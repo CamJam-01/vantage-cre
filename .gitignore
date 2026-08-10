@@ -1,8 +1,0 @@
-node_modules/
-.next/
-out/
-.env*.local
-output/
-.playwright-cli/
-*.tsbuildinfo
-supabase/.temp/
