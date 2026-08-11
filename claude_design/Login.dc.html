@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/industry-f4035e7d-525b-4f20-b25f-6e55ddf79c74/styles.css">
+  <script src="_ds/industry-f4035e7d-525b-4f20-b25f-6e55ddf79c74/_ds_bundle.js"></script>
+  <style>
+    body { margin: 0; background: var(--color-bg); }
+    a { color: var(--color-accent-700); text-decoration: none; }
+    a:hover { color: var(--color-accent-900); text-decoration: underline; }
+  </style>
+</helmet>
+<div style="min-height: 100vh; width: 100%; display: flex; align-items: center; justify-content: center; padding: var(--space-6); box-sizing: border-box; font-family: var(--font-body); background: linear-gradient(190deg, #627D98, #1F2D3A)">
+  <div class="blueprint elev-md" style="position: static; width: 100%; max-width: 420px; padding: var(--space-7) var(--space-6); box-sizing: border-box; padding-top: 20px; padding-right: 20px; padding-bottom: 20px; padding-left: 20px; background-color: var(--color-accent-200)">
+    
+
+    <div style="display:flex;flex-direction:column;align-items:center;gap:var(--space-3);margin-bottom:var(--space-6);">
+      <div class="blueprint" style="position:relative;width:56px;height:56px;display:flex;align-items:center;justify-content:center;">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M5 21V7l8-4v18"></path><path d="M19 21V11l-6-4"></path><path d="M9 9v.01"></path><path d="M9 12v.01"></path><path d="M9 15v.01"></path><path d="M9 18v.01"></path></svg>
+      </div>
+      <div style="text-align:center;">
+        <div style="font-family:var(--font-heading);font-size:28px;font-weight:600;letter-spacing:0.02em;color:var(--color-text);line-height:1.1;">VANTAGE CRE</div>
+        <div class="tag tag-outline" style="margin-top:var(--space-2);">DATABASE MANAGEMENT SYSTEM</div>
+      </div>
+    </div>
+
+    <form style="display:flex;flex-direction:column;gap:var(--space-4);" onsubmit="{{ handleSubmit }}">
+      <div class="field">
+        <label for="email">Email address</label>
+        <input class="input" type="email" id="email" name="email" placeholder="you@company.com" required="" style="background-color: #FFFFFF">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input class="input" type="password" id="password" name="password" placeholder="••••••••" required="" style="background-color: #FFFFFF">
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:calc(var(--space-2) * -1);">
+        <label class="radio" style="gap:var(--space-2);cursor:pointer;">
+          <input type="checkbox" style="display:none;" checked="{{ remember }}" onChange="{{ toggleRemember }}">
+          <span class="dot" style="background-color: #FFFFFF"></span>
+          <span style="font-size:14px;color:var(--color-text);">Remember me</span>
+        </label>
+        <a href="#" style="font-size:14px;">Forgot password?</a>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block" style="margin-top:var(--space-2);">Sign in</button>
+    </form>
+
+    <div style="text-align:center;margin-top:var(--space-6);font-size:14px;color:var(--color-text);">
+      Need access? <a href="#">Request an account</a>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { remember: false };
+  toggleRemember = () => this.setState(s => ({ remember: !s.remember }));
+  handleSubmit = (e) => e.preventDefault();
+  renderVals() {
+    return {
+      remember: this.state.remember,
+      toggleRemember: this.toggleRemember,
+      handleSubmit: this.handleSubmit,
+      rememberDotStyle: this.state.remember
+        ? 'background:var(--color-accent-600);border-color:var(--color-accent-600);'
+        : ''
+    };
+  }
+}
+</script>
+</body>
+</html>

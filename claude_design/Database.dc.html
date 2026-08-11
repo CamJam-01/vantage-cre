@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/industry-f4035e7d-525b-4f20-b25f-6e55ddf79c74/styles.css">
+  <script src="_ds/industry-f4035e7d-525b-4f20-b25f-6e55ddf79c74/_ds_bundle.js"></script>
+  <script src="./image-slot.js"></script>
+  <style>
+    body { margin: 0; background: var(--color-bg); }
+    a { color: var(--color-accent-700); text-decoration: none; }
+    a:hover { color: var(--color-accent-900); text-decoration: underline; }
+  </style>
+</helmet>
+<div style="min-height:100vh;width:100%;font-family:var(--font-body);display:flex;flex-direction:column;">
+
+  <header style="position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--color-neutral-300); display: flex; align-items: center; justify-content: space-between; padding: var(--space-4) var(--space-6); box-sizing: border-box; background-color: var(--color-accent)">
+    <a href="Search.dc.html" style="display:flex;align-items:center;gap:var(--space-3);text-decoration:none;">
+      <div class="blueprint" style="position:relative;width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--color-accent-200)"><path d="M3 21h18" stroke="var(--color-accent-200)"></path><path d="M5 21V7l8-4v18" stroke="var(--color-accent-200)"></path><path d="M19 21V11l-6-4" stroke="var(--color-accent-200)"></path><path d="M9 9v.01" stroke="var(--color-accent-200)"></path><path d="M9 12v.01" stroke="var(--color-neutral-400)"></path><path d="M9 15v.01" stroke="var(--color-accent-200)"></path><path d="M9 18v.01" stroke="var(--color-accent-200)"></path></svg>
+      </div>
+      <span style="font-family: var(--font-heading); font-size: 20px; font-weight: 600; letter-spacing: 0.02em; color: var(--color-accent-2-100)">VANTAGE CRE</span>
+    </a>
+
+    <div style="display:flex;align-items:center;gap:var(--space-6);">
+      <a href="Search.dc.html" style="font-size: 14px; font-weight: 500; color: var(--color-accent-200)">New Search</a>
+      <a href="Login.dc.html" style="font-size: 14px; font-weight: 500; color: var(--color-accent-200)">Logout</a>
+      <a href="#" aria-label="Profile" style="display:block;width:40px;height:40px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1px solid var(--color-neutral-400);">
+        <image-slot id="profile-avatar" shape="circle" style="width:40px;height:40px;" src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%23dfe3e6'/%3E%3Ccircle cx='20' cy='16' r='7' fill='%235980a6'/%3E%3Ccircle cx='20' cy='42' r='16' fill='%235980a6'/%3E%3C/svg%3E" placeholder="Profile"></image-slot>
+      </a>
+    </div>
+  </header><main style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: var(--space-8) var(--space-6) calc(var(--space-8) * 3); box-sizing: border-box; background-color: var(--color-accent-2-100);">
+    <div style="width:100%;max-width:1200px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:var(--space-3);margin-bottom:var(--space-6);">
+        <div>
+          <h1 style="font-family:var(--font-heading);font-size:32px;font-weight:600;letter-spacing:0.01em;color:var(--color-text);margin:0 0 var(--space-1);">Land Sales Results</h1>
+          <p style="font-size:14px;color:var(--color-neutral-700);margin:0;">{{ resultCountLabel }}</p>
+        </div>
+        <div class="tag tag-outline">DEMO DATA</div>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--space-3);margin-bottom:var(--space-4);">
+        <span style="font-size:14px;color:var(--color-neutral-700);">{{ selectionLabel }}</span>
+        <div style="display:flex;align-items:center;gap:var(--space-3);">
+          <button type="button" class="btn btn-secondary" onClick="{{ viewDetails }}" style="{{ viewDetailsStyle }}">View Details</button>
+          <button type="button" class="btn btn-secondary" onClick="{{ exportCsv }}" style="{{ exportCsvStyle }}">Export CSV</button>
+          <button type="button" class="btn btn-secondary" style="opacity:0.45;cursor:not-allowed;" title="Coming in a later phase">Merge to DOCX</button>
+        </div>
+      </div>
+
+      <div class="blueprint elev-sm" style="position: relative; box-sizing: border-box; overflow-x: auto; background-color: var(--color-accent-2-100)">
+        <table class="table" style="width:100%;min-width:1000px;">
+          <thead style="background-color: var(--color-accent-2-200)">
+            <tr>
+              <th style="width:40px;"><input type="checkbox" checked="{{ allSelected }}" onChange="{{ toggleAll }}"></th>
+              <th>Parcel ID</th>
+              <th>Address</th>
+              <th>City</th>
+              <th>County</th>
+              <th>State</th>
+              <th>Sale Date</th>
+              <th>Acreage</th>
+              <th>Sale Price</th>
+              <th>Price / Acre</th>
+              <th>Buyer</th>
+            </tr>
+          </thead>
+          <tbody style="background-color: #FFFFFF">
+            <sc-for list="{{ records }}" as="r" hint-placeholder-count="10">
+              <tr onClick="{{ r.toggle }}" style="{{ r.rowStyle }}cursor:pointer;">
+                <td onClick="{{ r.stopClick }}"><input type="checkbox" checked="{{ r.selected }}" onChange="{{ r.toggle }}"></td>
+                <td>{{ r.parcelId }}</td>
+                <td>{{ r.address }}</td>
+                <td>{{ r.city }}</td>
+                <td>{{ r.county }}</td>
+                <td>{{ r.state }}</td>
+                <td>{{ r.saleDate }}</td>
+                <td>{{ r.acreage }}</td>
+                <td>{{ r.salePrice }}</td>
+                <td>{{ r.pricePerAcre }}</td>
+                <td>{{ r.buyer }}</td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  
+
+  <a href="LandSalesSearch.dc.html" class="blueprint" style="position:fixed;bottom:var(--space-6);left:var(--space-6);display:flex;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-6);background:var(--color-bg);color:var(--color-text);box-shadow:var(--shadow-md);text-decoration:none;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+    <span style="font-family:var(--font-heading);font-size:16px;font-weight:600;letter-spacing:0.03em;">BACK</span>
+  </a>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const RECORDS = [
+  { parcelId: 'LND-10432', address: '4820 County Road 12', city: 'Denton', county: 'Denton', state: 'TX', saleDate: '06/12/2026', acreage: '12.40', salePrice: '$1,240,000', pricePerAcre: '$100,000', buyer: 'Ashford Land Holdings LLC' },
+  { parcelId: 'LND-10487', address: '1102 Farm to Market Rd 428', city: 'Sanger', county: 'Denton', state: 'TX', saleDate: '05/28/2026', acreage: '45.10', salePrice: '$2,255,000', pricePerAcre: '$50,000', buyer: 'Prairie Ridge Partners' },
+  { parcelId: 'LND-10501', address: '900 W University Dr', city: 'Prosper', county: 'Collin', state: 'TX', saleDate: '05/15/2026', acreage: '8.75', salePrice: '$1,750,000', pricePerAcre: '$200,000', buyer: 'Northgate Development Group' },
+  { parcelId: 'LND-10556', address: '2210 Old Alton Rd', city: 'Denton', county: 'Denton', state: 'TX', saleDate: '04/30/2026', acreage: '22.00', salePrice: '$1,100,000', pricePerAcre: '$50,000', buyer: 'Blue Line Capital' },
+  { parcelId: 'LND-10602', address: '5601 E Sherman Dr', city: 'Little Elm', county: 'Denton', state: 'TX', saleDate: '04/18/2026', acreage: '15.30', salePrice: '$1,836,000', pricePerAcre: '$120,000', buyer: 'Meridian Acquisitions' },
+  { parcelId: 'LND-10648', address: '1780 County Line Rd', city: 'Aubrey', county: 'Denton', state: 'TX', saleDate: '03/22/2026', acreage: '60.00', salePrice: '$2,400,000', pricePerAcre: '$40,000', buyer: 'Westbound Ranch Co.' },
+  { parcelId: 'LND-10689', address: '340 N Elm St', city: 'Pilot Point', county: 'Denton', state: 'TX', saleDate: '03/05/2026', acreage: '5.20', salePrice: '$676,000', pricePerAcre: '$130,000', buyer: 'Cornerstone Realty Partners' },
+  { parcelId: 'LND-10715', address: '8890 FM 455', city: 'Sanger', county: 'Denton', state: 'TX', saleDate: '02/14/2026', acreage: '33.80', salePrice: '$1,352,000', pricePerAcre: '$40,000', buyer: 'Ashford Land Holdings LLC' },
+  { parcelId: 'LND-10770', address: '4110 Rockhill Rd', city: 'Celina', county: 'Collin', state: 'TX', saleDate: '01/29/2026', acreage: '18.60', salePrice: '$2,790,000', pricePerAcre: '$150,000', buyer: 'Northgate Development Group' },
+  { parcelId: 'LND-10812', address: '260 S Loop 288', city: 'Denton', county: 'Denton', state: 'TX', saleDate: '01/09/2026', acreage: '9.40', salePrice: '$1,410,000', pricePerAcre: '$150,000', buyer: 'Prairie Ridge Partners' }
+];
+
+class Component extends DCLogic {
+  state = { selectedIds: [] };
+
+  toggleRow = (id) => this.setState(s => ({
+    selectedIds: s.selectedIds.includes(id) ? s.selectedIds.filter(x => x !== id) : [...s.selectedIds, id]
+  }));
+
+  toggleAll = () => this.setState(s => ({
+    selectedIds: s.selectedIds.length === RECORDS.length ? [] : RECORDS.map(r => r.parcelId)
+  }));
+
+  viewDetails = () => {
+    if (this.state.selectedIds.length !== 1) return;
+    window.location.href = `RecordDetails.dc.html?id=${encodeURIComponent(this.state.selectedIds[0])}`;
+  };
+
+  exportCsv = () => {
+    const selected = RECORDS.filter(r => this.state.selectedIds.includes(r.parcelId));
+    if (!selected.length) return;
+    const cols = ['parcelId', 'address', 'city', 'county', 'state', 'saleDate', 'acreage', 'salePrice', 'pricePerAcre', 'buyer'];
+    const header = cols.join(',');
+    const rows = selected.map(r => cols.map(c => `"${String(r[c]).replace(/"/g, '""')}"`).join(','));
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'land-sales-export.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  renderVals() {
+    const selectedIds = this.state.selectedIds;
+    const records = RECORDS.map(r => ({
+      ...r,
+      selected: selectedIds.includes(r.parcelId),
+      toggle: () => this.toggleRow(r.parcelId),
+      stopClick: (e) => e.stopPropagation(),
+      rowStyle: selectedIds.includes(r.parcelId) ? 'background:var(--color-accent-100);' : ''
+    }));
+
+    const count = selectedIds.length;
+    const disabledBtn = 'opacity:0.45;cursor:not-allowed;';
+    const enabledBtn = 'cursor:pointer;';
+
+    return {
+      records,
+      resultCountLabel: `${RECORDS.length} records matching your search criteria`,
+      selectionLabel: count === 0 ? 'No records selected' : `${count} record${count === 1 ? '' : 's'} selected`,
+      allSelected: count === RECORDS.length,
+      toggleAll: this.toggleAll,
+      viewDetails: this.viewDetails,
+      viewDetailsStyle: count === 1 ? enabledBtn : disabledBtn,
+      exportCsv: this.exportCsv,
+      exportCsvStyle: count >= 1 ? enabledBtn : disabledBtn
+    };
+  }
+}
+</script>
+</body>
+</html>
