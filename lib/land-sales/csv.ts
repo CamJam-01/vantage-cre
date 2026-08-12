@@ -1,3 +1,4 @@
+import { parseFlexibleDate } from './dates';
 import { landSaleInputSchema, type LandSale, type LandSaleInput } from './schema';
 
 export const csvHeaders = [
@@ -132,21 +133,28 @@ export function applyHeaderMapping(dataRows: string[][], mapping: ColumnMapping)
 }
 
 export type ImportRowResult =
-  | { row: number; ok: true; data: LandSaleInput }
+  | { row: number; ok: true; data: LandSaleInput; warnings?: string[] }
   | { row: number; ok: false; errors: string[] };
 
 /** Validates already-mapped data rows (canonical field order, one string per
  * csvField) against the schema, producing specific per-row/column error
  * messages (e.g. "Row 4, Sale Price: ..."). Runs identically client-side
- * (instant feedback) and server-side (never trust the client). */
+ * (instant feedback) and server-side (never trust the client).
+ *
+ * Sale Date is never a blocking error: if it doesn't parse, the row still
+ * imports with sale_date left blank and the original text captured in
+ * sale_date_raw, surfaced back as a warning rather than a rejection. */
 export function validateDataRows(rows: string[][]): ImportRowResult[] {
   return rows.map((values, index) => {
     const rowNumber = index + 2; // +1 for the header row, +1 to make it 1-indexed
     const [parcelId, address, city, county, state, msa, type, sf, ac, saleDate, salePrice, buyer] = values;
+    const dateRecognized = !!saleDate && parseFlexibleDate(saleDate) !== null;
     const parsed = landSaleInputSchema.safeParse({
       parcel_id: parcelId, address, city, county, state, msa: msa || undefined,
       property_type: type, square_feet: sf || undefined, acreage: ac,
-      sale_date: saleDate, sale_price: salePrice, buyer,
+      sale_date: saleDate,
+      sale_date_raw: dateRecognized ? undefined : (saleDate?.trim() || undefined),
+      sale_price: salePrice, buyer,
     });
     if (!parsed.success) {
       const errors = parsed.error.issues.map(issue => {
@@ -156,7 +164,10 @@ export function validateDataRows(rows: string[][]): ImportRowResult[] {
       });
       return { row: rowNumber, ok: false, errors };
     }
-    return { row: rowNumber, ok: true, data: parsed.data };
+    const warnings = parsed.data.sale_date_raw
+      ? [`Row ${rowNumber}, Sale Date: "${parsed.data.sale_date_raw}" wasn't recognized as a date — imported without a Sale Date and flagged for review.`]
+      : undefined;
+    return { row: rowNumber, ok: true, data: parsed.data, warnings };
   });
 }
 

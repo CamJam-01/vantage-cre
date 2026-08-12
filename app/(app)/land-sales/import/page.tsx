@@ -117,6 +117,7 @@ export default function ImportLandSalesPage() {
   }
 
   const rowErrors = rowResults?.filter(r => !r.ok).flatMap(r => (r.ok ? [] : r.errors)) ?? [];
+  const rowWarnings = rowResults?.flatMap(r => (r.ok ? r.warnings ?? [] : [])) ?? [];
   const validRows = rowResults?.filter(r => r.ok) ?? [];
   const canImport = !!rowResults && rowErrors.length === 0 && validRows.length > 0 && !outcome;
 
@@ -218,6 +219,16 @@ export default function ImportLandSalesPage() {
               <p style={{ fontSize: 14, color: 'var(--color-text)' }}>
                 {validRows.length} record{validRows.length === 1 ? '' : 's'} ready to import.
               </p>
+              {rowWarnings.length > 0 && (
+                <div style={{ marginBottom: 'var(--space-3)' }}>
+                  <div className="tag" style={{ background: '#fef3c7', color: '#92400e', marginBottom: 'var(--space-2)' }}>
+                    {rowWarnings.length} record{rowWarnings.length === 1 ? '' : 's'} flagged — unrecognized Sale Date, will still import
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#92400e' }}>
+                    {rowWarnings.map((warn, i) => <li key={i}>{warn}</li>)}
+                  </ul>
+                </div>
+              )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
                 <Button type="button" variant="primary" onClick={handleImport} disabled={!canImport || importing}>
                   {importing ? 'Importing…' : `Import ${validRows.length} record${validRows.length === 1 ? '' : 's'}`}
@@ -246,6 +257,16 @@ export default function ImportLandSalesPage() {
                     <> Skipped {outcome.duplicates.length} likely duplicate{outcome.duplicates.length === 1 ? '' : 's'}: {outcome.duplicates.join(', ')}.</>
                   )}
                 </p>
+              )}
+              {outcome.warnings && outcome.warnings.length > 0 && (
+                <div style={{ marginBottom: 'var(--space-3)' }}>
+                  <div className="tag" style={{ background: '#fef3c7', color: '#92400e', marginBottom: 'var(--space-2)' }}>
+                    {outcome.warnings.length} record{outcome.warnings.length === 1 ? '' : 's'} flagged for review
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#92400e' }}>
+                    {outcome.warnings.map((warn, i) => <li key={i}>{warn}</li>)}
+                  </ul>
+                </div>
               )}
               <Link href="/land-sales" className="btn btn-primary">Back to results</Link>
             </div>

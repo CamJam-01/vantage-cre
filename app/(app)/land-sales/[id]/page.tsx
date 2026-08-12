@@ -1,18 +1,25 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, TriangleAlert } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { Blueprint } from '@/components/ui/blueprint';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/land-sales/format';
 import type { LandSale } from '@/lib/land-sales/schema';
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value, warning }: { label: string; value: string; warning?: string }) {
   return (
     <div>
       <div style={{ fontSize: 12, letterSpacing: '0.05em', color: 'var(--color-neutral-700)', textTransform: 'uppercase', marginBottom: 'var(--space-1)' }}>
         {label}
       </div>
-      <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--color-text)' }}>{value}</div>
+      {warning ? (
+        <div title={warning} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 18, fontWeight: 600, color: '#92400e' }}>
+          <TriangleAlert size={16} strokeWidth={2} />
+          {value}
+        </div>
+      ) : (
+        <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--color-text)' }}>{value}</div>
+      )}
     </div>
   );
 }
@@ -44,7 +51,11 @@ export default async function RecordDetailsPage({ params }: { params: Promise<{ 
 
         <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: '#FFFFFF' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
-            <Field label="Sale Date" value={formatDate(r.sale_date)} />
+            <Field
+              label="Sale Date"
+              value={r.sale_date ? formatDate(r.sale_date) : r.sale_date_raw ? r.sale_date_raw : '—'}
+              warning={!r.sale_date && r.sale_date_raw ? `Unrecognized date from import: "${r.sale_date_raw}". Flagged for review.` : undefined}
+            />
             <Field label="Sale Price" value={formatCurrency(r.sale_price)} />
             <Field label="Acreage" value={r.acreage != null ? `${formatNumber(r.acreage)} AC` : '—'} />
             <Field label="Price / Acre" value={formatCurrency(r.price_per_acre)} />

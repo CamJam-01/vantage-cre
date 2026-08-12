@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { TriangleAlert } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
 import { Button } from '@/components/ui/button';
 import type { LandSale } from '@/lib/land-sales/schema';
@@ -101,7 +102,17 @@ export function ResultsTable({ records }: { records: LandSale[] }) {
                   <td>{r.county}</td>
                   <td>{r.state}</td>
                   <td>{r.property_type}</td>
-                  <td>{formatDate(r.sale_date)}</td>
+                  <td>
+                    {r.sale_date ? formatDate(r.sale_date) : r.sale_date_raw ? (
+                      <span
+                        title={`Unrecognized date from import: "${r.sale_date_raw}". Flagged for review.`}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#92400e' }}
+                      >
+                        <TriangleAlert size={14} strokeWidth={2} />
+                        {r.sale_date_raw}
+                      </span>
+                    ) : '—'}
+                  </td>
                   <td>{formatNumber(r.acreage)}</td>
                   <td>{formatNumber(r.square_feet)}</td>
                   <td>{formatCurrency(r.sale_price)}</td>

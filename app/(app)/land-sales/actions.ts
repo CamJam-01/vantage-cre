@@ -42,6 +42,7 @@ export type ImportOutcome = {
   headerError?: string;
   needsMapping?: { headers: string[]; suggested: ColumnMapping };
   rowErrors?: string[];
+  warnings?: string[];
   duplicates?: string[];
   inserted?: number;
 };
@@ -87,6 +88,7 @@ export async function importLandSales(csvText: string, mapping?: ColumnMapping):
 
   const toInsert: LandSaleInput[] = results.flatMap(r => (r.ok ? [r.data] : []));
   if (!toInsert.length) return { rowErrors: ['No valid rows to import.'] };
+  const warnings = results.flatMap(r => (r.ok ? r.warnings ?? [] : []));
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -111,5 +113,5 @@ export async function importLandSales(csvText: string, mapping?: ColumnMapping):
     inserted += count ?? chunk.length;
   }
 
-  return { inserted, duplicates };
+  return { inserted, duplicates, warnings: warnings.length ? warnings : undefined };
 }

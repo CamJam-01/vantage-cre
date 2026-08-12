@@ -19,10 +19,13 @@ function numericField(validate: (n: number) => boolean) {
 /** Single source of truth for the land-sale record shape: the manual-create form,
  * the CSV row validator, and Supabase insert typing all consume this.
  *
- * Property type and the numeric fields are intentionally permissive: real-world
- * CSV exports carry property-type labels beyond our curated five and numeric
- * cells in all sorts of formats. Rather than block an import, an unrecognized
- * type is stored as free text and an unparseable number is stored as null. */
+ * Property type, the numeric fields, and the sale date are intentionally
+ * permissive: real-world CSV exports carry property-type labels beyond our
+ * curated five, numeric cells in all sorts of formats, and dates in shapes
+ * `parseFlexibleDate` doesn't recognize. Rather than block an import, an
+ * unrecognized type is stored as free text, an unparseable number is stored
+ * as null, and an unparseable date is stored as null with the original text
+ * preserved in `sale_date_raw` for the UI to flag. */
 export const landSaleInputSchema = z.object({
   parcel_id: z.string().trim().default(''),
   address: z.string().trim().default(''),
@@ -33,10 +36,15 @@ export const landSaleInputSchema = z.object({
   property_type: z.string().trim().min(1, 'Type is required'),
   square_feet: numericField(n => n > 0),
   acreage: numericField(n => n > 0),
+  /** Never blocks import: an unparseable date just comes through as undefined
+   * (stored null) — `sale_date_raw` below is where the CSV row builder stashes
+   * the original text in that case, so the UI can flag the record for review
+   * instead of losing the source data or rejecting the row. */
   sale_date: z.preprocess(
-    v => (typeof v === 'string' ? (parseFlexibleDate(v) ?? v.trim()) : v),
-    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sale Date must be a valid date, e.g. 2026-06-12, 06/12/2026, or June 12, 2026')
+    v => (typeof v === 'string' ? (parseFlexibleDate(v) ?? undefined) : v),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
   ),
+  sale_date_raw: z.string().trim().optional().transform(v => (v ? v : undefined)),
   sale_price: numericField(n => n >= 0),
   buyer: z.string().trim().default(''),
 });
