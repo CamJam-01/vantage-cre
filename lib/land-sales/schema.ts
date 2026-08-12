@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseFlexibleDate } from './dates';
 
 /** Best-effort numeric coercion for CSV/form input — strips currency symbols,
  * thousands separators and stray whitespace, then quietly drops the value
@@ -13,28 +14,6 @@ function numericField(validate: (n: number) => boolean) {
     if (!Number.isFinite(raw) || !validate(raw)) return undefined;
     return raw;
   }, z.number().optional());
-}
-
-function isValidIsoDate(iso: string): boolean {
-  const [y, m, d] = iso.split('-').map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
-}
-
-/** Accepts the ISO format the app writes (YYYY-MM-DD) as well as the M/D/YYYY
- * (or M-D-YYYY) format most spreadsheet exports use, normalizing either to ISO.
- * Returns the original string unchanged if neither shape matches, so the
- * schema's regex still rejects it with a clear message. */
-function normalizeDate(raw: string): string {
-  const trimmed = raw.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-  const slash = trimmed.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  if (slash) {
-    const [, m, d, y] = slash;
-    const iso = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-    if (isValidIsoDate(iso)) return iso;
-  }
-  return trimmed;
 }
 
 /** Single source of truth for the land-sale record shape: the manual-create form,
@@ -55,8 +34,8 @@ export const landSaleInputSchema = z.object({
   square_feet: numericField(n => n > 0),
   acreage: numericField(n => n > 0),
   sale_date: z.preprocess(
-    v => (typeof v === 'string' ? normalizeDate(v) : v),
-    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sale Date must be a valid date, e.g. 2026-06-12 or 06/12/2026')
+    v => (typeof v === 'string' ? (parseFlexibleDate(v) ?? v.trim()) : v),
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Sale Date must be a valid date, e.g. 2026-06-12, 06/12/2026, or June 12, 2026')
   ),
   sale_price: numericField(n => n >= 0),
   buyer: z.string().trim().default(''),
