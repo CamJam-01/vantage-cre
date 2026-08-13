@@ -107,10 +107,7 @@ export function ResultsTable({ records, canEdit }: { records: LandSale[]; canEdi
           <Button variant="secondary" onClick={exportCsv} disabled={selectedCount < 1}>Export CSV</Button>
           <Button variant="secondary" disabled title="Coming in a later phase">Merge to DOCX</Button>
           {canEdit && (
-            <>
-              <Link href="/land-sales/import" className="btn btn-ghost">Import CSV</Link>
-              <Link href="/land-sales/new" className="btn btn-ghost">+ Add Record</Link>
-            </>
+            <Link href="/land-sales/new" className="btn btn-ghost">+ Add Record</Link>
           )}
         </div>
       </div>

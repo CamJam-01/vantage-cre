@@ -274,7 +274,7 @@ export function ImportLandSalesClient() {
         </Blueprint>
       </div>
 
-      <Link href="/land-sales" className="blueprint" style={{
+      <Link href="/admin/database-manager" className="blueprint" style={{
         position: 'fixed', bottom: 'var(--space-6)', left: 'var(--space-6)', display: 'flex',
         alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4) var(--space-6)',
         background: 'var(--color-bg)', color: 'var(--color-text)', boxShadow: 'var(--shadow-md)', textDecoration: 'none',
