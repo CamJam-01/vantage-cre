@@ -25,8 +25,14 @@ function Field({ label, value, warning }: { label: string; value: string; warnin
   );
 }
 
-export default async function RecordDetailsPage({ params }: { params: Promise<{ id: string }> }) {
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
+};
+
+export default async function RecordDetailsPage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const { from } = await searchParams;
   const supabase = await createClient();
   const [{ data: record, error }, profile] = await Promise.all([
     supabase.from('land_sales').select('*').eq('id', id).maybeSingle(),
@@ -36,6 +42,9 @@ export default async function RecordDetailsPage({ params }: { params: Promise<{ 
   if (!record) notFound();
   const r = record as LandSale;
 
+  const backToSearchHref = from ? `/land-sales?${from}` : '/land-sales';
+  const editHref = from ? `/land-sales/${r.id}/edit?from=${encodeURIComponent(from)}` : `/land-sales/${r.id}/edit`;
+
   return (
     <main style={{
       flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -43,6 +52,11 @@ export default async function RecordDetailsPage({ params }: { params: Promise<{ 
       background: 'var(--color-accent-2-200)',
     }}>
       <div style={{ width: '100%', maxWidth: 760 }}>
+        <Link href={backToSearchHref} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 14, fontWeight: 600, marginBottom: 'var(--space-4)' }}>
+          <ArrowLeft size={16} strokeWidth={2} />
+          Back to search
+        </Link>
+
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
           <div>
             <div className="tag tag-outline" style={{ marginBottom: 'var(--space-2)' }}>{r.parcel_id || r.id}</div>
@@ -54,7 +68,7 @@ export default async function RecordDetailsPage({ params }: { params: Promise<{ 
             </p>
           </div>
           {canEdit(profile?.role ?? 'Viewer') && (
-            <Link href={`/land-sales/${r.id}/edit`} className="btn btn-ghost">Edit</Link>
+            <Link href={editHref} className="btn btn-ghost">Edit</Link>
           )}
         </div>
 
@@ -76,15 +90,6 @@ export default async function RecordDetailsPage({ params }: { params: Promise<{ 
           </div>
         </Blueprint>
       </div>
-
-      <Link href="/land-sales" className="blueprint" style={{
-        position: 'fixed', bottom: 'var(--space-6)', left: 'var(--space-6)', display: 'flex',
-        alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4) var(--space-6)',
-        background: 'var(--color-bg)', color: 'var(--color-text)', boxShadow: 'var(--shadow-md)', textDecoration: 'none',
-      }}>
-        <ArrowLeft size={18} strokeWidth={2} />
-        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.03em' }}>BACK</span>
-      </Link>
     </main>
   );
 }

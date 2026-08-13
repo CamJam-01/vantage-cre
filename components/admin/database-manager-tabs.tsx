@@ -62,7 +62,7 @@ export function DatabaseManagerTabs({ salesCount, auditLog }: { salesCount: numb
             <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)' }}>Connections</div>
             <Button variant="primary" onClick={openModal}>Add Connection</Button>
           </div>
-          <p style={{ fontSize: 13, color: 'var(--color-neutral-600)', marginTop: 0 }}>
+          <p style={{ fontSize: 13, color: 'red', marginTop: 0 }}>
             Preview only — webhook and API connections aren&apos;t live yet.
           </p>
           <table className="table" style={{ width: '100%' }}>

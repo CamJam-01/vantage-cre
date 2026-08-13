@@ -1,8 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ChevronDown } from 'lucide-react';
+import { Blueprint } from '@/components/ui/blueprint';
+import { Button } from '@/components/ui/button';
 import { Tag } from '@/components/ui/tag';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { PROPERTY_TYPES, US_STATES, type PropertyType } from '@/lib/land-sales/constants';
@@ -11,6 +14,13 @@ import { formatInputWithCommas, parseFormattedNumber } from '@/lib/land-sales/fo
 
 type SizeMode = 'sf' | 'ac';
 type TimeMode = 'last' | 'range';
+
+type FilterKey = 'state' | 'msa' | 'county' | 'city' | 'type' | 'size' | 'time';
+
+const FILTER_KEYS: FilterKey[] = ['state', 'msa', 'county', 'city', 'type', 'size', 'time'];
+const FILTER_LABELS: Record<FilterKey, string> = {
+  state: 'State', msa: 'MSA', county: 'County', city: 'City', type: 'Type', size: 'Size', time: 'Time',
+};
 
 type LocalState = {
   state: string; msa: string; county: string; city: string; types: PropertyType[];
@@ -58,6 +68,32 @@ function toFilters(s: LocalState): LandSaleFilters {
 
 const DEBOUNCE_MS = 450;
 
+/** The "+ Add Filter" trigger sits inside the sidebar's own `overflow-y:auto`
+ * region, so an absolutely-positioned menu gets silently clipped by that
+ * ancestor whenever it would extend past the sidebar's current scrolled
+ * viewport. `position: fixed` escapes that clipping (it's laid out against
+ * the browser viewport, not the nearest positioned/scrolling ancestor), so
+ * this computes pixel coordinates from the trigger's rect instead of relying
+ * on CSS percentages. It also picks whichever side (above/below the trigger)
+ * has more room and caps the menu's height to that room with its own scroll,
+ * so every option stays reachable even in a short viewport. */
+function computeMenuStyle(triggerRect: DOMRect): CSSProperties {
+  const gap = 8;
+  const viewportHeight = window.innerHeight;
+  const spaceAbove = triggerRect.top - gap;
+  const spaceBelow = viewportHeight - triggerRect.bottom - gap;
+  const openUpward = spaceAbove >= spaceBelow;
+  const maxHeight = Math.max(80, Math.min(320, openUpward ? spaceAbove : spaceBelow));
+  return {
+    position: 'fixed',
+    left: triggerRect.left,
+    width: triggerRect.width,
+    maxHeight,
+    overflowY: 'auto',
+    ...(openUpward ? { bottom: viewportHeight - triggerRect.top + gap } : { top: triggerRect.bottom + gap }),
+  };
+}
+
 /** Quick-tweak filters for the results page — full parity with the search page's
  * filter set. Select/tag/mode changes apply immediately; free-text and numeric
  * fields debounce so we don't re-query on every keystroke.
@@ -75,7 +111,71 @@ export function FiltersSidebar({ filters }: { filters: LandSaleFilters }) {
   const filtersKey = encodeFilters(filters).toString();
   const [local, setLocal] = useState<LocalState>(() => fromFilters(filters));
   const [syncedKey, setSyncedKey] = useState(filtersKey);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [addedKeys, setAddedKeys] = useState<Set<FilterKey>>(new Set());
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [addMenuStyle, setAddMenuStyle] = useState<CSSProperties | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) setAddMenuOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // The sidebar itself scrolls (and the whole page can too), which would
+  // leave a `position: fixed` menu visually detached from its trigger.
+  // Rather than tracking scroll position to re-anchor it, just close it —
+  // scroll listeners need `capture: true` since scroll events don't bubble.
+  useEffect(() => {
+    if (!addMenuOpen) return;
+    function close() { setAddMenuOpen(false); }
+    document.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [addMenuOpen]);
+
+  function toggleAddMenu() {
+    if (!addMenuOpen && addMenuRef.current) {
+      setAddMenuStyle(computeMenuStyle(addMenuRef.current.getBoundingClientRect()));
+    }
+    setAddMenuOpen(o => !o);
+  }
+
+  // "Active" reflects real values from `filters` (the committed URL state) —
+  // used for the count badge. "Shown" additionally includes fields the user
+  // revealed via "+ Add Filter" but hasn't given a value yet. `addedKeys` is
+  // plain component state (not resynced from `filters`), so it survives our
+  // own debounced commits — which would otherwise re-trigger the sync below
+  // and immediately hide a still-empty field the user just added — while
+  // still resetting naturally on a real "Modify Search" round trip, since
+  // that unmounts this component and remounts it fresh.
+  const hasState = !!filters.state;
+  const hasMsa = !!filters.msa;
+  const hasCounty = !!filters.county;
+  const hasCity = !!filters.city;
+  const hasType = filters.types.length > 0;
+  const hasSize = filters.sfMin != null || filters.sfMax != null || filters.acMin != null || filters.acMax != null;
+  const hasTime = !!filters.time;
+  const activeCount = [hasState, hasMsa, hasCounty, hasCity, hasType, hasSize, hasTime].filter(Boolean).length;
+
+  const shown: Record<FilterKey, boolean> = {
+    state: hasState || addedKeys.has('state'),
+    msa: hasMsa || addedKeys.has('msa'),
+    county: hasCounty || addedKeys.has('county'),
+    city: hasCity || addedKeys.has('city'),
+    type: hasType || addedKeys.has('type'),
+    size: hasSize || addedKeys.has('size'),
+    time: hasTime || addedKeys.has('time'),
+  };
+  const anyShown = FILTER_KEYS.some(k => shown[k]);
+  const availableToAdd = FILTER_KEYS.filter(k => !shown[k]);
 
   if (filtersKey !== syncedKey) {
     setSyncedKey(filtersKey);
@@ -99,121 +199,185 @@ export function FiltersSidebar({ filters }: { filters: LandSaleFilters }) {
     commit({ ...local, types }, { immediate: true });
   }
 
+  function addFilter(key: FilterKey) {
+    setAddedKeys(prev => new Set(prev).add(key));
+    setAddMenuOpen(false);
+  }
+
   return (
-    <aside className="blueprint elev-sm" style={{
-      position: 'sticky', top: 88, alignSelf: 'flex-start', flexShrink: 0,
-      minWidth: 275, maxWidth: 325, width: '25%', maxHeight: 'calc(100vh - 112px)', overflowY: 'auto',
-      boxSizing: 'border-box', padding: 10, background: 'var(--color-neutral-100)',
-    }}>
-      <div style={{ paddingBottom: 'var(--space-4)', borderBottom: '1px solid var(--color-neutral-300)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, color: 'var(--color-text)' }}>Search Filters</span>
-        <Link href="/search/sales/land" style={{ fontSize: 13, fontWeight: 600 }}>Modify Search</Link>
+    <aside className="blueprint elev-sm results-sidebar">
+      <div style={{ paddingBottom: 'var(--space-4)', borderBottom: '1px solid var(--color-neutral-300)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, color: 'var(--color-text)' }}>
+          Search Filters
+          {activeCount > 0 && (
+            <span className="tag tag-accent" style={{ marginLeft: 'var(--space-2)', verticalAlign: 'middle' }}>{activeCount} active</span>
+          )}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexShrink: 0 }}>
+          <Link href="/search/sales/land" style={{ fontSize: 13, fontWeight: 600 }}>Modify Search</Link>
+          <button
+            type="button"
+            className="results-sidebar-toggle"
+            onClick={() => setMobileOpen(o => !o)}
+            aria-expanded={mobileOpen}
+            aria-label={mobileOpen ? 'Collapse filters' : 'Expand filters'}
+            style={{ alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+          >
+            <ChevronDown size={18} strokeWidth={1.5} color="var(--color-accent-700)" style={{ transition: 'transform 0.15s ease', transform: mobileOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+          </button>
+        </div>
       </div>
 
-      <div style={{ paddingTop: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div className={`results-sidebar-content${mobileOpen ? '' : ' is-collapsed'}`} style={{ paddingTop: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
-        <div className="field">
-          <label htmlFor="filter-state">State</label>
-          <select id="filter-state" className="input" value={local.state} onChange={e => commit({ ...local, state: e.target.value }, { immediate: true })} style={{ backgroundColor: '#FFFFFF', cursor: 'pointer' }}>
-            <option value="">Any state</option>
-            {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
-          </select>
-        </div>
+        {!anyShown && (
+          <p style={{ fontSize: 13, color: 'var(--color-neutral-600)', margin: 0 }}>
+            No filters applied yet. Use &quot;+ Add Filter&quot; below or &quot;Modify Search&quot; above.
+          </p>
+        )}
 
-        <div className="field">
-          <label htmlFor="filter-msa">MSA</label>
-          <input id="filter-msa" className="input" type="text" value={local.msa} onChange={e => commit({ ...local, msa: e.target.value })} style={{ backgroundColor: '#FFFFFF' }} />
-        </div>
+        {shown.state && (
+          <div className="field">
+            <label htmlFor="filter-state">State</label>
+            <select id="filter-state" className="input" value={local.state} onChange={e => commit({ ...local, state: e.target.value }, { immediate: true })} style={{ backgroundColor: '#FFFFFF', cursor: 'pointer' }}>
+              <option value="">Any state</option>
+              {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+            </select>
+          </div>
+        )}
 
-        <div className="field">
-          <label htmlFor="filter-county">County</label>
-          <input id="filter-county" className="input" type="text" value={local.county} onChange={e => commit({ ...local, county: e.target.value })} style={{ backgroundColor: '#FFFFFF' }} />
-        </div>
+        {shown.msa && (
+          <div className="field">
+            <label htmlFor="filter-msa">MSA</label>
+            <input id="filter-msa" className="input" type="text" value={local.msa} onChange={e => commit({ ...local, msa: e.target.value })} style={{ backgroundColor: '#FFFFFF' }} />
+          </div>
+        )}
 
-        <div className="field">
-          <label htmlFor="filter-city">City</label>
-          <input id="filter-city" className="input" type="text" value={local.city} onChange={e => commit({ ...local, city: e.target.value })} style={{ backgroundColor: '#FFFFFF' }} />
-        </div>
+        {shown.county && (
+          <div className="field">
+            <label htmlFor="filter-county">County</label>
+            <input id="filter-county" className="input" type="text" value={local.county} onChange={e => commit({ ...local, county: e.target.value })} style={{ backgroundColor: '#FFFFFF' }} />
+          </div>
+        )}
 
-        <div style={{ borderTop: '1px solid var(--color-neutral-300)', paddingTop: 'var(--space-4)' }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)', marginBottom: 'var(--space-2)' }}>Type</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-            {PROPERTY_TYPES.map(t => {
-              const selected = local.types.includes(t);
-              return (
-                <Tag
-                  key={t}
-                  onClick={() => toggleType(t)}
-                  style={{
-                    background: selected ? 'var(--color-accent-600)' : '#FFFFFF',
-                    color: selected ? '#FFFFFF' : 'var(--color-neutral-900)',
-                    border: `1px solid ${selected ? 'var(--color-accent-600)' : 'var(--color-neutral-400)'}`,
-                    cursor: 'pointer', fontSize: 12,
-                  }}
+        {shown.city && (
+          <div className="field">
+            <label htmlFor="filter-city">City</label>
+            <input id="filter-city" className="input" type="text" value={local.city} onChange={e => commit({ ...local, city: e.target.value })} style={{ backgroundColor: '#FFFFFF' }} />
+          </div>
+        )}
+
+        {shown.type && (
+          <div style={{ borderTop: '1px solid var(--color-neutral-300)', paddingTop: 'var(--space-4)' }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)', marginBottom: 'var(--space-2)' }}>Type</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+              {PROPERTY_TYPES.map(t => {
+                const selected = local.types.includes(t);
+                return (
+                  <Tag
+                    key={t}
+                    onClick={() => toggleType(t)}
+                    style={{
+                      background: selected ? 'var(--color-accent-600)' : '#FFFFFF',
+                      color: selected ? '#FFFFFF' : 'var(--color-neutral-900)',
+                      border: `1px solid ${selected ? 'var(--color-accent-600)' : 'var(--color-neutral-400)'}`,
+                      cursor: 'pointer', fontSize: 12,
+                    }}
+                  >
+                    {t}
+                  </Tag>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {shown.size && (
+          <div style={{ borderTop: '1px solid var(--color-neutral-300)', paddingTop: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>
+                Size ({local.sizeMode === 'sf' ? 'Square Feet' : 'Acreage'})
+              </label>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => commit({ ...local, sizeMode: local.sizeMode === 'sf' ? 'ac' : 'sf' }, { immediate: true })}
+                style={{ cursor: 'pointer', fontSize: 11, textDecorationLine: 'underline', padding: 0 }}
+              >
+                {local.sizeMode === 'sf' ? 'Use Acreage' : 'Use Square Feet'}
+              </button>
+            </div>
+            {local.sizeMode === 'sf' ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                <div className="field"><label>Min</label><input className="input" type="text" inputMode="numeric" value={local.sfMin} onChange={e => commit({ ...local, sfMin: formatInputWithCommas(e.target.value) })} style={{ backgroundColor: '#FFFFFF' }} /></div>
+                <div className="field"><label>Max</label><input className="input" type="text" inputMode="numeric" value={local.sfMax} onChange={e => commit({ ...local, sfMax: formatInputWithCommas(e.target.value) })} style={{ backgroundColor: '#FFFFFF' }} /></div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                <div className="field"><label>Min</label><input className="input" type="text" inputMode="decimal" value={local.acMin} onChange={e => commit({ ...local, acMin: formatInputWithCommas(e.target.value) })} style={{ backgroundColor: '#FFFFFF' }} /></div>
+                <div className="field"><label>Max</label><input className="input" type="text" inputMode="decimal" value={local.acMax} onChange={e => commit({ ...local, acMax: formatInputWithCommas(e.target.value) })} style={{ backgroundColor: '#FFFFFF' }} /></div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {shown.time && (
+          <div style={{ borderTop: '1px solid var(--color-neutral-300)', paddingTop: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>
+                Time ({local.timeMode === 'last' ? 'Last' : 'Range'})
+              </label>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => commit({ ...local, timeMode: local.timeMode === 'last' ? 'range' : 'last' }, { immediate: true })}
+                style={{ cursor: 'pointer', fontSize: 11, textDecorationLine: 'underline', padding: 0 }}
+              >
+                {local.timeMode === 'last' ? 'Use Range' : 'Use Last'}
+              </button>
+            </div>
+            {local.timeMode === 'last' ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', alignItems: 'end' }}>
+                <div className="field"><label>Duration</label><input className="input" type="number" value={local.lastDuration} onChange={e => commit({ ...local, lastDuration: e.target.value })} style={{ backgroundColor: '#FFFFFF' }} /></div>
+                <SegmentedControl
+                  name="filter-last-unit"
+                  value={local.lastUnit}
+                  onChange={v => commit({ ...local, lastUnit: v as 'months' | 'years' }, { immediate: true })}
+                  options={[{ label: 'Months', value: 'months' }, { label: 'Years', value: 'years' }]}
+                />
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+                <div className="field"><label>From</label><input className="input" type="date" value={local.dateFrom} onChange={e => commit({ ...local, dateFrom: e.target.value }, { immediate: true })} style={{ backgroundColor: '#FFFFFF' }} /></div>
+                <div className="field"><label>To</label><input className="input" type="date" value={local.dateTo} onChange={e => commit({ ...local, dateTo: e.target.value }, { immediate: true })} style={{ backgroundColor: '#FFFFFF' }} /></div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div ref={addMenuRef} style={{ position: 'relative', borderTop: anyShown ? '1px solid var(--color-neutral-300)' : undefined, paddingTop: anyShown ? 'var(--space-4)' : undefined }}>
+          <Button
+            variant="ghost"
+            block
+            onClick={toggleAddMenu}
+            disabled={availableToAdd.length === 0}
+            title={availableToAdd.length === 0 ? 'All filters are already active' : undefined}
+          >
+            + Add Filter
+          </Button>
+          {addMenuOpen && availableToAdd.length > 0 && addMenuStyle && (
+            <Blueprint elevation="md" style={{ ...addMenuStyle, background: '#FFFFFF', zIndex: 50 }}>
+              {availableToAdd.map(key => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => addFilter(key)}
+                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: 'var(--space-3) var(--space-4)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--color-text)' }}
                 >
-                  {t}
-                </Tag>
-              );
-            })}
-          </div>
-        </div>
-
-        <div style={{ borderTop: '1px solid var(--color-neutral-300)', paddingTop: 'var(--space-4)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>
-              Size ({local.sizeMode === 'sf' ? 'Square Feet' : 'Acreage'})
-            </label>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => commit({ ...local, sizeMode: local.sizeMode === 'sf' ? 'ac' : 'sf' }, { immediate: true })}
-              style={{ cursor: 'pointer', fontSize: 11, textDecorationLine: 'underline', padding: 0 }}
-            >
-              {local.sizeMode === 'sf' ? 'Use Acreage' : 'Use Square Feet'}
-            </button>
-          </div>
-          {local.sizeMode === 'sf' ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-              <div className="field"><label>Min</label><input className="input" type="text" inputMode="numeric" value={local.sfMin} onChange={e => commit({ ...local, sfMin: formatInputWithCommas(e.target.value) })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-              <div className="field"><label>Max</label><input className="input" type="text" inputMode="numeric" value={local.sfMax} onChange={e => commit({ ...local, sfMax: formatInputWithCommas(e.target.value) })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-              <div className="field"><label>Min</label><input className="input" type="text" inputMode="decimal" value={local.acMin} onChange={e => commit({ ...local, acMin: formatInputWithCommas(e.target.value) })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-              <div className="field"><label>Max</label><input className="input" type="text" inputMode="decimal" value={local.acMax} onChange={e => commit({ ...local, acMax: formatInputWithCommas(e.target.value) })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-            </div>
-          )}
-        </div>
-
-        <div style={{ borderTop: '1px solid var(--color-neutral-300)', paddingTop: 'var(--space-4)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>
-              Time ({local.timeMode === 'last' ? 'Last' : 'Range'})
-            </label>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={() => commit({ ...local, timeMode: local.timeMode === 'last' ? 'range' : 'last' }, { immediate: true })}
-              style={{ cursor: 'pointer', fontSize: 11, textDecorationLine: 'underline', padding: 0 }}
-            >
-              {local.timeMode === 'last' ? 'Use Range' : 'Use Last'}
-            </button>
-          </div>
-          {local.timeMode === 'last' ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', alignItems: 'end' }}>
-              <div className="field"><label>Duration</label><input className="input" type="number" value={local.lastDuration} onChange={e => commit({ ...local, lastDuration: e.target.value })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-              <SegmentedControl
-                name="filter-last-unit"
-                value={local.lastUnit}
-                onChange={v => commit({ ...local, lastUnit: v as 'months' | 'years' }, { immediate: true })}
-                options={[{ label: 'Months', value: 'months' }, { label: 'Years', value: 'years' }]}
-              />
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-              <div className="field"><label>From</label><input className="input" type="date" value={local.dateFrom} onChange={e => commit({ ...local, dateFrom: e.target.value }, { immediate: true })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-              <div className="field"><label>To</label><input className="input" type="date" value={local.dateTo} onChange={e => commit({ ...local, dateTo: e.target.value }, { immediate: true })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-            </div>
+                  {FILTER_LABELS[key]}
+                </button>
+              ))}
+            </Blueprint>
           )}
         </div>
 

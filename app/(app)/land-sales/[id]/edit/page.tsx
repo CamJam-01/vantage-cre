@@ -4,8 +4,14 @@ import { canEdit, getCurrentUserProfile } from '@/lib/users/roles';
 import { LandSaleForm } from '@/components/land-sales/land-sale-form';
 import type { LandSale } from '@/lib/land-sales/schema';
 
-export default async function EditLandSalePage({ params }: { params: Promise<{ id: string }> }) {
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
+};
+
+export default async function EditLandSalePage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const { from } = await searchParams;
   const supabase = await createClient();
   const profile = await getCurrentUserProfile(supabase);
   if (!profile || !canEdit(profile.role)) redirect(`/land-sales/${id}`);
@@ -14,5 +20,5 @@ export default async function EditLandSalePage({ params }: { params: Promise<{ i
   if (error) throw new Error(error.message);
   if (!record) notFound();
 
-  return <LandSaleForm record={record as LandSale} />;
+  return <LandSaleForm record={record as LandSale} from={from} />;
 }

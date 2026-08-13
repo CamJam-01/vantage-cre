@@ -45,6 +45,12 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
  * native date picker, so a successful edit always supersedes and clears any
  * `sale_date_raw` import flag. */
 export async function updateLandSale(id: string, _prevState: CreateFormState, formData: FormData): Promise<CreateFormState> {
+  // Carried through from the edit form's hidden `from` field (the results
+  // page's filters at the time the user navigated to this edit) purely to
+  // relay it onward to the post-save redirect — not part of the record shape.
+  const from = formData.get('from');
+  formData.delete('from');
+
   const raw = Object.fromEntries(formData.entries());
   const parsed = landSaleInputSchema.safeParse(raw);
   if (!parsed.success) {
@@ -61,7 +67,7 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
 
   if (error) return { message: error.message };
   await logAudit(supabase, 'Updated Record', `${parsed.data.parcel_id || parsed.data.address || id} updated`);
-  redirect(`/land-sales/${id}`);
+  redirect(from ? `/land-sales/${id}?from=${encodeURIComponent(String(from))}` : `/land-sales/${id}`);
 }
 
 export type ImportOutcome = {

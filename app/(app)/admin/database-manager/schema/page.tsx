@@ -1,6 +1,4 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUserProfile } from '@/lib/users/roles';
 import { Blueprint } from '@/components/ui/blueprint';
@@ -63,15 +61,6 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
           </table>
         </Blueprint>
       </div>
-
-      <Link href="/admin/database-manager" className="blueprint" style={{
-        position: 'fixed', bottom: 'var(--space-6)', left: 'var(--space-6)', display: 'flex',
-        alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4) var(--space-6)',
-        background: 'var(--color-bg)', color: 'var(--color-text)', boxShadow: 'var(--shadow-md)', textDecoration: 'none',
-      }}>
-        <ArrowLeft size={18} strokeWidth={2} />
-        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.03em' }}>BACK</span>
-      </Link>
     </main>
   );
 }

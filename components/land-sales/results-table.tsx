@@ -8,7 +8,7 @@ import { Blueprint } from '@/components/ui/blueprint';
 import { Button } from '@/components/ui/button';
 import { FiltersSidebar } from '@/components/land-sales/filters-sidebar';
 import type { LandSale } from '@/lib/land-sales/schema';
-import type { LandSaleFilters } from '@/lib/land-sales/search-params';
+import { encodeFilters, type LandSaleFilters } from '@/lib/land-sales/search-params';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/land-sales/format';
 import { makeCsv, downloadCsv } from '@/lib/land-sales/csv';
 
@@ -98,12 +98,16 @@ export function ResultsTable({ records, canEdit, filters }: { records: LandSale[
 
   const selectedCount = selectedIds.size;
 
+  // Carried as `?from=` so View Details / Edit can offer a "Back to search"
+  // link that lands the user back on this exact filtered result set.
+  const searchQuery = encodeFilters(filters).toString();
+
   function viewDetails(id: string) {
-    router.push(`/land-sales/${id}`);
+    router.push(searchQuery ? `/land-sales/${id}?from=${encodeURIComponent(searchQuery)}` : `/land-sales/${id}`);
   }
 
   function editDetails(id: string) {
-    router.push(`/land-sales/${id}/edit`);
+    router.push(searchQuery ? `/land-sales/${id}/edit?from=${encodeURIComponent(searchQuery)}` : `/land-sales/${id}/edit`);
   }
 
   function toggleExportMenu() {
@@ -154,7 +158,7 @@ export function ResultsTable({ records, canEdit, filters }: { records: LandSale[
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: 'var(--space-6)', padding: '0 var(--space-6) calc(var(--space-2) * 3)', boxSizing: 'border-box', background: 'var(--color-accent-2-200)' }}>
+      <div className="results-shell" style={{ flex: 1, display: 'flex', gap: 'var(--space-6)', padding: '0 var(--space-6) calc(var(--space-2) * 3)', boxSizing: 'border-box', background: 'var(--color-accent-2-200)' }}>
         <FiltersSidebar filters={filters} />
         <main style={{ flex: 1, minWidth: 0, paddingTop: 0, boxSizing: 'border-box' }}>
           <div style={{ width: '100%' }}>
