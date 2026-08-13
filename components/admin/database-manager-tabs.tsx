@@ -57,7 +57,7 @@ export function DatabaseManagerTabs({ salesCount, auditLog }: { salesCount: numb
       </div>
 
       {tab === 'connections' && (
-        <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', background: 'var(--color-bg)', padding: 'var(--space-6)' }}>
+        <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: 'var(--color-neutral-100)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
             <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)' }}>Connections</div>
             <Button variant="primary" onClick={openModal}>Add Connection</Button>

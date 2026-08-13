@@ -24,7 +24,7 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
     <main style={{
       flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
       padding: 'var(--space-8) var(--space-6) calc(var(--space-8) * 3)', boxSizing: 'border-box',
-      background: 'var(--color-accent-2-100)',
+      background: 'var(--color-accent-2-200)',
     }}>
       <div style={{ width: '100%', maxWidth: 900, display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
         <div>
@@ -37,7 +37,7 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
           </p>
         </div>
 
-        <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', background: 'var(--color-bg)', padding: 'var(--space-6)' }}>
+        <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: 'var(--color-neutral-100)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
             <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)' }}>Fields</div>
             <button type="button" className="btn btn-primary" disabled style={{ opacity: 0.45, cursor: 'not-allowed' }} title="Coming in a later phase">

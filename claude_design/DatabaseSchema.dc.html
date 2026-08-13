@@ -36,7 +36,7 @@
     </div>
   </header>
 
-  <main style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: var(--space-8) var(--space-6) calc(var(--space-8) * 3); box-sizing: border-box; background-color: var(--color-accent-2-100);">
+  <main style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: var(--space-8) var(--space-6) calc(var(--space-8) * 3); box-sizing: border-box; background-color: var(--color-accent-2-200)">
     <div style="width:100%;max-width:900px;display:flex;flex-direction:column;gap:var(--space-6);">
 
       <div>
@@ -44,7 +44,7 @@
         <h1 style="font-family:var(--font-heading);font-size:32px;font-weight:600;letter-spacing:0.01em;color:var(--color-text);margin:0;">Schema — {{ dbName }}</h1>
       </div>
 
-      <div class="blueprint elev-sm" style="position:relative;box-sizing:border-box;background:var(--color-bg);padding:var(--space-6);">
+      <div class="blueprint elev-sm" style="position: relative; box-sizing: border-box; padding: var(--space-6); background-color: var(--color-neutral-100)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4);">
           <div style="font-family:var(--font-heading);font-size:18px;font-weight:600;color:var(--color-text);">Fields</div>
           <button type="button" class="btn btn-primary" onClick="{{ openModal }}">Add Field</button>
@@ -85,7 +85,7 @@
 
           <sc-if value="{{ isStep1 }}" hint-placeholder-val="{{ true }}">
             <div style="display:flex;flex-direction:column;gap:var(--space-4);">
-              <div class="field"><label>Field Name</label><input class="input" type="text" placeholder="e.g. zoning" value="{{ fieldName }}" onChange="{{ setFieldName }}" /></div>
+              <div class="field"><label>Field Name</label><input class="input" type="text" placeholder="e.g. zoning" value="{{ fieldName }}" onChange="{{ setFieldName }}"></div>
               <div class="field">
                 <label>Field Type</label>
                 <select class="input" value="{{ fieldType }}" onChange="{{ setFieldType }}" style="padding:var(--space-2) var(--space-3);">
@@ -103,12 +103,12 @@
             <div style="display:flex;flex-direction:column;gap:var(--space-3);">
               <p style="font-size:14px;color:var(--color-neutral-700);margin:0 0 var(--space-2);">Set field behavior.</p>
               <label class="radio" style="gap:var(--space-2);cursor:pointer;">
-                <input type="checkbox" style="display:none;" checked="{{ required }}" onChange="{{ toggleRequired }}" />
+                <input type="checkbox" style="display:none;" checked="{{ required }}" onChange="{{ toggleRequired }}">
                 <span class="dot" style="{{ requiredDotStyle }}"></span>
                 <span style="font-size:14px;color:var(--color-text);">Required field</span>
               </label>
               <label class="radio" style="gap:var(--space-2);cursor:pointer;">
-                <input type="checkbox" style="display:none;" checked="{{ visible }}" onChange="{{ toggleVisible }}" />
+                <input type="checkbox" style="display:none;" checked="{{ visible }}" onChange="{{ toggleVisible }}">
                 <span class="dot" style="{{ visibleDotStyle }}"></span>
                 <span style="font-size:14px;color:var(--color-text);">Visible in search filters</span>
               </label>

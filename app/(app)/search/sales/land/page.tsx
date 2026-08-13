@@ -5,48 +5,32 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
-import { AccordionHeader } from '@/components/ui/accordion';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Field } from '@/components/ui/field';
 import { Tag } from '@/components/ui/tag';
 import { PROPERTY_TYPES, US_STATES, type PropertyType } from '@/lib/land-sales/constants';
 import { encodeFilters, type LandSaleFilters, type TimeFilter } from '@/lib/land-sales/search-params';
+import { formatInputWithCommas, parseFormattedNumber } from '@/lib/land-sales/format';
 
-function formatWithCommas(raw: string): string {
-  let clean = raw.replace(/[^0-9.]/g, '');
-  const firstDot = clean.indexOf('.');
-  if (firstDot !== -1) clean = clean.slice(0, firstDot + 1) + clean.slice(firstDot + 1).replace(/\./g, '');
-  const [intPart, decPart] = clean.split('.');
-  const withCommas = (intPart || '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  return decPart !== undefined ? `${withCommas}.${decPart}` : withCommas;
-}
+type Tab = 'location' | 'type' | 'size' | 'time';
 
-function parseNum(formatted: string): number | undefined {
-  const n = Number(formatted.replace(/,/g, ''));
-  return formatted && Number.isFinite(n) ? n : undefined;
-}
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'location', label: 'Location' },
+  { key: 'type', label: 'Type' },
+  { key: 'size', label: 'Size' },
+  { key: 'time', label: 'Time' },
+];
 
-// Effective computed styles from the mockup (LandSalesSearch.dc.html): several
-// declarations there reference --space-5/--space-7, which the design system's
-// token sheet never defines — that makes the whole shorthand `padding` invalid,
-// so only the explicit px longhands (or nothing, where none exist) actually apply.
-const topHeaderStyle: CSSProperties = { padding: 'var(--space-4) var(--space-6)', background: 'var(--color-accent-200)' };
-const topTitleStyle: CSSProperties = { fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 600, color: 'var(--color-text)' };
-const nestedHeaderBase: CSSProperties = { padding: '15px 20px 5px 20px' };
-const nestedTitleStyle: CSSProperties = { fontSize: 14, fontWeight: 500, color: 'var(--color-text)' };
-const nestedContentStyle: CSSProperties = { padding: '0 20px 13.6px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' };
+const sectionStyle: CSSProperties = { padding: 'var(--space-6)', background: 'var(--color-neutral-100)' };
+const modeRowStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'flex-start', flexDirection: 'row', gap: 20 };
+const twoColStyle: CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' };
 
 export default function LandSalesSearchPage() {
   const router = useRouter();
 
-  const [locationOpen, setLocationOpen] = useState(true);
-  const [typeOpen, setTypeOpen] = useState(false);
-  const [sizeOpen, setSizeOpen] = useState(false);
-  const [timeOpen, setTimeOpen] = useState(false);
-  const [sfOpen, setSfOpen] = useState(false);
-  const [acOpen, setAcOpen] = useState(false);
-  const [lastOpen, setLastOpen] = useState(false);
-  const [rangeOpen, setRangeOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>('location');
+  const [sizeMode, setSizeMode] = useState<'sf' | 'ac'>('sf');
+  const [timeMode, setTimeMode] = useState<'last' | 'range'>('last');
 
   const [state, setState] = useState('');
   const [msa, setMsa] = useState('');
@@ -58,7 +42,6 @@ export default function LandSalesSearchPage() {
   const [acMin, setAcMin] = useState('');
   const [acMax, setAcMax] = useState('');
 
-  const [timeMode, setTimeMode] = useState<'none' | 'last' | 'range'>('none');
   const [lastDuration, setLastDuration] = useState('');
   const [lastUnit, setLastUnit] = useState<'months' | 'years'>('months');
   const [dateFrom, setDateFrom] = useState('');
@@ -66,18 +49,6 @@ export default function LandSalesSearchPage() {
 
   function toggleType(t: PropertyType) {
     setTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
-  }
-
-  function setLastDurationValue(v: string) {
-    setLastDuration(v);
-    setTimeMode(v ? 'last' : 'none');
-    setDateFrom(''); setDateTo('');
-  }
-
-  function setDateRangeValue(which: 'from' | 'to', v: string) {
-    if (which === 'from') setDateFrom(v); else setDateTo(v);
-    setTimeMode('range');
-    setLastDuration('');
   }
 
   function handleContinue() {
@@ -93,10 +64,10 @@ export default function LandSalesSearchPage() {
       county: county.trim() || undefined,
       city: city.trim() || undefined,
       types,
-      sfMin: parseNum(sfMin),
-      sfMax: parseNum(sfMax),
-      acMin: parseNum(acMin),
-      acMax: parseNum(acMax),
+      sfMin: sizeMode === 'sf' ? parseFormattedNumber(sfMin) : undefined,
+      sfMax: sizeMode === 'sf' ? parseFormattedNumber(sfMax) : undefined,
+      acMin: sizeMode === 'ac' ? parseFormattedNumber(acMin) : undefined,
+      acMax: sizeMode === 'ac' ? parseFormattedNumber(acMax) : undefined,
       time,
     };
     router.push(`/land-sales?${encodeFilters(filters).toString()}`);
@@ -106,7 +77,7 @@ export default function LandSalesSearchPage() {
     <main style={{
       flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
       padding: 'var(--space-8) var(--space-6) calc(var(--space-8) * 2)', boxSizing: 'border-box',
-      background: 'var(--color-accent-2-100)', paddingTop: 80,
+      background: 'var(--color-accent-2-200)', paddingTop: 80,
     }}>
       <div style={{ textAlign: 'center', maxWidth: 520 }}>
         <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 36, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: '0 0 var(--space-2)' }}>
@@ -115,161 +86,154 @@ export default function LandSalesSearchPage() {
         <p style={{ fontSize: 15, color: 'var(--color-neutral-700)', margin: 0 }}>Refine your search using the criteria below.</p>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', width: '100%', maxWidth: 640, marginTop: 'var(--space-8)' }}>
+      <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', width: '100%', maxWidth: 640, marginTop: 'var(--space-8)' }}>
 
-        {/* Location */}
-        <Blueprint elevation="sm">
-          <AccordionHeader title="Location" open={locationOpen} onToggle={() => setLocationOpen(o => !o)} style={topHeaderStyle} titleStyle={topTitleStyle} />
-          {locationOpen && (
-            <div style={{
-              padding: 20, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)',
-              background: 'var(--color-accent-2-100)', border: '1px solid var(--color-neutral-300)',
-            }}>
-              <div className="field">
-                <label htmlFor="state">State</label>
-                <select id="state" className="input" value={state} onChange={e => setState(e.target.value)} style={{ backgroundColor: '#FFFFFF' }}>
-                  <option value="">Any state</option>
-                  {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
-                </select>
-              </div>
-              <Field id="msa" label="MSA" type="text" placeholder="e.g. Dallas-Fort Worth" value={msa} onChange={e => setMsa(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
-              <Field id="county" label="County" type="text" placeholder="e.g. Denton" value={county} onChange={e => setCounty(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
-              <Field id="city" label="City" type="text" placeholder="e.g. Denton" value={city} onChange={e => setCity(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+        <div style={{ display: 'flex', background: 'var(--color-accent-2-300)', borderBottom: '1px solid var(--color-neutral-300)' }}>
+          {TABS.map(t => {
+            const active = activeTab === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setActiveTab(t.key)}
+                style={{
+                  background: active ? 'var(--color-accent-600)' : 'transparent',
+                  color: active ? '#FFFFFF' : 'var(--color-text)',
+                  flex: 1, fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.02em',
+                  padding: 'var(--space-4) var(--space-3)', cursor: 'pointer', border: 'none',
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {activeTab === 'location' && (
+          <div style={{ ...sectionStyle, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+            <div className="field">
+              <label htmlFor="state">State</label>
+              <select id="state" className="input" value={state} onChange={e => setState(e.target.value)} style={{ backgroundColor: '#FFFFFF', cursor: 'pointer' }}>
+                <option value="">Select state</option>
+                {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+              </select>
             </div>
-          )}
-        </Blueprint>
+            <Field id="msa" label="MSA" type="text" placeholder="e.g. Dallas-Fort Worth" value={msa} onChange={e => setMsa(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+            <Field id="county" label="County" type="text" placeholder="e.g. Denton" value={county} onChange={e => setCounty(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+            <Field id="city" label="City" type="text" placeholder="e.g. Denton" value={city} onChange={e => setCity(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+          </div>
+        )}
 
-        {/* Type */}
-        <Blueprint elevation="sm">
-          <AccordionHeader title="Type" open={typeOpen} onToggle={() => setTypeOpen(o => !o)} style={topHeaderStyle} titleStyle={topTitleStyle} />
-          {typeOpen && (
-            <div style={{
-              padding: 20, display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)',
-              background: 'var(--color-accent-100)', border: '1px solid var(--color-neutral-300)',
-            }}>
-              {PROPERTY_TYPES.map(t => {
-                const selected = types.includes(t);
-                return (
-                  <Tag
-                    key={t}
-                    onClick={() => toggleType(t)}
-                    style={{
-                      background: selected ? 'var(--color-accent-600)' : '#FFFFFF',
-                      color: selected ? '#FFFFFF' : 'var(--color-neutral-900)',
-                      border: `1px solid ${selected ? 'var(--color-accent-600)' : 'var(--color-neutral-400)'}`,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {t}
-                  </Tag>
-                );
-              })}
+        {activeTab === 'type' && (
+          <div style={{ ...sectionStyle, display: 'grid', flexWrap: 'wrap', gap: 15, gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
+            {PROPERTY_TYPES.map(t => {
+              const selected = types.includes(t);
+              return (
+                <Tag
+                  key={t}
+                  onClick={() => toggleType(t)}
+                  style={{
+                    background: selected ? 'var(--color-accent-600)' : '#FFFFFF',
+                    color: selected ? '#FFFFFF' : 'var(--color-neutral-900)',
+                    border: `1px solid ${selected ? 'var(--color-accent-600)' : 'var(--color-neutral-400)'}`,
+                    cursor: 'pointer', fontSize: 14, fontWeight: 500, gap: 0, padding: 10,
+                  }}
+                >
+                  {t}
+                </Tag>
+              );
+            })}
+          </div>
+        )}
+
+        {activeTab === 'size' && (
+          <div style={{ ...sectionStyle, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <div style={modeRowStyle}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>
+                {sizeMode === 'sf' ? 'Square Feet (SF)' : 'Acreage (AC)'}
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setSizeMode(m => m === 'sf' ? 'ac' : 'sf')}
+                style={{ cursor: 'pointer', textAlign: 'left', alignSelf: 'auto', fontSize: 12, fontStyle: 'normal', textDecorationLine: 'underline' }}
+              >
+                {sizeMode === 'sf' ? 'Use Acreage' : 'Use Square Feet'}
+              </button>
             </div>
-          )}
-        </Blueprint>
+            {sizeMode === 'sf' ? (
+              <div style={twoColStyle}>
+                <Field id="sfMin" label="Min" type="text" inputMode="numeric" placeholder="0" value={sfMin} onChange={e => setSfMin(formatInputWithCommas(e.target.value))} style={{ backgroundColor: '#FFFFFF' }} />
+                <Field id="sfMax" label="Max" type="text" inputMode="numeric" placeholder="0" value={sfMax} onChange={e => setSfMax(formatInputWithCommas(e.target.value))} style={{ backgroundColor: '#FFFFFF' }} />
+              </div>
+            ) : (
+              <div style={twoColStyle}>
+                <Field id="acMin" label="Min" type="text" inputMode="decimal" placeholder="0.00" value={acMin} onChange={e => setAcMin(formatInputWithCommas(e.target.value))} style={{ backgroundColor: '#FFFFFF' }} />
+                <Field id="acMax" label="Max" type="text" inputMode="decimal" placeholder="0.00" value={acMax} onChange={e => setAcMax(formatInputWithCommas(e.target.value))} style={{ backgroundColor: '#FFFFFF' }} />
+              </div>
+            )}
+          </div>
+        )}
 
-        {/* Size */}
-        <Blueprint elevation="sm">
-          <AccordionHeader title="Size" open={sizeOpen} onToggle={() => setSizeOpen(o => !o)} style={topHeaderStyle} titleStyle={topTitleStyle} />
-          {sizeOpen && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              <div style={{ borderTop: '1px solid var(--color-neutral-300)' }}>
-                <AccordionHeader
-                  title="Square Feet (SF)" open={sfOpen} onToggle={() => setSfOpen(o => !o)}
-                  style={{ ...nestedHeaderBase, background: 'var(--color-accent-2-100)' }} titleStyle={nestedTitleStyle} chevronSize={16}
-                />
-                {sfOpen && (
-                  <div style={nestedContentStyle}>
-                    <Field id="sfMin" label="Min" type="text" inputMode="numeric" placeholder="0" value={sfMin} onChange={e => setSfMin(formatWithCommas(e.target.value))} style={{ backgroundColor: '#FFFFFF' }} />
-                    <Field id="sfMax" label="Max" type="text" inputMode="numeric" placeholder="0" value={sfMax} onChange={e => setSfMax(formatWithCommas(e.target.value))} style={{ backgroundColor: '#FFFFFF' }} />
-                  </div>
-                )}
-              </div>
-              <div style={{ borderTop: '1px solid var(--color-neutral-300)', paddingBottom: 10 }}>
-                <AccordionHeader
-                  title="Acreage (AC)" open={acOpen} onToggle={() => setAcOpen(o => !o)}
-                  style={nestedHeaderBase} titleStyle={nestedTitleStyle} chevronSize={16}
-                />
-                {acOpen && (
-                  <div style={nestedContentStyle}>
-                    <Field id="acMin" label="Min" type="text" inputMode="decimal" placeholder="0.00" value={acMin} onChange={e => setAcMin(formatWithCommas(e.target.value))} style={{ backgroundColor: '#FFFFFF' }} />
-                    <Field id="acMax" label="Max" type="text" inputMode="decimal" placeholder="0.00" value={acMax} onChange={e => setAcMax(formatWithCommas(e.target.value))} style={{ backgroundColor: '#FFFFFF' }} />
-                  </div>
-                )}
-              </div>
+        {activeTab === 'time' && (
+          <div style={{ ...sectionStyle, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <div style={modeRowStyle}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>
+                {timeMode === 'last' ? 'Last' : 'Range'}
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setTimeMode(m => m === 'last' ? 'range' : 'last')}
+                style={{ cursor: 'pointer', textAlign: 'left', alignSelf: 'auto', fontSize: 12, fontStyle: 'normal', textDecorationLine: 'underline' }}
+              >
+                {timeMode === 'last' ? 'Use Range' : 'Use Last'}
+              </button>
             </div>
-          )}
-        </Blueprint>
-
-        {/* Time */}
-        <Blueprint elevation="sm">
-          <AccordionHeader title="Time" open={timeOpen} onToggle={() => setTimeOpen(o => !o)} style={topHeaderStyle} titleStyle={topTitleStyle} />
-          {timeOpen && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              <div style={{ borderTop: '1px solid var(--color-neutral-300)' }}>
-                <AccordionHeader
-                  title="Last" open={lastOpen} onToggle={() => setLastOpen(o => !o)}
-                  style={nestedHeaderBase} titleStyle={nestedTitleStyle} chevronSize={16}
+            {timeMode === 'last' ? (
+              <div style={{ ...twoColStyle, alignItems: 'end' }}>
+                <Field id="lastDuration" label="Duration" type="number" placeholder="0" value={lastDuration} onChange={e => setLastDuration(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+                <SegmentedControl
+                  name="last-unit"
+                  value={lastUnit}
+                  onChange={v => setLastUnit(v as 'months' | 'years')}
+                  options={[{ label: 'Months', value: 'months' }, { label: 'Years', value: 'years' }]}
                 />
-                {lastOpen && (
-                  <div style={{ ...nestedContentStyle, alignItems: 'end' }}>
-                    <Field
-                      id="lastDuration" label="Duration" type="number" placeholder="0"
-                      value={lastDuration} onChange={e => setLastDurationValue(e.target.value)}
-                      style={{ backgroundColor: '#FFFFFF' }}
-                    />
-                    <SegmentedControl
-                      name="last-unit"
-                      value={lastUnit}
-                      onChange={v => setLastUnit(v as 'months' | 'years')}
-                      options={[{ label: 'Months', value: 'months' }, { label: 'Years', value: 'years' }]}
-                    />
-                  </div>
-                )}
-                {timeMode === 'range' && <p style={{ fontSize: 12, color: 'var(--color-neutral-600)', margin: '0 20px var(--space-2)' }}>Clears the date Range below.</p>}
               </div>
-              <div style={{ borderTop: '1px solid var(--color-neutral-300)', paddingBottom: 10 }}>
-                <AccordionHeader
-                  title="Range" open={rangeOpen} onToggle={() => setRangeOpen(o => !o)}
-                  style={nestedHeaderBase} titleStyle={nestedTitleStyle} chevronSize={16}
-                />
-                {rangeOpen && (
-                  <div style={nestedContentStyle}>
-                    <Field id="dateFrom" label="From" type="date" value={dateFrom} onChange={e => setDateRangeValue('from', e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
-                    <Field id="dateTo" label="To" type="date" value={dateTo} onChange={e => setDateRangeValue('to', e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
-                  </div>
-                )}
-                {timeMode === 'last' && <p style={{ fontSize: 12, color: 'var(--color-neutral-600)', margin: '0 20px var(--space-2)' }}>Clears &quot;Last&quot; above.</p>}
+            ) : (
+              <div style={twoColStyle}>
+                <Field id="dateFrom" label="From" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+                <Field id="dateTo" label="To" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
               </div>
-            </div>
-          )}
-        </Blueprint>
+            )}
+          </div>
+        )}
 
+      </Blueprint>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', maxWidth: 640, marginTop: 'var(--space-6)' }}>
+        <Link href="/search/sales" className="blueprint" style={{
+          display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4) var(--space-6)',
+          background: 'var(--color-bg)', color: 'var(--color-text)', boxShadow: 'var(--shadow-md)', textDecoration: 'none',
+        }}>
+          <ArrowLeft size={18} strokeWidth={2} />
+          <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.03em' }}>BACK</span>
+        </Link>
+
+        <button
+          type="button"
+          className="blueprint"
+          onClick={handleContinue}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4) var(--space-6)',
+            background: 'var(--color-accent-600)', color: 'var(--color-bg)', border: 'none',
+            cursor: 'pointer', boxShadow: 'var(--shadow-md)',
+          }}
+        >
+          <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.03em' }}>CONTINUE</span>
+          <ArrowRight size={18} strokeWidth={2} />
+        </button>
       </div>
-
-      <Link href="/search/sales" className="blueprint" style={{
-        position: 'fixed', bottom: 'var(--space-6)', left: 'var(--space-6)', display: 'flex',
-        alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4) var(--space-6)',
-        background: 'var(--color-bg)', color: 'var(--color-text)', boxShadow: 'var(--shadow-md)', textDecoration: 'none',
-      }}>
-        <ArrowLeft size={18} strokeWidth={2} />
-        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.03em' }}>BACK</span>
-      </Link>
-
-      <button
-        type="button"
-        className="blueprint"
-        onClick={handleContinue}
-        style={{
-          position: 'fixed', bottom: 'var(--space-6)', right: 'var(--space-6)', display: 'flex',
-          alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4) var(--space-6)',
-          background: 'var(--color-accent-600)', color: 'var(--color-bg)', border: 'none',
-          cursor: 'pointer', boxShadow: 'var(--shadow-md)',
-        }}
-      >
-        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.03em' }}>CONTINUE</span>
-        <ArrowRight size={18} strokeWidth={2} />
-      </button>
     </main>
   );
 }

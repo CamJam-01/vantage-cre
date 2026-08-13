@@ -31,7 +31,7 @@ export default async function DatabaseManagerPage() {
     <main style={{
       flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
       padding: 'var(--space-8) var(--space-6) calc(var(--space-8) * 3)', boxSizing: 'border-box',
-      background: 'var(--color-accent-2-100)',
+      background: 'var(--color-accent-2-200)',
     }}>
       <div style={{ width: '100%', maxWidth: 1100, display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>

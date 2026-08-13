@@ -36,155 +36,123 @@
     </div>
   </header>
 
-  <main style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: var(--space-8) var(--space-6) calc(var(--space-8) * 2); box-sizing: border-box; background-color: var(--color-accent-2-100); padding-top: 80px">
+  <main style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: var(--space-8) var(--space-6) calc(var(--space-8) * 2); box-sizing: border-box; background-color: var(--color-accent-2-200); padding-top: 80px">
     <div style="text-align:center;max-width:520px;">
       <h1 style="font-family:var(--font-heading);font-size:36px;font-weight:600;letter-spacing:0.01em;color:var(--color-text);margin:0 0 var(--space-2);">Land Sales Search</h1>
       <p style="font-size:15px;color:var(--color-neutral-700);margin:0;">Refine your search using the criteria below.</p>
     </div>
 
-    <div style="display:flex;flex-direction:column;gap:var(--space-4);width:100%;max-width:640px;margin-top:var(--space-8);">
+    <div class="blueprint elev-sm" style="position:relative;box-sizing:border-box;width:100%;max-width:640px;margin-top:var(--space-8);">
+
+      <div style="display: flex; background-color: var(--color-accent-2-300); border-bottom: 1px solid var(--color-neutral-300)">
+        <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="4">
+          <button type="button" onClick="{{ tab.select }}" style="{{ tab.style }}flex:1;font-family:var(--font-heading);font-size:16px;font-weight:600;letter-spacing:0.02em;padding:var(--space-4) var(--space-3);cursor:pointer;border:none;">{{ tab.label }}</button>
+        </sc-for>
+      </div>
 
       <!-- Location -->
-      <div class="blueprint elev-sm" style="position:relative;box-sizing:border-box;">
-        <div onClick="{{ toggleLocation }}" style="display: flex; align-items: center; justify-content: space-between; padding: var(--space-4) var(--space-6); cursor: pointer; background-color: var(--color-accent-200)">
-          <span style="font-family: var(--font-heading); font-size: 20px; font-weight: 600; color: var(--color-text); padding-left: 0px; padding-right: 0px">Location</span>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="{{ locationChevronStyle }}"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </div>
-        <sc-if value="{{ locationOpen }}" hint-placeholder-val="{{ false }}" style="padding-left: 0px; padding-right: 0px">
-          <div style="padding: 0 var(--space-6) var(--space-5); display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); padding-right: 20px; padding-left: 20px; padding-bottom: 20px; padding-top: 20px; background-color: var(--color-accent-2-100); border-width: 1px; border-style: solid; border-color: var(--color-neutral-300)">
-            <div class="field"><label>State</label><input class="input" type="text" placeholder="e.g. Texas" style="background-color: #FFFFFF"></div>
-            <div class="field"><label>MSA</label><input class="input" type="text" placeholder="e.g. Dallas-Fort Worth" style="background-color: #FFFFFF"></div>
-            <div class="field"><label>County</label><input class="input" type="text" placeholder="e.g. Denton" style="background-color: #FFFFFF"></div>
-            <div class="field"><label>City</label><input class="input" type="text" placeholder="e.g. Denton" style="background-color: #FFFFFF"></div>
+      <sc-if value="{{ isLocation }}" hint-placeholder-val="{{ true }}">
+        <div style="padding: var(--space-6); display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); background-color: var(--color-neutral-100)">
+          <div class="field"><label>State</label>
+            <select class="input" style="background-color: #FFFFFF; cursor: pointer">
+              <option value="">Select state</option>
+              <sc-for list="{{ stateOptions }}" as="st" hint-placeholder-count="50">
+                <option value="{{ st.abbr }}">{{ st.abbr }}</option>
+              </sc-for>
+            </select>
           </div>
-        </sc-if>
-      </div>
+          <div class="field"><label>MSA</label><input class="input" type="text" placeholder="e.g. Dallas-Fort Worth" style="background-color: #FFFFFF"></div>
+          <div class="field"><label>County</label><input class="input" type="text" placeholder="e.g. Denton" style="background-color: #FFFFFF"></div>
+          <div class="field"><label>City</label><input class="input" type="text" placeholder="e.g. Denton" style="background-color: #FFFFFF"></div>
+        </div>
+      </sc-if>
 
       <!-- Type -->
-      <div class="blueprint elev-sm" style="position:relative;box-sizing:border-box;">
-        <div onClick="{{ toggleType }}" style="display: flex; align-items: center; justify-content: space-between; padding: var(--space-4) var(--space-6); cursor: pointer; background-color: var(--color-accent-200)">
-          <span style="font-family: var(--font-heading); font-size: 20px; font-weight: 600; color: var(--color-text); padding-left: 0px; padding-right: 0px">Type</span>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="{{ typeChevronStyle }}"><polyline points="6 9 12 15 18 9"></polyline></svg>
+      <sc-if value="{{ isType }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: var(--space-6); display: grid; flex-wrap: wrap; gap: 15px; flex-direction: row; align-items: stretch; justify-content: space-between; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); background-color: var(--color-neutral-100)">
+          <sc-for list="{{ typeOptions }}" as="t" hint-placeholder-count="5" style="display: grid; align-items: stretch; background-color: var(--color-accent-2-400)">
+            <div class="tag" onClick="{{ t.toggle }}" style="{{ t.tagStyle }}cursor: pointer; font-size: 14px; font-weight: 500; gap: 0px; padding-top: 10px; padding-right: 10px; padding-bottom: 10px; padding-left: 10px">{{ t.label }}</div>
+          </sc-for>
         </div>
-        <sc-if value="{{ typeOpen }}" hint-placeholder-val="{{ false }}">
-          <div style="padding: 0 var(--space-6) var(--space-5); display: flex; flex-wrap: wrap; gap: var(--space-3); padding-top: 20px; padding-right: 20px; padding-bottom: 20px; padding-left: 20px; background-color: var(--color-accent-100); border-width: 1px; border-style: solid; border-color: var(--color-neutral-300)">
-            <sc-for list="{{ typeOptions }}" as="t" hint-placeholder-count="5">
-              <div class="tag" onClick="{{ t.toggle }}" style="{{ t.tagStyle }}cursor:pointer;">{{ t.label }}</div>
-            </sc-for>
-          </div>
-        </sc-if>
-      </div>
+      </sc-if>
 
       <!-- Size -->
-      <div class="blueprint elev-sm" style="position: relative; box-sizing: border-box; padding-bottom: 0px">
-        <div onClick="{{ toggleSize }}" style="display: flex; align-items: center; justify-content: space-between; padding: var(--space-4) var(--space-6); cursor: pointer; background-color: var(--color-accent-200)">
-          <span style="font-family: var(--font-heading); font-size: 20px; font-weight: 600; color: var(--color-text); padding-left: 0px; padding-right: 0px">Size</span>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="{{ sizeChevronStyle }}"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </div>
-        <sc-if value="{{ sizeOpen }}" hint-placeholder-val="{{ false }}">
-          <div style="padding:0 var(--space-6) var(--space-5);display:flex;flex-direction:column;gap:var(--space-3);">
-
-            <div style="border-top: 1px solid var(--color-neutral-300); display: block">
-              <div onClick="{{ toggleSf }}" style="display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) 0; cursor: pointer; padding-right: 20px; padding-left: 20px; background-color: var(--color-accent-2-100); padding-top: 15px; padding-bottom: 5px">
-                <span style="font-size: 14px; font-weight: 500; color: var(--color-text); padding-left: 0px; padding-right: 0px">Square Feet (SF)</span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="{{ sfChevronStyle }}"><polyline points="6 9 12 15 18 9"></polyline></svg>
-              </div>
-              <sc-if value="{{ sfOpen }}" hint-placeholder-val="{{ false }}" style="padding-right: 20px; padding-left: 20px">
-                <div style="padding: 0 0 var(--space-4); display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); padding-left: 20px; padding-right: 20px">
-                  <div class="field"><label>Min</label><input class="input" type="text" inputmode="numeric" placeholder="0" value="{{ sfMin }}" onChange="{{ setSfMin }}" style="background-color: #FFFFFF"></div>
-                  <div class="field"><label>Max</label><input class="input" type="text" inputmode="numeric" placeholder="0" value="{{ sfMax }}" onChange="{{ setSfMax }}" style="background-color: #FFFFFF"></div>
-                </div>
-              </sc-if>
-            </div>
-
-            <div style="border-top: 1px solid var(--color-neutral-300); padding-bottom: 10px">
-              <div onClick="{{ toggleAc }}" style="display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) 0; cursor: pointer; padding-right: 20px; padding-left: 20px; padding-top: 15px; padding-bottom: 5px">
-                <span style="font-size: 14px; font-weight: 500; color: var(--color-text); padding-left: 0px; padding-right: 0px">Acreage (AC)</span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="{{ acChevronStyle }}"><polyline points="6 9 12 15 18 9"></polyline></svg>
-              </div>
-              <sc-if value="{{ acOpen }}" hint-placeholder-val="{{ false }}" style="padding-right: 20px; padding-left: 20px">
-                <div style="padding: 0 0 var(--space-4); display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); padding-left: 20px; padding-right: 20px">
-                  <div class="field"><label>Min</label><input class="input" type="text" inputmode="decimal" placeholder="0.00" value="{{ acMin }}" onChange="{{ setAcMin }}" style="background-color: #FFFFFF"></div>
-                  <div class="field"><label>Max</label><input class="input" type="text" inputmode="decimal" placeholder="0.00" value="{{ acMax }}" onChange="{{ setAcMax }}" style="background-color: #FFFFFF"></div>
-                </div>
-              </sc-if>
-            </div>
-
+      <sc-if value="{{ isSize }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-4); background-color: var(--color-neutral-100)">
+          <div style="display: flex; align-items: center; justify-content: flex-start; flex-direction: row; gap: 20px">
+            <span style="font-size:14px;font-weight:600;color:var(--color-text);">{{ sizeModeLabel }}</span>
+            <button type="button" class="btn btn-ghost" onClick="{{ toggleSizeMode }}" style="cursor: pointer; text-align: left; align-self: auto; font-size: 12px; font-style: normal; text-decoration-line: underline">{{ sizeModeToggleLabel }}</button>
           </div>
-        </sc-if>
-      </div>
+          <sc-if value="{{ isSizeModeSf }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);">
+              <div class="field"><label>Min</label><input class="input" type="text" inputmode="numeric" placeholder="0" value="{{ sfMin }}" onChange="{{ setSfMin }}" style="background-color: #FFFFFF"></div>
+              <div class="field"><label>Max</label><input class="input" type="text" inputmode="numeric" placeholder="0" value="{{ sfMax }}" onChange="{{ setSfMax }}" style="background-color: #FFFFFF"></div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ isSizeModeAc }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);">
+              <div class="field"><label>Min</label><input class="input" type="text" inputmode="decimal" placeholder="0.00" value="{{ acMin }}" onChange="{{ setAcMin }}" style="background-color: #FFFFFF"></div>
+              <div class="field"><label>Max</label><input class="input" type="text" inputmode="decimal" placeholder="0.00" value="{{ acMax }}" onChange="{{ setAcMax }}" style="background-color: #FFFFFF"></div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
 
       <!-- Time -->
-      <div class="blueprint elev-sm" style="position: relative; box-sizing: border-box; padding-bottom: 0px">
-        <div onClick="{{ toggleTime }}" style="display: flex; align-items: center; justify-content: space-between; padding: var(--space-4) var(--space-6); cursor: pointer; background-color: var(--color-accent-200)">
-          <span style="font-family: var(--font-heading); font-size: 20px; font-weight: 600; color: var(--color-text); padding-left: 0px; padding-right: 0px">Time</span>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="{{ timeChevronStyle }}"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </div>
-        <sc-if value="{{ timeOpen }}" hint-placeholder-val="{{ false }}" style="padding-bottom: 0px; padding-top: 5px">
-          <div style="padding:0 var(--space-6) var(--space-5);display:flex;flex-direction:column;gap:var(--space-3);">
-
-            <div style="border-top:1px solid var(--color-neutral-300);">
-              <div onClick="{{ toggleLast }}" style="display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) 0; cursor: pointer; padding-right: 20px; padding-left: 20px; padding-top: 15px; padding-bottom: 5px">
-                <span style="font-size: 14px; font-weight: 500; color: var(--color-text); padding-left: 0px; padding-right: 0px">Last</span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="{{ lastChevronStyle }}"><polyline points="6 9 12 15 18 9"></polyline></svg>
-              </div>
-              <sc-if value="{{ lastOpen }}" hint-placeholder-val="{{ false }}" style="padding-right: 20px; padding-left: 20px">
-                <div style="padding: 0 0 var(--space-4); display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); align-items: end; padding-left: 20px; padding-right: 20px">
-                  <div class="field"><label>Duration</label><input class="input" type="number" placeholder="0" style="background-color: #FFFFFF"></div>
-                  <div class="seg">
-                    <label class="seg-opt" style="width: 100%"><input type="radio" name="last-unit" checked="{{ lastUnitIsMonths }}" onChange="{{ setLastUnitMonths }}"><span>Months</span></label>
-                    <label class="seg-opt" style="width: 100%"><input type="radio" name="last-unit" checked="{{ lastUnitIsYears }}" onChange="{{ setLastUnitYears }}"><span>Years</span></label>
-                  </div>
-                </div>
-              </sc-if>
-            </div>
-
-            <div style="border-top: 1px solid var(--color-neutral-300); padding-bottom: 10px">
-              <div onClick="{{ toggleRange }}" style="display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) 0; cursor: pointer; padding-right: 20px; padding-left: 20px; padding-top: 15px; padding-bottom: 5px">
-                <span style="font-size: 14px; font-weight: 500; color: var(--color-text); padding-left: 0px; padding-right: 0px">Range</span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="{{ rangeChevronStyle }}"><polyline points="6 9 12 15 18 9"></polyline></svg>
-              </div>
-              <sc-if value="{{ rangeOpen }}" hint-placeholder-val="{{ false }}" style="padding-right: 20px; padding-left: 20px">
-                <div style="padding: 0 0 var(--space-4); display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); padding-left: 20px; padding-right: 20px">
-                  <div class="field"><label>From</label><input class="input" type="date" style="background-color: #FFFFFF"></div>
-                  <div class="field"><label>To</label><input class="input" type="date" style="background-color: #FFFFFF"></div>
-                </div>
-              </sc-if>
-            </div>
-
+      <sc-if value="{{ isTime }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: var(--space-6); display: flex; flex-direction: column; gap: var(--space-4); background-color: var(--color-neutral-100)">
+          <div style="display: flex; align-items: center; justify-content: flex-start; flex-direction: row; gap: 20px">
+            <span style="font-size:14px;font-weight:600;color:var(--color-text);">{{ timeModeLabel }}</span>
+            <button type="button" class="btn btn-ghost" onClick="{{ toggleTimeMode }}" style="cursor: pointer; text-align: left; align-self: auto; font-size: 12px; font-style: normal; text-decoration-line: underline">{{ timeModeToggleLabel }}</button>
           </div>
-        </sc-if>
-      </div>
+          <sc-if value="{{ isTimeModeLast }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);align-items:end;">
+              <div class="field"><label>Duration</label><input class="input" type="number" placeholder="0" style="background-color: #FFFFFF"></div>
+              <div class="seg">
+                <label class="seg-opt" style="width: 100%"><input type="radio" name="last-unit" checked="{{ lastUnitIsMonths }}" onChange="{{ setLastUnitMonths }}"><span>Months</span></label>
+                <label class="seg-opt" style="width: 100%"><input type="radio" name="last-unit" checked="{{ lastUnitIsYears }}" onChange="{{ setLastUnitYears }}"><span>Years</span></label>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ isTimeModeRange }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);">
+              <div class="field"><label>From</label><input class="input" type="date" style="background-color: #FFFFFF"></div>
+              <div class="field"><label>To</label><input class="input" type="date" style="background-color: #FFFFFF"></div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
 
+    </div>
+
+    <div style="display:flex;justify-content:space-between;width:100%;max-width:640px;margin-top:var(--space-6);">
+      <a href="SalesSearch.dc.html" class="blueprint" style="display:flex;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-6);background:var(--color-bg);color:var(--color-text);box-shadow:var(--shadow-md);text-decoration:none;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        <span style="font-family:var(--font-heading);font-size:16px;font-weight:600;letter-spacing:0.03em;">BACK</span>
+      </a>
+
+      <button type="button" class="blueprint" onClick="{{ handleContinue }}" style="display:flex;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-6);background:var(--color-accent-600);color:var(--color-bg);border:none;cursor:pointer;box-shadow:var(--shadow-md);">
+        <span style="font-family:var(--font-heading);font-size:16px;font-weight:600;letter-spacing:0.03em;">CONTINUE</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+      </button>
     </div>
   </main>
 
-  <a href="SalesSearch.dc.html" class="blueprint" style="position:fixed;bottom:var(--space-6);left:var(--space-6);display:flex;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-6);background:var(--color-bg);color:var(--color-text);box-shadow:var(--shadow-md);text-decoration:none;">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-    <span style="font-family:var(--font-heading);font-size:16px;font-weight:600;letter-spacing:0.03em;">BACK</span>
-  </a>
-
-  <button type="button" class="blueprint" onClick="{{ handleContinue }}" style="position:fixed;bottom:var(--space-6);right:var(--space-6);display:flex;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-6);background:var(--color-accent-600);color:var(--color-bg);border:none;cursor:pointer;box-shadow:var(--shadow-md);">
-    <span style="font-family:var(--font-heading);font-size:16px;font-weight:600;letter-spacing:0.03em;">CONTINUE</span>
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-  </button>
-
 </div>
+
 </x-dc>
 <script type="text/x-dc" data-dc-script>
 const TYPE_OPTIONS = ['Residential', 'Multifamily', 'Retail', 'Office', 'Industrial'];
+const STATE_ABBRS = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
+const TABS = ['location', 'type', 'size', 'time'];
+const TAB_LABELS = { location: 'Location', type: 'Type', size: 'Size', time: 'Time' };
 
 class Component extends DCLogic {
   state = {
-    locationOpen: true,
-    typeOpen: false,
-    sizeOpen: false,
-    timeOpen: false,
-    sfOpen: false,
-    acOpen: false,
-    lastOpen: false,
-    rangeOpen: false,
+    activeTab: 'location',
     selectedTypes: [],
+    timeMode: 'last',
+    sizeMode: 'sf',
     lastUnit: 'months',
     sfMin: '', sfMax: '', acMin: '', acMax: ''
   };
@@ -200,7 +168,7 @@ class Component extends DCLogic {
 
   setFormattedField = (key) => (e) => this.setState({ [key]: this.formatWithCommas(e.target.value) });
 
-  toggle = (key) => this.setState(s => ({ [key]: !s[key] }));
+  selectTab = (tab) => this.setState({ activeTab: tab });
 
   toggleTypeOption = (label) => this.setState(s => ({
     selectedTypes: s.selectedTypes.includes(label)
@@ -212,12 +180,18 @@ class Component extends DCLogic {
     window.location.href = 'Database.dc.html';
   };
 
-  chevronStyle(open) {
-    return `transition:transform 0.15s ease;transform:rotate(${open ? '180deg' : '0deg'});flex-shrink:0;`;
-  }
-
   renderVals() {
     const s = this.state;
+
+    const tabs = TABS.map(key => {
+      const active = s.activeTab === key;
+      return {
+        label: TAB_LABELS[key],
+        select: () => this.selectTab(key),
+        style: `background:${active ? 'var(--color-accent-600)' : 'transparent'};color:${active ? '#FFFFFF' : 'var(--color-text)'};`
+      };
+    });
+
     const typeOptions = TYPE_OPTIONS.map(label => {
       const selected = s.selectedTypes.includes(label);
       return {
@@ -228,30 +202,22 @@ class Component extends DCLogic {
     });
 
     return {
-      locationOpen: s.locationOpen,
-      typeOpen: s.typeOpen,
-      sizeOpen: s.sizeOpen,
-      timeOpen: s.timeOpen,
-      sfOpen: s.sfOpen,
-      acOpen: s.acOpen,
-      lastOpen: s.lastOpen,
-      rangeOpen: s.rangeOpen,
-      toggleLocation: () => this.toggle('locationOpen'),
-      toggleType: () => this.toggle('typeOpen'),
-      toggleSize: () => this.toggle('sizeOpen'),
-      toggleTime: () => this.toggle('timeOpen'),
-      toggleSf: () => this.toggle('sfOpen'),
-      toggleAc: () => this.toggle('acOpen'),
-      toggleLast: () => this.toggle('lastOpen'),
-      toggleRange: () => this.toggle('rangeOpen'),
-      locationChevronStyle: this.chevronStyle(s.locationOpen),
-      typeChevronStyle: this.chevronStyle(s.typeOpen),
-      sizeChevronStyle: this.chevronStyle(s.sizeOpen),
-      timeChevronStyle: this.chevronStyle(s.timeOpen),
-      sfChevronStyle: this.chevronStyle(s.sfOpen),
-      acChevronStyle: this.chevronStyle(s.acOpen),
-      lastChevronStyle: this.chevronStyle(s.lastOpen),
-      rangeChevronStyle: this.chevronStyle(s.rangeOpen),
+      tabs,
+      stateOptions: STATE_ABBRS.map(abbr => ({ abbr })),
+      isLocation: s.activeTab === 'location',
+      isType: s.activeTab === 'type',
+      isSize: s.activeTab === 'size',
+      isSizeModeSf: s.sizeMode === 'sf',
+      isSizeModeAc: s.sizeMode === 'ac',
+      sizeModeLabel: s.sizeMode === 'sf' ? 'Square Feet (SF)' : 'Acreage (AC)',
+      sizeModeToggleLabel: s.sizeMode === 'sf' ? 'Use Acreage' : 'Use Square Feet',
+      toggleSizeMode: () => this.setState(st => ({ sizeMode: st.sizeMode === 'sf' ? 'ac' : 'sf' })),
+      isTime: s.activeTab === 'time',
+      isTimeModeLast: s.timeMode === 'last',
+      isTimeModeRange: s.timeMode === 'range',
+      timeModeLabel: s.timeMode === 'last' ? 'Last' : 'Range',
+      timeModeToggleLabel: s.timeMode === 'last' ? 'Use Range' : 'Use Last',
+      toggleTimeMode: () => this.setState(st => ({ timeMode: st.timeMode === 'last' ? 'range' : 'last' })),
       typeOptions,
       lastUnitIsMonths: s.lastUnit === 'months',
       lastUnitIsYears: s.lastUnit === 'years',
@@ -266,6 +232,7 @@ class Component extends DCLogic {
     };
   }
 }
+
 </script>
 </body>
 </html>

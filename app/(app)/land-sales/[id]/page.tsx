@@ -40,7 +40,7 @@ export default async function RecordDetailsPage({ params }: { params: Promise<{ 
     <main style={{
       flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
       padding: 'var(--space-8) var(--space-6) calc(var(--space-8) * 3)', boxSizing: 'border-box',
-      background: 'var(--color-accent-2-100)',
+      background: 'var(--color-accent-2-200)',
     }}>
       <div style={{ width: '100%', maxWidth: 760 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
@@ -58,7 +58,7 @@ export default async function RecordDetailsPage({ params }: { params: Promise<{ 
           )}
         </div>
 
-        <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: '#FFFFFF' }}>
+        <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: 'var(--color-neutral-100)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
             <Field
               label="Sale Date"

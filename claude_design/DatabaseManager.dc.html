@@ -36,7 +36,7 @@
     </div>
   </header>
 
-  <main style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: var(--space-8) var(--space-6) calc(var(--space-8) * 3); box-sizing: border-box; background-color: var(--color-accent-2-100);">
+  <main style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: var(--space-8) var(--space-6) calc(var(--space-8) * 3); box-sizing: border-box; background-color: var(--color-accent-2-200)">
     <div style="width:100%;max-width:1100px;display:flex;flex-direction:column;gap:var(--space-6);">
 
       <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:var(--space-3);">
@@ -51,7 +51,7 @@
       </div>
 
       <sc-if value="{{ isSources }}" hint-placeholder-val="{{ true }}">
-        <div class="blueprint elev-sm" style="position:relative;box-sizing:border-box;background:var(--color-bg);padding:var(--space-6);">
+        <div class="blueprint elev-sm" style="position: relative; box-sizing: border-box; padding: var(--space-6); background-color: var(--color-neutral-100)">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4);">
             <div style="font-family:var(--font-heading);font-size:18px;font-weight:600;color:var(--color-text);">Connections</div>
             <button type="button" class="btn btn-primary" onClick="{{ openModal }}">Add Connection</button>
@@ -134,8 +134,8 @@
 
           <sc-if value="{{ isStep2 }}" hint-placeholder-val="{{ false }}">
             <div style="display:flex;flex-direction:column;gap:var(--space-4);">
-              <div class="field"><label>Connection Name</label><input class="input" type="text" placeholder="e.g. CoStar API" /></div>
-              <div class="field"><label>{{ step2FieldLabel }}</label><input class="input" type="text" placeholder="{{ step2Placeholder }}" /></div>
+              <div class="field"><label>Connection Name</label><input class="input" type="text" placeholder="e.g. CoStar API"></div>
+              <div class="field"><label>{{ step2FieldLabel }}</label><input class="input" type="text" placeholder="{{ step2Placeholder }}"></div>
             </div>
           </sc-if>
         </div>

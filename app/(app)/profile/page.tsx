@@ -25,7 +25,7 @@ export default async function ProfilePage() {
     <main style={{
       flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
       padding: 'var(--space-8) var(--space-6) calc(var(--space-8) * 3)', boxSizing: 'border-box',
-      background: 'var(--color-accent-2-100)',
+      background: 'var(--color-accent-2-200)',
     }}>
       <div style={{ width: '100%', maxWidth: 680, display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
         <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: 0 }}>

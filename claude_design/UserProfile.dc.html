@@ -36,7 +36,7 @@
     </div>
   </header>
 
-  <main style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: var(--space-8) var(--space-6) calc(var(--space-8) * 3); box-sizing: border-box; background-color: var(--color-accent-2-100);">
+  <main style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: var(--space-8) var(--space-6) calc(var(--space-8) * 3); box-sizing: border-box; background-color: var(--color-accent-2-200)">
     <div style="width:100%;max-width:680px;display:flex;flex-direction:column;gap:var(--space-6);">
 
       <h1 style="font-family:var(--font-heading);font-size:32px;font-weight:600;letter-spacing:0.01em;color:var(--color-text);margin:0;">Your Profile</h1>
@@ -49,8 +49,8 @@
             <span style="font-size:12px;color:var(--color-neutral-700);">Drop to replace</span>
           </div>
           <div style="flex:1;min-width:240px;display:flex;flex-direction:column;gap:var(--space-4);">
-            <div class="field"><label>Username</label><input class="input" type="text" value="{{ username }}" onChange="{{ setUsername }}" /></div>
-            <div class="field"><label>Email address</label><input class="input" type="email" value="{{ email }}" onChange="{{ setEmail }}" /></div>
+            <div class="field"><label>Username</label><input class="input" type="text" value="{{ username }}" onChange="{{ setUsername }}"></div>
+            <div class="field"><label>Email address</label><input class="input" type="email" value="{{ email }}" onChange="{{ setEmail }}"></div>
           </div>
         </div>
       </div>
@@ -58,9 +58,9 @@
       <div class="blueprint elev-sm" style="position:relative;box-sizing:border-box;background:var(--color-bg);padding:var(--space-6);">
         <div style="font-family:var(--font-heading);font-size:18px;font-weight:600;color:var(--color-text);margin-bottom:var(--space-4);">Change Password</div>
         <div style="display:flex;flex-direction:column;gap:var(--space-4);max-width:360px;">
-          <div class="field"><label>Current password</label><input class="input" type="password" placeholder="••••••••" /></div>
-          <div class="field"><label>New password</label><input class="input" type="password" placeholder="••••••••" /></div>
-          <div class="field"><label>Confirm new password</label><input class="input" type="password" placeholder="••••••••" /></div>
+          <div class="field"><label>Current password</label><input class="input" type="password" placeholder="••••••••"></div>
+          <div class="field"><label>New password</label><input class="input" type="password" placeholder="••••••••"></div>
+          <div class="field"><label>Confirm new password</label><input class="input" type="password" placeholder="••••••••"></div>
         </div>
       </div>
 
