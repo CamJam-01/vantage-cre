@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { Building2, User } from 'lucide-react';
 import { signOutAction } from '@/app/(app)/land-sales/actions';
+import type { UserProfile } from '@/lib/users/roles';
 
-export function NavHeader() {
+export function NavHeader({ profile }: { profile: UserProfile | null }) {
   return (
     <header
       style={{
@@ -26,21 +27,23 @@ export function NavHeader() {
         <Link href="/search" style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-accent-200)' }}>
           New Search
         </Link>
+        {profile?.role === 'Admin' && (
+          <Link href="/admin/database-manager" style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-accent-200)' }}>
+            Database Manager
+          </Link>
+        )}
         <form action={signOutAction}>
           <button type="submit" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 500, color: 'var(--color-accent-200)', fontFamily: 'inherit' }}>
             Logout
           </button>
         </form>
-        <span
-          aria-hidden="true"
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
-            border: '1px solid var(--color-neutral-400)', background: 'var(--color-accent-800)',
-          }}
-        >
+        <Link href="/profile" aria-label="Profile" style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+          border: '1px solid var(--color-neutral-400)', background: 'var(--color-accent-800)',
+        }}>
           <User size={18} strokeWidth={1.5} color="var(--color-accent-200)" />
-        </span>
+        </Link>
       </div>
     </header>
   );

@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { logAudit } from '@/lib/audit/log';
 import { landSaleInputSchema, type LandSaleInput } from '@/lib/land-sales/schema';
 import {
   applyHeaderMapping, csvHeaders, headersMatchExactly, looksLikeWrongDelimiter,
@@ -35,7 +36,32 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
     .single();
 
   if (error) return { message: error.message };
+  await logAudit(supabase, 'Created Record', `${parsed.data.parcel_id || parsed.data.address || data.id} added`);
   redirect(`/land-sales/${data.id}`);
+}
+
+/** Bound to the record id via `updateLandSale.bind(null, id)` when wired into
+ * useActionState — the edit form always submits a valid date through the
+ * native date picker, so a successful edit always supersedes and clears any
+ * `sale_date_raw` import flag. */
+export async function updateLandSale(id: string, _prevState: CreateFormState, formData: FormData): Promise<CreateFormState> {
+  const raw = Object.fromEntries(formData.entries());
+  const parsed = landSaleInputSchema.safeParse(raw);
+  if (!parsed.success) {
+    const errors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) errors[String(issue.path[0])] = issue.message;
+    return { errors };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('land_sales')
+    .update({ ...parsed.data, sale_date_raw: null })
+    .eq('id', id);
+
+  if (error) return { message: error.message };
+  await logAudit(supabase, 'Updated Record', `${parsed.data.parcel_id || parsed.data.address || id} updated`);
+  redirect(`/land-sales/${id}`);
 }
 
 export type ImportOutcome = {
@@ -111,6 +137,11 @@ export async function importLandSales(csvText: string, mapping?: ColumnMapping):
     const { error, count } = await supabase.from('land_sales').insert(chunk, { count: 'exact' });
     if (error) return { rowErrors: [error.message], duplicates, inserted };
     inserted += count ?? chunk.length;
+  }
+
+  if (inserted > 0) {
+    const dupNote = duplicates.length ? `, ${duplicates.length} duplicate${duplicates.length === 1 ? '' : 's'} skipped` : '';
+    await logAudit(supabase, 'Imported CSV', `${inserted} record${inserted === 1 ? '' : 's'} imported${dupNote}`);
   }
 
   return { inserted, duplicates, warnings: warnings.length ? warnings : undefined };

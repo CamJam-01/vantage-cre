@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { Blueprint } from '@/components/ui/blueprint';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/land-sales/format';
 import type { LandSale } from '@/lib/land-sales/schema';
+import { canEdit, getCurrentUserProfile } from '@/lib/users/roles';
 
 function Field({ label, value, warning }: { label: string; value: string; warning?: string }) {
   return (
@@ -27,7 +28,10 @@ function Field({ label, value, warning }: { label: string; value: string; warnin
 export default async function RecordDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: record, error } = await supabase.from('land_sales').select('*').eq('id', id).maybeSingle();
+  const [{ data: record, error }, profile] = await Promise.all([
+    supabase.from('land_sales').select('*').eq('id', id).maybeSingle(),
+    getCurrentUserProfile(supabase),
+  ]);
   if (error) throw new Error(error.message);
   if (!record) notFound();
   const r = record as LandSale;
@@ -39,14 +43,19 @@ export default async function RecordDetailsPage({ params }: { params: Promise<{ 
       background: 'var(--color-accent-2-100)',
     }}>
       <div style={{ width: '100%', maxWidth: 760 }}>
-        <div style={{ marginBottom: 'var(--space-6)' }}>
-          <div className="tag tag-outline" style={{ marginBottom: 'var(--space-2)' }}>{r.parcel_id || r.id}</div>
-          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: 0 }}>
-            {r.address || `${r.city}, ${r.state}`}
-          </h1>
-          <p style={{ fontSize: 15, color: 'var(--color-neutral-700)', margin: 'var(--space-1) 0 0' }}>
-            {r.city}, {r.state} · {r.county} County
-          </p>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
+          <div>
+            <div className="tag tag-outline" style={{ marginBottom: 'var(--space-2)' }}>{r.parcel_id || r.id}</div>
+            <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: 0 }}>
+              {r.address || `${r.city}, ${r.state}`}
+            </h1>
+            <p style={{ fontSize: 15, color: 'var(--color-neutral-700)', margin: 'var(--space-1) 0 0' }}>
+              {r.city}, {r.state} · {r.county} County
+            </p>
+          </div>
+          {canEdit(profile?.role ?? 'Viewer') && (
+            <Link href={`/land-sales/${r.id}/edit`} className="btn btn-ghost">Edit</Link>
+          )}
         </div>
 
         <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: '#FFFFFF' }}>

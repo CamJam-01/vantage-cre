@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/industry-f4035e7d-525b-4f20-b25f-6e55ddf79c74/styles.css">
+  <script src="_ds/industry-f4035e7d-525b-4f20-b25f-6e55ddf79c74/_ds_bundle.js"></script>
+  <script src="./image-slot.js"></script>
+  <style>
+    body { margin: 0; background: var(--color-bg); }
+    a { color: var(--color-accent-700); text-decoration: none; }
+    a:hover { color: var(--color-accent-900); text-decoration: underline; }
+  </style>
+</helmet>
+<div style="min-height:100vh;width:100%;font-family:var(--font-body);display:flex;flex-direction:column;">
+
+  <header style="position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--color-neutral-300); display: flex; align-items: center; justify-content: space-between; padding: var(--space-4) var(--space-6); box-sizing: border-box; background-color: var(--color-accent)">
+    <a href="Search.dc.html" style="display:flex;align-items:center;gap:var(--space-3);text-decoration:none;">
+      <div class="blueprint" style="position:relative;width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(--color-accent-200)"><path d="M3 21h18" stroke="var(--color-accent-200)"></path><path d="M5 21V7l8-4v18" stroke="var(--color-accent-200)"></path><path d="M19 21V11l-6-4" stroke="var(--color-accent-200)"></path><path d="M9 9v.01" stroke="var(--color-accent-200)"></path><path d="M9 12v.01" stroke="var(--color-neutral-400)"></path><path d="M9 15v.01" stroke="var(--color-accent-200)"></path><path d="M9 18v.01" stroke="var(--color-accent-200)"></path></svg>
+      </div>
+      <span style="font-family: var(--font-heading); font-size: 20px; font-weight: 600; letter-spacing: 0.02em; color: var(--color-accent-2-100)">VANTAGE CRE</span>
+    </a>
+
+    <div style="display:flex;align-items:center;gap:var(--space-6);">
+      <a href="Search.dc.html" style="font-size: 14px; font-weight: 500; color: var(--color-accent-200)">New Search</a>
+      <a href="Login.dc.html" style="font-size: 14px; font-weight: 500; color: var(--color-accent-200)">Logout</a>
+      <a href="UserProfile.dc.html" aria-label="Profile" style="display:block;width:40px;height:40px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1px solid var(--color-neutral-400);">
+        <image-slot id="profile-avatar" shape="circle" style="width:40px;height:40px;" src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%23dfe3e6'/%3E%3Ccircle cx='20' cy='16' r='7' fill='%235980a6'/%3E%3Ccircle cx='20' cy='42' r='16' fill='%235980a6'/%3E%3C/svg%3E" placeholder="Profile"></image-slot>
+      </a>
+    </div>
+  </header>
+
+  <main style="flex: 1; display: flex; flex-direction: column; align-items: center; padding: var(--space-8) var(--space-6) calc(var(--space-8) * 3); box-sizing: border-box; background-color: var(--color-accent-2-100);">
+    <div style="width:100%;max-width:680px;display:flex;flex-direction:column;gap:var(--space-6);">
+
+      <h1 style="font-family:var(--font-heading);font-size:32px;font-weight:600;letter-spacing:0.01em;color:var(--color-text);margin:0;">Your Profile</h1>
+
+      <div class="blueprint elev-sm" style="position:relative;box-sizing:border-box;background:var(--color-bg);padding:var(--space-6);">
+        <div style="font-family:var(--font-heading);font-size:18px;font-weight:600;color:var(--color-text);margin-bottom:var(--space-4);">Account Details</div>
+        <div style="display:flex;gap:var(--space-6);align-items:flex-start;flex-wrap:wrap;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:var(--space-2);flex-shrink:0;">
+            <image-slot id="profile-picture" shape="circle" style="width:96px;height:96px;" src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Crect width='96' height='96' fill='%23dfe3e6'/%3E%3Ccircle cx='48' cy='38' r='17' fill='%235980a6'/%3E%3Ccircle cx='48' cy='100' r='38' fill='%235980a6'/%3E%3C/svg%3E" placeholder="Profile photo"></image-slot>
+            <span style="font-size:12px;color:var(--color-neutral-700);">Drop to replace</span>
+          </div>
+          <div style="flex:1;min-width:240px;display:flex;flex-direction:column;gap:var(--space-4);">
+            <div class="field"><label>Username</label><input class="input" type="text" value="{{ username }}" onChange="{{ setUsername }}" /></div>
+            <div class="field"><label>Email address</label><input class="input" type="email" value="{{ email }}" onChange="{{ setEmail }}" /></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="blueprint elev-sm" style="position:relative;box-sizing:border-box;background:var(--color-bg);padding:var(--space-6);">
+        <div style="font-family:var(--font-heading);font-size:18px;font-weight:600;color:var(--color-text);margin-bottom:var(--space-4);">Change Password</div>
+        <div style="display:flex;flex-direction:column;gap:var(--space-4);max-width:360px;">
+          <div class="field"><label>Current password</label><input class="input" type="password" placeholder="••••••••" /></div>
+          <div class="field"><label>New password</label><input class="input" type="password" placeholder="••••••••" /></div>
+          <div class="field"><label>Confirm new password</label><input class="input" type="password" placeholder="••••••••" /></div>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;">
+        <button type="button" class="btn btn-primary">Save Changes</button>
+      </div>
+
+      <sc-if value="{{ isAdmin }}" hint-placeholder-val="{{ true }}">
+        <div class="blueprint elev-sm" style="position:relative;box-sizing:border-box;background:var(--color-bg);padding:var(--space-6);margin-top:var(--space-2);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4);">
+            <div style="font-family:var(--font-heading);font-size:18px;font-weight:600;color:var(--color-text);">User Access Management</div>
+            <div class="tag tag-accent">ADMIN</div>
+          </div>
+          <table class="table" style="width:100%;">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{ users }}" as="u" hint-placeholder-count="4">
+                <tr>
+                  <td>{{ u.name }}</td>
+                  <td>{{ u.email }}</td>
+                  <td>
+                    <select class="input" value="{{ u.role }}" onChange="{{ u.setRole }}" style="padding:var(--space-2) var(--space-3);">
+                      <option value="Admin">Admin</option>
+                      <option value="Editor">Editor</option>
+                      <option value="Viewer">Viewer</option>
+                    </select>
+                  </td>
+                  <td><div class="tag {{ u.statusTagClass }}">{{ u.statusLabel }}</div></td>
+                  <td><button type="button" class="btn btn-ghost" onClick="{{ u.toggleStatus }}">{{ u.toggleLabel }}</button></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </sc-if>
+
+    </div>
+  </main>
+
+  <a href="Search.dc.html" class="blueprint" style="position:fixed;bottom:var(--space-6);left:var(--space-6);display:flex;align-items:center;gap:var(--space-3);padding:var(--space-4) var(--space-6);background:var(--color-bg);color:var(--color-text);box-shadow:var(--shadow-md);text-decoration:none;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+    <span style="font-family:var(--font-heading);font-size:16px;font-weight:600;letter-spacing:0.03em;">BACK</span>
+  </a>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const INITIAL_USERS = [
+  { id: 1, name: 'Jordan Blake', email: 'jordan.blake@vantagecre.com', role: 'Admin', active: true },
+  { id: 2, name: 'Casey Nguyen', email: 'casey.nguyen@vantagecre.com', role: 'Editor', active: true },
+  { id: 3, name: 'Priya Anand', email: 'priya.anand@vantagecre.com', role: 'Viewer', active: true },
+  { id: 4, name: 'Sam Whitfield', email: 'sam.whitfield@vantagecre.com', role: 'Editor', active: false }
+];
+
+class Component extends DCLogic {
+  state = {
+    username: 'jblake',
+    email: 'jordan.blake@vantagecre.com',
+    users: INITIAL_USERS,
+    isAdmin: true
+  };
+
+  setUsername = (e) => this.setState({ username: e.target.value });
+  setEmail = (e) => this.setState({ email: e.target.value });
+
+  setUserRole = (id, role) => this.setState(s => ({
+    users: s.users.map(u => u.id === id ? { ...u, role } : u)
+  }));
+
+  toggleUserStatus = (id) => this.setState(s => ({
+    users: s.users.map(u => u.id === id ? { ...u, active: !u.active } : u)
+  }));
+
+  renderVals() {
+    const users = this.state.users.map(u => ({
+      ...u,
+      setRole: (e) => this.setUserRole(u.id, e.target.value),
+      toggleStatus: () => this.toggleUserStatus(u.id),
+      statusLabel: u.active ? 'Active' : 'Suspended',
+      statusTagClass: u.active ? 'tag-accent' : 'tag-neutral',
+      toggleLabel: u.active ? 'Suspend' : 'Reactivate'
+    }));
+
+    return {
+      username: this.state.username,
+      email: this.state.email,
+      setUsername: this.setUsername,
+      setEmail: this.setEmail,
+      isAdmin: this.state.isAdmin,
+      users
+    };
+  }
+}
+</script>
+</body>
+</html>

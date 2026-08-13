@@ -5,6 +5,7 @@ import { decodeFilters } from '@/lib/land-sales/search-params';
 import { applyLandSaleFilters } from '@/lib/land-sales/query';
 import { ResultsTable } from '@/components/land-sales/results-table';
 import type { LandSale } from '@/lib/land-sales/schema';
+import { canEdit, getCurrentUserProfile } from '@/lib/users/roles';
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -15,7 +16,10 @@ export default async function LandSalesPage({ searchParams }: PageProps) {
   const filters = decodeFilters(params);
 
   const supabase = await createClient();
-  const { data, error } = await applyLandSaleFilters(supabase, filters);
+  const [{ data, error }, profile] = await Promise.all([
+    applyLandSaleFilters(supabase, filters),
+    getCurrentUserProfile(supabase),
+  ]);
   if (error) throw new Error(error.message);
   const records = (data ?? []) as LandSale[];
 
@@ -38,7 +42,7 @@ export default async function LandSalesPage({ searchParams }: PageProps) {
           <Link href="/search/sales/land" className="btn btn-ghost">Modify Search</Link>
         </div>
 
-        <ResultsTable records={records} />
+        <ResultsTable records={records} canEdit={canEdit(profile?.role ?? 'Viewer')} />
       </div>
 
       <Link href="/search/sales/land" className="blueprint" style={{
