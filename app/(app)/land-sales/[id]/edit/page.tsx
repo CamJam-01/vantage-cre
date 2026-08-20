@@ -1,8 +1,6 @@
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { canEdit, getCurrentUserProfile } from '@/lib/users/roles';
-import { LandSaleForm } from '@/components/land-sales/land-sale-form';
-import type { LandSale } from '@/lib/land-sales/schema';
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -14,11 +12,13 @@ export default async function EditLandSalePage({ params, searchParams }: PagePro
   const { from } = await searchParams;
   const supabase = await createClient();
   const profile = await getCurrentUserProfile(supabase);
-  if (!profile || !canEdit(profile.role)) redirect(`/land-sales/${id}`);
+  const qs = new URLSearchParams();
+  if (from) qs.set('from', from);
 
-  const { data: record, error } = await supabase.from('land_sales').select('*').eq('id', id).maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!record) notFound();
+  if (!profile || !canEdit(profile.role)) {
+    redirect(from ? `/land-sales/${id}?${qs.toString()}` : `/land-sales/${id}`);
+  }
 
-  return <LandSaleForm record={record as LandSale} from={from} />;
+  qs.set('edit', '1');
+  redirect(`/land-sales/${id}?${qs.toString()}`);
 }
