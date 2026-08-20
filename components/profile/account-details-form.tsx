@@ -1,14 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { User } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Blueprint } from '@/components/ui/blueprint';
 import { Field } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
+import { ProfilePhotoField } from '@/components/profile/profile-photo-field';
 import { updateProfileAction } from '@/app/(app)/profile/actions';
 
-export function AccountDetailsForm({ initialUsername, initialEmail }: { initialUsername: string; initialEmail: string }) {
+export function AccountDetailsForm({
+  initialUsername,
+  initialEmail,
+  initialAvatarUrl,
+}: {
+  initialUsername: string;
+  initialEmail: string;
+  initialAvatarUrl: string | null;
+}) {
   const [username, setUsername] = useState(initialUsername);
   const [email, setEmail] = useState(initialEmail);
   const [saving, setSaving] = useState(false);
@@ -53,17 +61,7 @@ export function AccountDetailsForm({ initialUsername, initialEmail }: { initialU
         Account Details
       </div>
       <div style={{ display: 'flex', gap: 'var(--space-6)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}>
-          <span
-            aria-hidden="true"
-            style={{
-              width: 96, height: 96, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: 'var(--color-accent-800)', border: '1px solid var(--color-neutral-400)',
-            }}
-          >
-            <User size={40} strokeWidth={1.5} color="var(--color-accent-200)" />
-          </span>
-        </div>
+        <ProfilePhotoField key={initialAvatarUrl ?? 'empty'} initialUrl={initialAvatarUrl} />
         <div style={{ flex: 1, minWidth: 240, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <Field id="username" label="Username" type="text" value={username} onChange={e => setUsername(e.target.value)} />
           <Field id="email" label="Email address" type="email" value={email} onChange={e => setEmail(e.target.value)} />

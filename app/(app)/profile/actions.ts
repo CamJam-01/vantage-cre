@@ -4,8 +4,14 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { logAudit } from '@/lib/audit/log';
 import type { Role } from '@/lib/users/roles';
+import {
+  AVATAR_BUCKET,
+  avatarFileErrorMessage,
+  avatarObjectPath,
+  validateAvatarFile,
+} from '@/lib/users/avatar';
 
-export type ProfileFormState = { error?: string; success?: boolean } | null;
+export type ProfileFormState = { error?: string; success?: boolean; avatarUrl?: string } | null;
 
 export async function updateProfileAction(_prev: ProfileFormState, formData: FormData): Promise<ProfileFormState> {
   const username = String(formData.get('username') ?? '').trim();
@@ -22,6 +28,39 @@ export async function updateProfileAction(_prev: ProfileFormState, formData: For
   if (error) return { error: error.message };
   revalidatePath('/profile');
   return { success: true };
+}
+
+export async function updateAvatarAction(formData: FormData): Promise<ProfileFormState> {
+  const file = formData.get('avatar');
+  if (!(file instanceof Blob) || file.size === 0) {
+    return { error: 'Choose a photo to upload.' };
+  }
+
+  const invalid = validateAvatarFile(file);
+  if (invalid) return { error: avatarFileErrorMessage(invalid) };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not signed in.' };
+
+  const path = avatarObjectPath(user.id, file.type, crypto.randomUUID());
+  const { error: uploadError } = await supabase.storage.from(AVATAR_BUCKET).upload(path, file, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (uploadError) return { error: uploadError.message };
+
+  const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+  const { error } = await supabase
+    .from('users')
+    .update({ avatar_url: data.publicUrl })
+    .eq('id', user.id);
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/', 'layout');
+  revalidatePath('/profile');
+  return { success: true, avatarUrl: data.publicUrl };
 }
 
 export type AdminActionResult = { error?: string } | null;

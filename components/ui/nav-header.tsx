@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { Building2, User } from 'lucide-react';
+import { Building2 } from 'lucide-react';
 import { signOutAction } from '@/app/(app)/land-sales/actions';
 import type { UserProfile } from '@/lib/users/roles';
+import { ProfileAvatar } from '@/components/ui/profile-avatar';
 
 export function NavHeader({ profile }: { profile: UserProfile | null }) {
   return (
@@ -40,9 +41,9 @@ export function NavHeader({ profile }: { profile: UserProfile | null }) {
         <Link href="/profile" aria-label="Profile" style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
-          border: '1px solid var(--color-neutral-400)', background: 'var(--color-accent-800)',
+          overflow: 'hidden',
         }}>
-          <User size={18} strokeWidth={1.5} color="var(--color-accent-200)" />
+          <ProfileAvatar src={profile?.avatar_url} size={40} iconSize={18} />
         </Link>
       </div>
     </header>
