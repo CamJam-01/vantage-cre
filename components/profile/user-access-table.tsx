@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { Blueprint } from '@/components/ui/blueprint';
 import { adminSetRoleAction, adminSetSuspendedAction } from '@/app/(app)/profile/actions';
+import { displayUserName } from '@/lib/users/display-name';
 import { ROLES, type Role, type UserProfile } from '@/lib/users/roles';
 
 export function UserAccessTable({ users, currentUserId }: { users: UserProfile[]; currentUserId: string }) {
@@ -47,7 +48,7 @@ export function UserAccessTable({ users, currentUserId }: { users: UserProfile[]
             const isSelf = u.id === currentUserId;
             return (
               <tr key={u.id}>
-                <td>{u.full_name || u.username || '—'}</td>
+                <td>{displayUserName(u)}</td>
                 <td>{u.email}</td>
                 <td>
                   <select
