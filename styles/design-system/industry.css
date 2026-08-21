@@ -47,6 +47,7 @@
   --font-heading: var(--font-barlow-condensed), system-ui, sans-serif;
   --font-heading-weight: 600;
   --font-body: var(--font-barlow), system-ui, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, SFMono-Regular, monospace;
 
   --space-1: 3.4px;
   --space-2: 6.8px;
@@ -64,6 +65,9 @@
   --shadow-sm: 0 1px 2px color-mix(in srgb, #2b2b2d 14%, transparent);
   --shadow-md: 0 3px 10px color-mix(in srgb, #2b2b2d 16%, transparent);
   --shadow-lg: 0 12px 32px color-mix(in srgb, #2b2b2d 22%, transparent);
+
+  /* App chrome — nav is this tall; sticky page bars pin to the same edge. */
+  --app-header-height: 68px;
 }
 
 body {
@@ -325,4 +329,191 @@ textarea.input { min-height: 90px; resize: vertical; }
   }
   .results-sidebar-toggle { display: flex; }
   .results-sidebar-content.is-collapsed { display: none; }
+}
+
+/* — land sales record detail: the "Sales Record Blueprint" drafting sheets.
+   The record page is a deep accent-2 ground with pale accent panels floated on
+   it, each panel a numbered sheet of a 12-column field grid. Everything here is
+   painted from the tokens above; nothing is theme-conditional, matching the
+   rest of this light-only system. — */
+.record-page {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: var(--space-8) var(--space-6) calc(var(--space-8) * 4);
+  background: linear-gradient(190deg, var(--color-accent-2-600), var(--color-accent-2-900));
+}
+.record-col { width: 100%; max-width: 920px; }
+
+/* Action bar — sticks flush beneath the app nav so Save stays
+   reachable however far down the sheet the user has scrolled. */
+.record-bar {
+  position: sticky; top: var(--app-header-height); z-index: 9;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+  box-sizing: border-box;
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-accent-700);
+  border-bottom: 1px solid color-mix(in srgb, #000000 14%, transparent);
+}
+.record-bar-back {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 13px; font-weight: 500; text-decoration: none;
+  color: var(--color-accent-200);
+}
+.record-bar-back:hover { color: #ffffff; }
+.record-bar-actions { display: flex; align-items: center; gap: var(--space-3); flex-shrink: 0; }
+.record-bar .btn-primary {
+  background: var(--color-accent-900); border-color: var(--color-accent-900); color: #ffffff;
+}
+.record-bar .btn-primary:hover { background: var(--color-accent-800); }
+.record-bar .btn-secondary {
+  border-color: color-mix(in srgb, var(--color-accent-2-100) 45%, transparent);
+  color: var(--color-accent-2-100);
+}
+.record-bar .btn-secondary:hover { background: color-mix(in srgb, #ffffff 12%, transparent); }
+
+/* Masthead — reads directly off the ground, no panel behind it. */
+.record-head { margin-bottom: var(--space-6); }
+.record-head .tags {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.record-head h1 {
+  margin: 0; font-size: 36px; line-height: 1.1; letter-spacing: 0.005em;
+  color: #ffffff; text-wrap: balance;
+}
+.record-head .sub { margin: 7px 0 0; font-size: 15px; color: var(--color-accent-2-100); }
+.tag-on-ground {
+  border: 1px solid color-mix(in srgb, var(--color-accent-2-100) 55%, transparent);
+  color: var(--color-accent-2-100); background: transparent;
+}
+
+/* Sheet tabs */
+.record-tabs {
+  display: inline-flex; margin-bottom: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-accent-2-100) 35%, transparent);
+  background: color-mix(in srgb, var(--color-accent-2-900) 30%, transparent);
+}
+.record-tab {
+  display: inline-flex; align-items: center; gap: var(--space-2); cursor: pointer;
+  font-family: var(--font-heading); font-weight: var(--font-heading-weight); font-size: 14px;
+  padding: 10px 18px; color: var(--color-accent-2-100); background: transparent;
+  border: 0; border-right: 1px solid color-mix(in srgb, var(--color-accent-2-100) 25%, transparent);
+}
+.record-tab:last-child { border-right: 0; }
+.record-tab .sheet-no {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500; color: inherit;
+  border: 1px solid currentColor; border-radius: 50%; opacity: 0.75;
+  width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center;
+}
+.record-tab[aria-selected="true"] { background: var(--color-accent-200); color: var(--color-accent-800); }
+.record-tab[aria-selected="true"] .sheet-no { opacity: 1; }
+.record-tab:not([aria-selected="true"]):hover { background: color-mix(in srgb, #ffffff 8%, transparent); }
+
+/* Sheet panel — pale accent fill, hairline border. */
+.record-panel {
+  padding: var(--space-8) calc(var(--space-8) * 1.2) var(--space-6);
+  margin-bottom: var(--space-4);
+  background: var(--color-accent-200);
+  border: 1px solid color-mix(in srgb, var(--color-accent-800) 22%, transparent);
+  box-shadow: var(--shadow-lg);
+}
+.record-panel-title {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4);
+  margin-bottom: var(--space-6); padding-bottom: var(--space-4);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-accent-800) 20%, transparent);
+}
+.record-panel-title h2 {
+  margin: 0; font-size: 21px; letter-spacing: 0.005em; color: var(--color-accent-800);
+}
+.record-panel-title .hint { font-size: 12px; color: var(--color-accent-700); white-space: nowrap; }
+
+/* Field grid */
+.record-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 18px 20px; }
+.record-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.record-field > label {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--color-accent-700);
+}
+.record-span-2 { grid-column: span 2; }
+.record-span-3 { grid-column: span 3; }
+.record-span-4 { grid-column: span 4; }
+.record-span-6 { grid-column: span 6; }
+.record-span-9 { grid-column: span 9; }
+.record-span-12 { grid-column: span 12; }
+.record-divider {
+  grid-column: span 12; height: 1px; margin: 2px 0;
+  background: color-mix(in srgb, var(--color-accent-800) 18%, transparent);
+}
+.record-section-label {
+  grid-column: span 12; margin-top: 4px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--color-accent-800);
+}
+
+/* Fields sit on white inside the pale panel — the surface fill the global
+   .input uses would otherwise disappear into it. */
+.record-panel .input {
+  background: #ffffff;
+  border-color: color-mix(in srgb, var(--color-accent-800) 20%, transparent);
+}
+.record-panel .input:hover { border-color: var(--color-accent-700); }
+.record-panel .input:focus-visible { border-color: var(--color-accent-800); }
+.record-panel .input[readonly] { cursor: default; }
+.record-panel .input[readonly]:hover {
+  border-color: color-mix(in srgb, var(--color-accent-800) 20%, transparent);
+}
+.record-affix { position: relative; }
+.record-affix > .affix {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  font-size: 14px; pointer-events: none;
+  color: color-mix(in srgb, var(--color-text) 38%, transparent);
+}
+.record-affix > .input { padding-left: 22px; }
+.record-flag {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: #92400e;
+}
+.record-error { font-size: 12px; color: #b3261e; }
+
+/* Drafting title block — the sheet set's footer stamp. */
+.record-titleblock {
+  display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr 0.7fr;
+  font-size: 12px;
+  background: var(--color-accent-200);
+  border: 1px solid color-mix(in srgb, var(--color-accent-800) 22%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+.record-titleblock > div {
+  display: flex; flex-direction: column; gap: 3px; justify-content: center;
+  padding: 10px 14px;
+  border-right: 1px solid color-mix(in srgb, var(--color-accent-800) 18%, transparent);
+}
+.record-titleblock > div:last-child { border-right: 0; align-items: center; text-align: center; }
+.record-titleblock .tb-label {
+  font-size: 9.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--color-accent-700);
+}
+.record-titleblock .tb-value {
+  font-family: var(--font-mono); font-size: 13px; color: var(--color-accent-800);
+  overflow-wrap: anywhere;
+}
+.record-titleblock > div:last-child .tb-value { font-size: 17px; font-weight: 600; }
+
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+.num { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 760px) {
+  .record-span-2, .record-span-3, .record-span-4 { grid-column: span 6; }
+  .record-span-6, .record-span-9 { grid-column: span 12; }
+  .record-page { padding: var(--space-6) var(--space-4) calc(var(--space-8) * 3); }
+  .record-panel { padding: var(--space-6) var(--space-4) var(--space-4); }
+  .record-head h1 { font-size: 28px; }
+  .record-tabs { display: flex; width: 100%; }
+  .record-tab { flex: 1; justify-content: center; }
+  .record-titleblock { grid-template-columns: 1fr 1fr; }
+  .record-titleblock > div {
+    border-bottom: 1px solid color-mix(in srgb, var(--color-accent-800) 18%, transparent);
+  }
 }

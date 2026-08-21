@@ -9,9 +9,9 @@ export function NavHeader({ profile }: { profile: UserProfile | null }) {
     <header
       style={{
         position: 'sticky', top: 0, zIndex: 10,
-        borderBottom: '1px solid var(--color-neutral-300)',
+        height: 'var(--app-header-height)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: 'var(--space-4) var(--space-6)', boxSizing: 'border-box',
+        padding: '0 var(--space-6)', boxSizing: 'border-box',
         background: 'var(--color-accent)',
       }}
     >

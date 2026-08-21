@@ -27,6 +27,18 @@ const stickyHeaderCellStyle = {
   color: 'var(--color-bg)', background: 'var(--color-accent-2-500)', position: 'sticky' as const, top: 0, zIndex: 4,
 };
 
+const rowActionButtonStyle = {
+  width: 22,
+  height: 22,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 0,
+  border: '1px solid var(--color-neutral-400)',
+  background: '#FFFFFF',
+  cursor: 'pointer',
+} as const;
+
 function SortableHeader({ column, sort, onSort }: { column: ResultColumn; sort: Sort | null; onSort: (column: ResultColumn) => void }) {
   const active = sort ? sameColumn(sort.column, column) : false;
   return (
@@ -214,21 +226,20 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
         <main style={{ flex: 1, minWidth: 0, paddingTop: 0, boxSizing: 'border-box' }}>
           <div style={{ width: '100%' }}>
             <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 250px)', background: 'var(--color-accent-2-100)' }}>
-              <table className="table" style={{ width: '100%', minWidth: Math.max(1150, 280 + columns.length * 120) }}>
+              <table className="table" style={{ width: '100%', minWidth: Math.max(1150, 220 + columns.length * 120) }}>
                 <thead>
                   <tr>
                     <th style={{ ...stickyHeaderCellStyle, width: 40 }}>
                       <input type="checkbox" checked={records.length > 0 && selectedCount === records.length} onChange={toggleAll} aria-label="Select all rows" />
                     </th>
-                    <th style={{ ...stickyHeaderCellStyle, width: 40 }} />
-                    <th style={{ ...stickyHeaderCellStyle, width: 40 }} />
+                    <th style={{ ...stickyHeaderCellStyle, width: 52 }} />
                     {columns.map(col => <SortableHeader key={columnId(col)} column={col} sort={sort} onSort={handleSort} />)}
                   </tr>
                 </thead>
                 <tbody style={{ background: '#FFFFFF' }}>
                   {records.length === 0 ? (
                     <tr>
-                      <td colSpan={3 + columns.length} style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--color-neutral-600)' }}>
+                      <td colSpan={2 + columns.length} style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--color-neutral-600)' }}>
                         No records match your search criteria.
                       </td>
                     </tr>
@@ -243,27 +254,29 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
                         <td onClick={e => e.stopPropagation()}>
                           <input type="checkbox" checked={isSelected} onChange={() => toggleRow(r.id)} aria-label={`Select ${r.parcel_id || r.address}`} />
                         </td>
-                        <td onClick={e => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            onClick={() => viewDetails(r.id)}
-                            title="View Details"
-                            style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, border: '1px solid var(--color-neutral-400)', background: '#FFFFFF', cursor: 'pointer' }}
-                          >
-                            <Eye size={16} strokeWidth={1.5} color="var(--color-accent-700)" />
-                          </button>
-                        </td>
-                        <td onClick={e => e.stopPropagation()}>
-                          {canEdit && (
+                        <td onClick={e => e.stopPropagation()} style={{ padding: 4, width: 52 }}>
+                          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                             <button
                               type="button"
-                              onClick={() => editDetails(r.id)}
-                              title="Edit Details"
-                              style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, border: '1px solid var(--color-neutral-400)', background: '#FFFFFF', cursor: 'pointer' }}
+                              onClick={() => viewDetails(r.id)}
+                              title="View Details"
+                              aria-label="View Details"
+                              style={rowActionButtonStyle}
                             >
-                              <Pencil size={16} strokeWidth={1.5} color="var(--color-accent-700)" />
+                              <Eye size={12} strokeWidth={1.75} color="var(--color-accent-700)" />
                             </button>
-                          )}
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => editDetails(r.id)}
+                                title="Edit Details"
+                                aria-label="Edit Details"
+                                style={rowActionButtonStyle}
+                              >
+                                <Pencil size={12} strokeWidth={1.75} color="var(--color-accent-700)" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                         {columns.map(col => (
                           <td key={columnId(col)}>
