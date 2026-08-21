@@ -19,7 +19,10 @@ export default async function RecordDetailsPage({ params, searchParams }: PagePr
   ]);
   if (error) throw new Error(error.message);
   if (!record) notFound();
-  const r = record as LandSale;
+  const r = {
+    ...(record as LandSale),
+    extras: (record as LandSale).extras ?? {},
+  };
   const editable = canEdit(profile?.role ?? 'Viewer');
 
   return (

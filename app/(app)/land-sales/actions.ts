@@ -3,11 +3,11 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { logAudit } from '@/lib/audit/log';
-import { landSaleInputSchema, type LandSaleInput } from '@/lib/land-sales/schema';
+import { extrasFromFormData, formDataHasExtras, landSaleInputSchema, type LandSaleInput } from '@/lib/land-sales/schema';
 import {
-  applyHeaderMapping, csvHeaders, headersMatchExactly, looksLikeWrongDelimiter,
-  missingRequiredMappings, parseCsv, recordKey, suggestHeaderMapping, validateDataRows,
-  type ColumnMapping,
+  csvHeaders, headersMatchExactly, looksLikeWrongDelimiter, mappingIssues,
+  newFieldLabels, parseCsv, recordKey, suggestSourceMapping, validateMappedRows,
+  type SourceMapping,
 } from '@/lib/land-sales/csv';
 import { landSaleWriteDeniedMessage } from '@/lib/users/roles';
 
@@ -59,17 +59,24 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
   const from = formData.get('from');
   formData.delete('from');
 
+  const extrasPresent = formDataHasExtras(formData);
+  const extras = extrasFromFormData(formData);
   const raw = Object.fromEntries(formData.entries());
-  const parsed = landSaleInputSchema.safeParse(raw);
+  const parsed = landSaleInputSchema.safeParse(extrasPresent ? { ...raw, extras } : raw);
   if (!parsed.success) {
     const errors: Record<string, string> = {};
     for (const issue of parsed.error.issues) errors[String(issue.path[0])] = issue.message;
     return { errors };
   }
 
+  const { extras: parsedExtras, ...core } = parsed.data;
+  const payload = extrasPresent
+    ? { ...core, extras: parsedExtras, sale_date_raw: null }
+    : { ...core, sale_date_raw: null };
+
   const { error } = await supabase
     .from('land_sales')
-    .update({ ...parsed.data, sale_date_raw: null })
+    .update(payload)
     .eq('id', id);
 
   if (error) return { message: error.message };
@@ -79,7 +86,7 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
 
 export type ImportOutcome = {
   headerError?: string;
-  needsMapping?: { headers: string[]; suggested: ColumnMapping };
+  needsMapping?: { headers: string[]; suggested: SourceMapping };
   rowErrors?: string[];
   warnings?: string[];
   duplicates?: string[];
@@ -91,7 +98,7 @@ export type ImportOutcome = {
  * through schema validation below). If headers match the expected set exactly,
  * imports immediately; otherwise a mapping must be supplied (from the header-
  * mapping step in the UI) or this returns `needsMapping` for the caller to act on. */
-export async function importLandSales(csvText: string, mapping?: ColumnMapping): Promise<ImportOutcome> {
+export async function importLandSales(csvText: string, mapping?: SourceMapping): Promise<ImportOutcome> {
   const supabase = await createClient();
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { rowErrors: [denied] };
@@ -112,19 +119,19 @@ export async function importLandSales(csvText: string, mapping?: ColumnMapping):
   let effectiveMapping = mapping;
   if (!effectiveMapping) {
     if (headersMatchExactly(headers)) {
-      effectiveMapping = suggestHeaderMapping(headers);
+      effectiveMapping = suggestSourceMapping(headers);
     } else {
-      return { needsMapping: { headers, suggested: suggestHeaderMapping(headers) } };
+      return { needsMapping: { headers, suggested: suggestSourceMapping(headers) } };
     }
   }
-
-  const missing = missingRequiredMappings(effectiveMapping);
-  if (missing.length) {
-    return { rowErrors: [`Map a column for: ${missing.join(', ')}.`] };
+  if (effectiveMapping.length !== headers.length) {
+    return { rowErrors: ['Column mapping does not match the CSV headers.'] };
   }
 
-  const mappedRows = applyHeaderMapping(dataRowsRaw, effectiveMapping);
-  const results = validateDataRows(mappedRows);
+  const issues = mappingIssues(effectiveMapping);
+  if (issues.length) return { rowErrors: issues };
+
+  const results = validateMappedRows(dataRowsRaw, headers, effectiveMapping);
 
   const rowErrors = results.filter(r => !r.ok).flatMap(r => (r.ok ? [] : r.errors));
   if (rowErrors.length) return { rowErrors };
@@ -134,6 +141,14 @@ export async function importLandSales(csvText: string, mapping?: ColumnMapping):
   const warnings = results.flatMap(r => (r.ok ? r.warnings ?? [] : []));
 
   const { data: { user } } = await supabase.auth.getUser();
+
+  const labels = newFieldLabels(headers, effectiveMapping);
+  if (labels.length) {
+    const { error: catalogError } = await supabase
+      .from('land_sales_custom_fields')
+      .upsert(labels.map(label => ({ label })), { onConflict: 'label', ignoreDuplicates: true });
+    if (catalogError) return { rowErrors: [catalogError.message] };
+  }
 
   const { data: existing } = await supabase.from('land_sales').select('parcel_id, sale_date, address');
   const existingKeys = new Set((existing ?? []).map(r => recordKey(r)));

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { PROPERTY_TYPES, US_STATES } from '@/lib/land-sales/constants';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/land-sales/format';
 import { updateLandSale, type CreateFormState } from '@/app/(app)/land-sales/actions';
-import type { LandSale } from '@/lib/land-sales/schema';
+import { extraInputName, type LandSale } from '@/lib/land-sales/schema';
 
 const initialState: CreateFormState = null;
 
@@ -163,6 +163,7 @@ function RecordDetailsForm({
   const importedPropertyType = record.property_type && !(PROPERTY_TYPES as readonly string[]).includes(record.property_type)
     ? record.property_type
     : null;
+  const extraEntries = Object.entries(record.extras ?? {}).sort(([a], [b]) => a.localeCompare(b));
 
   function handleCancel() {
     formRef.current?.reset();
@@ -436,6 +437,24 @@ function RecordDetailsForm({
                   defaultValue={record.msa}
                 />
               </DetailField>
+
+              {extraEntries.map(([label, value]) => (
+                <DetailField
+                  key={label}
+                  label={label}
+                  htmlFor={extraInputName(label)}
+                  editing={editing}
+                  locked={<LockedValue>{value || '—'}</LockedValue>}
+                >
+                  <input
+                    id={extraInputName(label)}
+                    name={extraInputName(label)}
+                    type="text"
+                    className="input"
+                    defaultValue={value}
+                  />
+                </DetailField>
+              ))}
             </div>
 
             {state?.message && (

@@ -6,10 +6,10 @@ export const csvHeaders = [
   'Square Feet', 'Acreage', 'Sale Date', 'Sale Price', 'Buyer',
 ] as const;
 
-export const csvFields: (keyof LandSale)[] = [
+export const csvFields = [
   'parcel_id', 'address', 'city', 'county', 'state', 'msa', 'property_type',
   'square_feet', 'acreage', 'sale_date', 'sale_price', 'buyer',
-];
+] as const;
 
 export type CsvField = (typeof csvFields)[number];
 
@@ -19,24 +19,167 @@ export const REQUIRED_CSV_FIELDS: CsvField[] = [
   'city', 'county', 'state', 'property_type', 'acreage', 'sale_date', 'sale_price',
 ];
 
-const fieldToHeader: Record<string, string> = {
+export const fieldToHeader: Record<CsvField, string> = {
   parcel_id: 'Parcel ID', address: 'Address', city: 'City', county: 'County', state: 'State',
   msa: 'MSA', property_type: 'Type', square_feet: 'Square Feet', acreage: 'Acreage',
   sale_date: 'Sale Date', sale_price: 'Sale Price', buyer: 'Buyer',
 };
+
+const fieldByCanonicalLabel = new Map<string, CsvField>(
+  csvHeaders.map((label, i) => [label.toLowerCase(), csvFields[i]]),
+);
+
+export function fieldForCanonicalHeader(header: string): CsvField | undefined {
+  return fieldByCanonicalLabel.get(header.trim().toLowerCase());
+}
+
+export function unmatchedHeaders(headers: string[]): { index: number; header: string }[] {
+  return headers.flatMap((header, index) =>
+    fieldForCanonicalHeader(header) ? [] : [{ index, header }],
+  );
+}
+
+export type MappingAction =
+  | { type: 'existing'; field: CsvField }
+  | { type: 'new' }
+  | { type: 'skip' };
+
+/** Per-source-column mapping: index in the array is the CSV column index. */
+export type SourceMapping = MappingAction[];
+
+export function suggestSourceMapping(
+  headers: string[],
+  newFieldIndexes: ReadonlySet<number> = new Set(),
+): SourceMapping {
+  return headers.map((header, index) => {
+    const field = fieldForCanonicalHeader(header);
+    if (field) return { type: 'existing' as const, field };
+    if (newFieldIndexes.has(index)) return { type: 'new' as const };
+    return { type: 'skip' as const };
+  });
+}
+
+function existingTargetCounts(mapping: SourceMapping): Map<CsvField, number> {
+  const counts = new Map<CsvField, number>();
+  for (const action of mapping) {
+    if (action.type !== 'existing') continue;
+    counts.set(action.field, (counts.get(action.field) ?? 0) + 1);
+  }
+  return counts;
+}
+
+export function missingRequiredTargets(mapping: SourceMapping): string[] {
+  const counts = existingTargetCounts(mapping);
+  return REQUIRED_CSV_FIELDS.filter(f => !counts.get(f)).map(f => fieldToHeader[f]);
+}
+
+export function duplicateTargetLabels(mapping: SourceMapping): string[] {
+  const counts = existingTargetCounts(mapping);
+  return csvFields.filter(f => (counts.get(f) ?? 0) > 1).map(f => fieldToHeader[f]);
+}
+
+export function mappingIssues(mapping: SourceMapping): string[] {
+  const issues: string[] = [];
+  const dupes = duplicateTargetLabels(mapping);
+  if (dupes.length) {
+    issues.push(`Each database field can only be mapped once. Duplicates: ${dupes.join(', ')}.`);
+  }
+  const missing = missingRequiredTargets(mapping);
+  if (missing.length) issues.push(`Map a column for: ${missing.join(', ')}.`);
+  return issues;
+}
+
+export function newFieldLabels(headers: string[], mapping: SourceMapping): string[] {
+  return mapping.flatMap((action, index) => {
+    if (action.type !== 'new') return [];
+    return [headers[index] || `Column ${index + 1}`];
+  });
+}
+
+export function applySourceMapping(
+  dataRows: string[][],
+  headers: string[],
+  mapping: SourceMapping,
+): { canonical: string[][]; extras: Record<string, string>[] } {
+  return {
+    canonical: dataRows.map(row => {
+      const cells = csvFields.map(() => '');
+      mapping.forEach((action, index) => {
+        switch (action.type) {
+          case 'existing': {
+            const fieldIndex = csvFields.indexOf(action.field);
+            cells[fieldIndex] = (row[index] ?? '').trim();
+            return;
+          }
+          case 'new':
+          case 'skip':
+            return;
+          default: {
+            const _exhaustive: never = action;
+            return _exhaustive;
+          }
+        }
+      });
+      return cells;
+    }),
+    extras: dataRows.map(row => {
+      const extra: Record<string, string> = {};
+      mapping.forEach((action, index) => {
+        switch (action.type) {
+          case 'new': {
+            const value = (row[index] ?? '').trim();
+            if (!value) return;
+            extra[headers[index] || `Column ${index + 1}`] = value;
+            return;
+          }
+          case 'existing':
+          case 'skip':
+            return;
+          default: {
+            const _exhaustive: never = action;
+            return _exhaustive;
+          }
+        }
+      });
+      return extra;
+    }),
+  };
+}
+
+export function validateMappedRows(
+  dataRows: string[][],
+  headers: string[],
+  mapping: SourceMapping,
+): ImportRowResult[] {
+  const { canonical, extras } = applySourceMapping(dataRows, headers, mapping);
+  return validateDataRows(canonical).map((result, i) => {
+    if (!result.ok) return result;
+    return { ...result, data: { ...result.data, extras: extras[i] ?? {} } };
+  });
+}
 
 export function csvCell(value: string | number | null | undefined): string {
   const text = String(value ?? '');
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
+export function extraKeys(rows: Array<{ extras?: Record<string, string> }>): string[] {
+  const keys = new Set<string>();
+  for (const row of rows) {
+    for (const key of Object.keys(row.extras ?? {})) keys.add(key);
+  }
+  return [...keys].sort((a, b) => a.localeCompare(b));
+}
+
 /** Export-side CSV builder — used client-side by the results table's "Export CSV"
  * button (selected rows only) and to generate the import-template download. */
 export function makeCsv(rows: LandSale[]): string {
-  const header = [...csvHeaders, 'Price / Acre'].join(',');
+  const extras = extraKeys(rows);
+  const header = [...csvHeaders, 'Price / Acre', ...extras].join(',');
   const body = rows.map(row => [
     ...csvFields.map(field => csvCell(row[field] as string | number | null)),
     csvCell(row.price_per_acre),
+    ...extras.map(key => csvCell((row.extras ?? {})[key])),
   ].join(','));
   return [header, ...body].join('\r\n');
 }
@@ -88,10 +231,6 @@ export function parseCsv(text: string): string[][] {
   return rows.filter(r => !(r.length === 1 && r[0].trim() === ''));
 }
 
-/** Maps each target field (parcel_id, address, ...) to the index of the source
- * CSV column that holds it. A field absent from the mapping is left blank on import. */
-export type ColumnMapping = Partial<Record<CsvField, number>>;
-
 /** Catches the classic "exported with semicolons/tabs instead of commas" case
  * early: parseCsv would otherwise read the whole header line as one column,
  * and every row would then fail validation on nearly every field at once. */
@@ -102,34 +241,6 @@ export function looksLikeWrongDelimiter(headers: string[]): boolean {
 export function headersMatchExactly(headers: string[]): boolean {
   if (headers.length !== csvHeaders.length) return false;
   return headers.every((h, i) => h.trim().toLowerCase() === csvHeaders[i].toLowerCase());
-}
-
-/** Best-effort auto-mapping by case-insensitive header name match. Used both to
- * skip the mapping step entirely when headers already match, and to prefill the
- * mapping form with sensible guesses when they don't. */
-export function suggestHeaderMapping(headers: string[]): ColumnMapping {
-  const mapping: ColumnMapping = {};
-  csvFields.forEach((field, i) => {
-    const label = csvHeaders[i].toLowerCase();
-    const idx = headers.findIndex(h => h.trim().toLowerCase() === label);
-    if (idx !== -1) mapping[field] = idx;
-  });
-  return mapping;
-}
-
-export function missingRequiredMappings(mapping: ColumnMapping): string[] {
-  return REQUIRED_CSV_FIELDS.filter(f => mapping[f] == null).map(f => fieldToHeader[f]);
-}
-
-/** Reorders raw data rows into canonical field order per the mapping. A field
- * with no assigned source column comes through as ''. */
-export function applyHeaderMapping(dataRows: string[][], mapping: ColumnMapping): string[][] {
-  return dataRows.map(row =>
-    csvFields.map(field => {
-      const idx = mapping[field];
-      return idx != null ? (row[idx] ?? '').trim() : '';
-    })
-  );
 }
 
 export type ImportRowResult =
@@ -159,7 +270,7 @@ export function validateDataRows(rows: string[][]): ImportRowResult[] {
     if (!parsed.success) {
       const errors = parsed.error.issues.map(issue => {
         const field = String(issue.path[0] ?? '');
-        const header = fieldToHeader[field] ?? field;
+        const header = Object.hasOwn(fieldToHeader, field) ? fieldToHeader[field as CsvField] : field;
         return `Row ${rowNumber}, ${header}: ${issue.message}`;
       });
       return { row: rowNumber, ok: false, errors };

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUserProfile } from '@/lib/users/roles';
 import { Blueprint } from '@/components/ui/blueprint';
-import { DATABASE_CATEGORIES, LAND_SALES_FIELDS } from '@/lib/admin/database-descriptor';
+import { DATABASE_CATEGORIES, LAND_SALES_FIELDS, customFieldDescriptor } from '@/lib/admin/database-descriptor';
 
 type PageProps = { searchParams: Promise<{ db?: string }> };
 
@@ -16,7 +16,14 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
   const category = DATABASE_CATEGORIES.find(c => c.key === db);
   if (!category || !category.available) redirect('/admin/database-manager');
 
-  const fields = LAND_SALES_FIELDS;
+  const { data: customRows, error: customError } = await supabase
+    .from('land_sales_custom_fields')
+    .select('label')
+    .order('label');
+  const fields = [
+    ...LAND_SALES_FIELDS,
+    ...(customError ? [] : (customRows ?? []).map(row => customFieldDescriptor(row.label as string))),
+  ];
 
   return (
     <main style={{
@@ -48,7 +55,12 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
               {fields.map(f => (
                 <tr key={f.name}>
                   <td>{f.name}</td>
-                  <td>{f.type}</td>
+                  <td>
+                    {f.type}
+                    {f.custom ? (
+                      <span className="tag tag-neutral" style={{ marginLeft: 8 }}>Custom</span>
+                    ) : null}
+                  </td>
                   <td><span className={`tag ${f.required ? 'tag-accent' : 'tag-neutral'}`}>{f.required ? 'Required' : 'Optional'}</span></td>
                   <td><span className={`tag ${f.visibleInSearch ? 'tag-accent' : 'tag-neutral'}`}>{f.visibleInSearch ? 'Visible' : 'Hidden'}</span></td>
                   <td style={{ display: 'flex', gap: 'var(--space-2)' }}>
