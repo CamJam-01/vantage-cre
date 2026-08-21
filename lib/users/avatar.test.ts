@@ -5,6 +5,7 @@ import {
   avatarExtension,
   avatarFileErrorMessage,
   avatarObjectPath,
+  createAvatarUploadLock,
   validateAvatarFile,
 } from './avatar.ts';
 
@@ -42,5 +43,32 @@ describe('avatarObjectPath', () => {
 
   it('maps jpeg to a jpg extension', () => {
     assert.equal(avatarExtension('image/jpeg'), 'jpg');
+  });
+});
+
+describe('createAvatarUploadLock', () => {
+  it('refuses a second acquire while the first upload is still held', async () => {
+    const lock = createAvatarUploadLock();
+    const started: number[] = [];
+
+    async function upload(id: number) {
+      if (!lock.tryAcquire()) return;
+      started.push(id);
+      await Promise.resolve();
+      lock.release();
+    }
+
+    const first = upload(1);
+    await upload(2);
+    await first;
+
+    assert.deepEqual(started, [1]);
+  });
+
+  it('allows another upload after the in-flight one is released', async () => {
+    const lock = createAvatarUploadLock();
+    assert.equal(lock.tryAcquire(), true);
+    lock.release();
+    assert.equal(lock.tryAcquire(), true);
   });
 });

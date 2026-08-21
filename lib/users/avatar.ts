@@ -48,3 +48,21 @@ export function avatarObjectPath(userId: string, mimeType: string, id: string): 
   if (!ext) throw new Error('Unsupported image type');
   return `${userId}/${id}.${ext}`;
 }
+
+/** Synchronous lock so overlapping file picks cannot start two uploads. */
+export function createAvatarUploadLock() {
+  let inFlight = false;
+  return {
+    get inFlight() {
+      return inFlight;
+    },
+    tryAcquire(): boolean {
+      if (inFlight) return false;
+      inFlight = true;
+      return true;
+    },
+    release(): void {
+      inFlight = false;
+    },
+  };
+}

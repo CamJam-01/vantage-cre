@@ -7,20 +7,25 @@ import { updateAvatarAction } from '@/app/(app)/profile/actions';
 import {
   AVATAR_MIME_TYPES,
   avatarFileErrorMessage,
+  createAvatarUploadLock,
   validateAvatarFile,
 } from '@/lib/users/avatar';
 
 export function ProfilePhotoField({ initialUrl }: { initialUrl: string | null }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const uploadLockRef = useRef(createAvatarUploadLock());
   const [previewUrl, setPreviewUrl] = useState(initialUrl);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
 
   async function handleFile(file: File) {
+    if (!uploadLockRef.current.tryAcquire()) return;
+
     const invalid = validateAvatarFile(file);
     if (invalid) {
+      uploadLockRef.current.release();
       setError(avatarFileErrorMessage(invalid));
       return;
     }
@@ -30,20 +35,24 @@ export function ProfilePhotoField({ initialUrl }: { initialUrl: string | null })
     setError(null);
     setUploading(true);
 
-    const formData = new FormData();
-    formData.set('avatar', file);
-    const result = await updateAvatarAction(formData);
-    setUploading(false);
+    try {
+      const formData = new FormData();
+      formData.set('avatar', file);
+      const result = await updateAvatarAction(formData);
 
-    if (result?.error) {
-      setPreviewUrl(initialUrl);
-      setError(result.error);
-      URL.revokeObjectURL(localUrl);
-      return;
+      if (result?.error) {
+        setPreviewUrl(initialUrl);
+        setError(result.error);
+        URL.revokeObjectURL(localUrl);
+        return;
+      }
+
+      setPreviewUrl(result?.avatarUrl ?? localUrl);
+      router.refresh();
+    } finally {
+      uploadLockRef.current.release();
+      setUploading(false);
     }
-
-    setPreviewUrl(result?.avatarUrl ?? localUrl);
-    router.refresh();
   }
 
   function openPicker() {
@@ -52,6 +61,10 @@ export function ProfilePhotoField({ initialUrl }: { initialUrl: string | null })
 
   function onDragOver(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
+    if (uploadLockRef.current.inFlight) {
+      event.dataTransfer.dropEffect = 'none';
+      return;
+    }
     setDragging(true);
   }
 
@@ -62,12 +75,14 @@ export function ProfilePhotoField({ initialUrl }: { initialUrl: string | null })
   function onDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setDragging(false);
+    if (uploadLockRef.current.inFlight) return;
     const file = event.dataTransfer.files[0];
     if (file) void handleFile(file);
   }
 
   return (
     <div
+      aria-busy={uploading}
       style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-2)', flexShrink: 0 }}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
