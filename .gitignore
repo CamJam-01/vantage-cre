@@ -6,3 +6,6 @@ output/
 .playwright-cli/
 *.tsbuildinfo
 supabase/.temp/
+*.docx
+*.xlsx
+*.csv
