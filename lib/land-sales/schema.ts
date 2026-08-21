@@ -47,9 +47,34 @@ export const landSaleInputSchema = z.object({
   sale_date_raw: z.string().trim().optional().transform(v => (v ? v : undefined)),
   sale_price: numericField(n => n >= 0),
   buyer: z.string().trim().default(''),
+  extras: z.record(z.string(), z.string()).optional().default({}),
 });
 
 export type LandSaleInput = z.infer<typeof landSaleInputSchema>;
+
+export const EXTRAS_FIELD_PREFIX = 'extra:';
+
+export function extraInputName(label: string): string {
+  return `${EXTRAS_FIELD_PREFIX}${label}`;
+}
+
+export function extrasFromFormData(formData: FormData): Record<string, string> {
+  const extras: Record<string, string> = {};
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith(EXTRAS_FIELD_PREFIX) || typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (!trimmed) continue;
+    extras[key.slice(EXTRAS_FIELD_PREFIX.length)] = trimmed;
+  }
+  return extras;
+}
+
+export function formDataHasExtras(formData: FormData): boolean {
+  for (const key of formData.keys()) {
+    if (key.startsWith(EXTRAS_FIELD_PREFIX)) return true;
+  }
+  return false;
+}
 
 export type LandSale = LandSaleInput & {
   id: string;

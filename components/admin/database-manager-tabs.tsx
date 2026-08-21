@@ -13,9 +13,9 @@ import { DATABASE_CATEGORIES } from '@/lib/admin/database-descriptor';
 type Tab = 'connections' | 'databases' | 'audit';
 
 const TABS: { key: Tab; label: string }[] = [
-  { key: 'connections', label: 'Connections' },
   { key: 'databases', label: 'Databases' },
   { key: 'audit', label: 'Audit Log' },
+  { key: 'connections', label: 'Connections' },
 ];
 
 /** Illustrative only — Connections has no backend yet (decided scope: UI shell). */
@@ -28,7 +28,7 @@ const SAMPLE_CONNECTIONS = [
 export type AuditRow = { timestamp: string; user: string; action: string; detail: string };
 
 export function DatabaseManagerTabs({ salesCount, auditLog }: { salesCount: number; auditLog: AuditRow[] }) {
-  const [tab, setTab] = useState<Tab>('connections');
+  const [tab, setTab] = useState<Tab>('databases');
   const [modalOpen, setModalOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [connectionType, setConnectionType] = useState<'webhook' | 'api' | null>(null);

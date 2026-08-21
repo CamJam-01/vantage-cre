@@ -21,7 +21,12 @@ export type FieldDescriptor = {
   type: 'Text' | 'Number' | 'Currency' | 'Date';
   required: boolean;
   visibleInSearch: boolean;
+  custom?: boolean;
 };
+
+export function customFieldDescriptor(label: string): FieldDescriptor {
+  return { name: label, type: 'Text', required: false, visibleInSearch: false, custom: true };
+}
 
 /** Reflects land_sales' actual columns/constraints as of the current schema —
  * this is a read-only display, not a live introspection, per the "Land Sales

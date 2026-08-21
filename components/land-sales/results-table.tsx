@@ -11,36 +11,29 @@ import type { LandSale } from '@/lib/land-sales/schema';
 import { encodeFilters, type LandSaleFilters } from '@/lib/land-sales/search-params';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/land-sales/format';
 import { makeCsv, downloadCsv } from '@/lib/land-sales/csv';
+import { resultSortValue, type CoreResultField, type ResultColumn } from '@/lib/land-sales/result-columns';
 
-type SortKey = 'parcel_id' | 'address' | 'city' | 'county' | 'state' | 'property_type' | 'sale_date' | 'acreage' | 'square_feet' | 'sale_price' | 'price_per_acre' | 'buyer';
-type Sort = { key: SortKey; dir: 'asc' | 'desc' };
+type Sort = { column: ResultColumn; dir: 'asc' | 'desc' };
 
-const COLUMNS: { key: SortKey; label: string }[] = [
-  { key: 'parcel_id', label: 'Parcel ID' },
-  { key: 'address', label: 'Address' },
-  { key: 'city', label: 'City' },
-  { key: 'county', label: 'County' },
-  { key: 'state', label: 'State' },
-  { key: 'property_type', label: 'Type' },
-  { key: 'sale_date', label: 'Sale Date' },
-  { key: 'acreage', label: 'Acreage' },
-  { key: 'square_feet', label: 'Square Feet' },
-  { key: 'sale_price', label: 'Sale Price' },
-  { key: 'price_per_acre', label: 'Price / Acre' },
-  { key: 'buyer', label: 'Buyer' },
-];
+function columnId(column: ResultColumn): string {
+  return column.kind === 'core' ? column.key : `extra:${column.key}`;
+}
+
+function sameColumn(a: ResultColumn, b: ResultColumn): boolean {
+  return a.kind === b.kind && a.key === b.key;
+}
 
 const stickyHeaderCellStyle = {
   color: 'var(--color-bg)', background: 'var(--color-accent-2-500)', position: 'sticky' as const, top: 0, zIndex: 4,
 };
 
-function SortableHeader({ column, sort, onSort }: { column: { key: SortKey; label: string }; sort: Sort | null; onSort: (key: SortKey) => void }) {
-  const active = sort?.key === column.key;
+function SortableHeader({ column, sort, onSort }: { column: ResultColumn; sort: Sort | null; onSort: (column: ResultColumn) => void }) {
+  const active = sort ? sameColumn(sort.column, column) : false;
   return (
-    <th style={{ ...stickyHeaderCellStyle, cursor: 'pointer', userSelect: 'none' }} onClick={() => onSort(column.key)}>
+    <th style={{ ...stickyHeaderCellStyle, cursor: 'pointer', userSelect: 'none' }} onClick={() => onSort(column)}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
         {column.label}
-        {active ? (
+        {active && sort ? (
           sort.dir === 'asc' ? <ChevronUp size={14} strokeWidth={2} /> : <ChevronDown size={14} strokeWidth={2} />
         ) : (
           <ChevronsUpDown size={12} strokeWidth={2} style={{ opacity: 0.35 }} />
@@ -50,7 +43,63 @@ function SortableHeader({ column, sort, onSort }: { column: { key: SortKey; labe
   );
 }
 
-export function ResultsTable({ records, canEdit, filters }: { records: LandSale[]; canEdit: boolean; filters: LandSaleFilters }) {
+function SaleDateCell({ record }: { record: LandSale }) {
+  if (record.sale_date) return formatDate(record.sale_date);
+  if (record.sale_date_raw) {
+    return (
+      <span
+        title={`Unrecognized date from import: "${record.sale_date_raw}". Flagged for review.`}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#92400e' }}
+      >
+        <TriangleAlert size={14} strokeWidth={2} />
+        {record.sale_date_raw}
+      </span>
+    );
+  }
+  return '—';
+}
+
+function CoreCell({ record, field }: { record: LandSale; field: CoreResultField }) {
+  switch (field) {
+    case 'sale_date':
+      return <SaleDateCell record={record} />;
+    case 'acreage':
+    case 'square_feet':
+      return formatNumber(record[field]);
+    case 'sale_price':
+    case 'price_per_acre':
+      return formatCurrency(record[field]);
+    case 'parcel_id':
+    case 'address':
+    case 'msa':
+    case 'buyer':
+      return record[field] || '—';
+    case 'city':
+    case 'county':
+    case 'state':
+    case 'property_type':
+      return record[field];
+    default: {
+      const _exhaustive: never = field;
+      return _exhaustive;
+    }
+  }
+}
+
+function ResultCell({ record, column }: { record: LandSale; column: ResultColumn }) {
+  switch (column.kind) {
+    case 'extra':
+      return record.extras?.[column.key] || '—';
+    case 'core':
+      return <CoreCell record={record} field={column.key} />;
+    default: {
+      const _exhaustive: never = column;
+      return _exhaustive;
+    }
+  }
+}
+
+export function ResultsTable({ records, columns, canEdit, filters }: { records: LandSale[]; columns: ResultColumn[]; canEdit: boolean; filters: LandSaleFilters }) {
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<Sort | null>(null);
@@ -65,17 +114,17 @@ export function ResultsTable({ records, canEdit, filters }: { records: LandSale[
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  function handleSort(key: SortKey) {
-    setSort(prev => (prev?.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
+  function handleSort(column: ResultColumn) {
+    setSort(prev => (prev && sameColumn(prev.column, column) ? { column, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { column, dir: 'asc' }));
   }
 
   const sortedRecords = useMemo(() => {
     if (!sort) return records;
-    const { key, dir } = sort;
+    const { column, dir } = sort;
     const factor = dir === 'asc' ? 1 : -1;
     return [...records].sort((a, b) => {
-      const av = a[key];
-      const bv = b[key];
+      const av = resultSortValue(a, column);
+      const bv = resultSortValue(b, column);
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
@@ -165,7 +214,7 @@ export function ResultsTable({ records, canEdit, filters }: { records: LandSale[
         <main style={{ flex: 1, minWidth: 0, paddingTop: 0, boxSizing: 'border-box' }}>
           <div style={{ width: '100%' }}>
             <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 250px)', background: 'var(--color-accent-2-100)' }}>
-              <table className="table" style={{ width: '100%', minWidth: 1150 }}>
+              <table className="table" style={{ width: '100%', minWidth: Math.max(1150, 280 + columns.length * 120) }}>
                 <thead>
                   <tr>
                     <th style={{ ...stickyHeaderCellStyle, width: 40 }}>
@@ -173,13 +222,13 @@ export function ResultsTable({ records, canEdit, filters }: { records: LandSale[
                     </th>
                     <th style={{ ...stickyHeaderCellStyle, width: 40 }} />
                     <th style={{ ...stickyHeaderCellStyle, width: 40 }} />
-                    {COLUMNS.map(col => <SortableHeader key={col.key} column={col} sort={sort} onSort={handleSort} />)}
+                    {columns.map(col => <SortableHeader key={columnId(col)} column={col} sort={sort} onSort={handleSort} />)}
                   </tr>
                 </thead>
                 <tbody style={{ background: '#FFFFFF' }}>
                   {records.length === 0 ? (
                     <tr>
-                      <td colSpan={15} style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--color-neutral-600)' }}>
+                      <td colSpan={3 + columns.length} style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--color-neutral-600)' }}>
                         No records match your search criteria.
                       </td>
                     </tr>
@@ -216,28 +265,11 @@ export function ResultsTable({ records, canEdit, filters }: { records: LandSale[
                             </button>
                           )}
                         </td>
-                        <td>{r.parcel_id || '—'}</td>
-                        <td>{r.address || '—'}</td>
-                        <td>{r.city}</td>
-                        <td>{r.county}</td>
-                        <td>{r.state}</td>
-                        <td>{r.property_type}</td>
-                        <td>
-                          {r.sale_date ? formatDate(r.sale_date) : r.sale_date_raw ? (
-                            <span
-                              title={`Unrecognized date from import: "${r.sale_date_raw}". Flagged for review.`}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#92400e' }}
-                            >
-                              <TriangleAlert size={14} strokeWidth={2} />
-                              {r.sale_date_raw}
-                            </span>
-                          ) : '—'}
-                        </td>
-                        <td>{formatNumber(r.acreage)}</td>
-                        <td>{formatNumber(r.square_feet)}</td>
-                        <td>{formatCurrency(r.sale_price)}</td>
-                        <td>{formatCurrency(r.price_per_acre)}</td>
-                        <td>{r.buyer || '—'}</td>
+                        {columns.map(col => (
+                          <td key={columnId(col)}>
+                            <ResultCell record={r} column={col} />
+                          </td>
+                        ))}
                       </tr>
                     );
                   })}

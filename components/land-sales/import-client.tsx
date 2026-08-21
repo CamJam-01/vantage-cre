@@ -6,11 +6,34 @@ import { ArrowLeft } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
 import { Button } from '@/components/ui/button';
 import {
-  applyHeaderMapping, csvFields, csvHeaders, downloadCsv, headersMatchExactly,
-  looksLikeWrongDelimiter, makeCsvTemplate, missingRequiredMappings, parseCsv, REQUIRED_CSV_FIELDS,
-  suggestHeaderMapping, validateDataRows, type ColumnMapping, type CsvField, type ImportRowResult,
+  csvFields, csvHeaders, downloadCsv, fieldForCanonicalHeader, fieldToHeader,
+  headersMatchExactly, looksLikeWrongDelimiter, makeCsvTemplate, mappingIssues,
+  missingRequiredTargets, parseCsv, REQUIRED_CSV_FIELDS, suggestSourceMapping,
+  unmatchedHeaders, validateMappedRows, type CsvField, type ImportRowResult,
+  type MappingAction, type SourceMapping,
 } from '@/lib/land-sales/csv';
 import { importLandSales, type ImportOutcome } from '@/app/(app)/land-sales/actions';
+
+function actionFromSelect(value: string): MappingAction {
+  if (value === '') return { type: 'skip' };
+  if (value === 'new') return { type: 'new' };
+  return { type: 'existing', field: value as CsvField };
+}
+
+function selectValue(action: MappingAction): string {
+  switch (action.type) {
+    case 'skip':
+      return '';
+    case 'new':
+      return 'new';
+    case 'existing':
+      return action.field;
+    default: {
+      const _exhaustive: never = action;
+      return _exhaustive;
+    }
+  }
+}
 
 export function ImportLandSalesClient() {
   const [fileName, setFileName] = useState<string | null>(null);
@@ -19,7 +42,9 @@ export function ImportLandSalesClient() {
 
   const [headers, setHeaders] = useState<string[] | null>(null);
   const [dataRowsRaw, setDataRowsRaw] = useState<string[][] | null>(null);
-  const [mapping, setMapping] = useState<ColumnMapping | null>(null);
+  const [mapping, setMapping] = useState<SourceMapping | null>(null);
+  const [selectedNewIndexes, setSelectedNewIndexes] = useState<Set<number>>(new Set());
+  const [unmatchedStep, setUnmatchedStep] = useState(false);
   const [showMapping, setShowMapping] = useState(false);
   const [mappingError, setMappingError] = useState<string | null>(null);
 
@@ -27,19 +52,23 @@ export function ImportLandSalesClient() {
   const [importing, setImporting] = useState(false);
   const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
 
+  const unmatched = headers ? unmatchedHeaders(headers) : [];
+
   function reset() {
     setFileError(null);
     setHeaders(null);
     setDataRowsRaw(null);
     setMapping(null);
+    setSelectedNewIndexes(new Set());
+    setUnmatchedStep(false);
     setShowMapping(false);
     setMappingError(null);
     setRowResults(null);
     setOutcome(null);
   }
 
-  function validateWithMapping(dataRaw: string[][], m: ColumnMapping) {
-    setRowResults(validateDataRows(applyHeaderMapping(dataRaw, m)));
+  function validateWithMapping(dataRaw: string[][], hdrs: string[], m: SourceMapping) {
+    setRowResults(validateMappedRows(dataRaw, hdrs, m));
   }
 
   async function handleFile(e: ChangeEvent<HTMLInputElement>) {
@@ -70,34 +99,71 @@ export function ImportLandSalesClient() {
     setDataRowsRaw(dataRaw);
 
     if (headersMatchExactly(hdrs)) {
-      const m = suggestHeaderMapping(hdrs);
+      const m = suggestSourceMapping(hdrs);
       setMapping(m);
-      validateWithMapping(dataRaw, m);
-    } else {
-      setMapping(suggestHeaderMapping(hdrs));
-      setShowMapping(true);
+      validateWithMapping(dataRaw, hdrs, m);
+      return;
     }
+
+    if (unmatchedHeaders(hdrs).length > 0) {
+      setUnmatchedStep(true);
+      return;
+    }
+
+    const m = suggestSourceMapping(hdrs);
+    setMapping(m);
+    setShowMapping(true);
   }
 
-  function updateMapping(field: CsvField, value: string) {
+  function toggleNewField(index: number) {
+    setSelectedNewIndexes(prev => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
+
+  function continueToMapping() {
+    if (!headers) return;
+    setMapping(suggestSourceMapping(headers, selectedNewIndexes));
+    setMappingError(null);
+    setUnmatchedStep(false);
+    setShowMapping(true);
+  }
+
+  function updateMapping(index: number, value: string) {
     setMapping(prev => {
-      const next = { ...(prev ?? {}) };
-      if (value === '') delete next[field];
-      else next[field] = Number(value);
+      if (!prev) return prev;
+      const next = [...prev];
+      next[index] = actionFromSelect(value);
       return next;
     });
   }
 
   function confirmMapping() {
-    if (!mapping || !dataRowsRaw) return;
-    const missing = missingRequiredMappings(mapping);
-    if (missing.length) {
-      setMappingError(`Map a column for: ${missing.join(', ')}.`);
+    if (!mapping || !dataRowsRaw || !headers) return;
+    const issues = mappingIssues(mapping);
+    if (issues.length) {
+      setMappingError(issues.join(' '));
       return;
     }
     setMappingError(null);
     setShowMapping(false);
-    validateWithMapping(dataRowsRaw, mapping);
+    validateWithMapping(dataRowsRaw, headers, mapping);
+  }
+
+  function backToUnmatched() {
+    setShowMapping(false);
+    setUnmatchedStep(true);
+    setMappingError(null);
+    setRowResults(null);
+  }
+
+  function openMapping() {
+    setUnmatchedStep(false);
+    setShowMapping(true);
+    setOutcome(null);
   }
 
   async function handleImport() {
@@ -106,10 +172,10 @@ export function ImportLandSalesClient() {
     const result = await importLandSales(csvText, mapping);
     setImporting(false);
     if (result.needsMapping) {
-      // Defensive: the server disagreed with the client's read of the file (e.g. a stale mapping).
       setHeaders(result.needsMapping.headers);
       setMapping(result.needsMapping.suggested);
       setShowMapping(true);
+      setUnmatchedStep(false);
       setRowResults(null);
       return;
     }
@@ -120,6 +186,8 @@ export function ImportLandSalesClient() {
   const rowWarnings = rowResults?.flatMap(r => (r.ok ? r.warnings ?? [] : [])) ?? [];
   const validRows = rowResults?.filter(r => r.ok) ?? [];
   const canImport = !!rowResults && rowErrors.length === 0 && validRows.length > 0 && !outcome;
+  const mappingReady = !unmatchedStep && !showMapping;
+  const stillNeed = mapping ? missingRequiredTargets(mapping) : [];
 
   return (
     <main style={{
@@ -132,7 +200,7 @@ export function ImportLandSalesClient() {
           Import Land Sales CSV
         </h1>
         <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: '0 0 var(--space-2)' }}>
-          We&apos;ll match your CSV headers automatically where we can. If they don&apos;t match {csvHeaders.join(', ')}, you&apos;ll be asked to map your columns to these fields.
+          We&apos;ll match headers that already exist in the database. Extra columns can be added as custom fields, then each CSV column is mapped to a database field.
         </p>
         <button
           type="button"
@@ -157,48 +225,115 @@ export function ImportLandSalesClient() {
             <div style={{ marginTop: 'var(--space-4)', fontSize: 13, color: '#b3261e' }}>{fileError}</div>
           )}
 
-          {showMapping && headers && mapping && (
+          {unmatchedStep && headers && (
             <div style={{ marginTop: 'var(--space-4)' }}>
               <p style={{ fontSize: 14, color: 'var(--color-text)', margin: '0 0 var(--space-3)' }}>
-                Your CSV&apos;s headers don&apos;t match ours. Map each field below to a column from your file (fields marked <span style={{ color: '#b3261e' }}>*</span> are required).
+                These column headers don&apos;t match fields in the database. Select any you want to add as new custom fields. Unchecked columns can still be mapped to an existing field in the next step.
               </p>
+              <div style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ padding: 0 }}
+                  onClick={() => setSelectedNewIndexes(new Set(unmatched.map(u => u.index)))}
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ padding: 0 }}
+                  onClick={() => setSelectedNewIndexes(new Set())}
+                >
+                  Select none
+                </button>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {csvFields.map((field, i) => (
-                  <div
-                    key={field}
+                {unmatched.map(({ index, header }) => (
+                  <label
+                    key={index}
+                    className="radio"
                     style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      gap: 'var(--space-3)', padding: 'var(--space-2) 0',
+                      gap: 'var(--space-2)', cursor: 'pointer',
+                      padding: 'var(--space-2) 0',
                       borderBottom: '1px solid var(--color-neutral-200)',
                     }}
                   >
-                    <label htmlFor={`map-${field}`} style={{ fontSize: 14, color: 'var(--color-text)' }}>
-                      {csvHeaders[i]}
-                      {REQUIRED_CSV_FIELDS.includes(field) && <span style={{ color: '#b3261e' }}> *</span>}
-                    </label>
-                    <select
-                      id={`map-${field}`}
-                      className="input"
-                      style={{ width: 240, backgroundColor: '#FFFFFF' }}
-                      value={mapping[field] ?? ''}
-                      onChange={e => updateMapping(field, e.target.value)}
-                    >
-                      <option value="">— Not mapped —</option>
-                      {headers.map((h, hi) => (
-                        <option key={hi} value={hi}>{h || `Column ${hi + 1}`}</option>
-                      ))}
-                    </select>
-                  </div>
+                    <input
+                      type="checkbox"
+                      checked={selectedNewIndexes.has(index)}
+                      onChange={() => toggleNewField(index)}
+                    />
+                    <span style={{ fontSize: 14, color: 'var(--color-text)' }}>{header || `Column ${index + 1}`}</span>
+                  </label>
                 ))}
               </div>
-              {mappingError && <div style={{ marginTop: 'var(--space-3)', fontSize: 13, color: '#b3261e' }}>{mappingError}</div>}
-              <Button type="button" variant="primary" style={{ marginTop: 'var(--space-4)' }} onClick={confirmMapping}>
-                Apply mapping
+              <Button type="button" variant="primary" style={{ marginTop: 'var(--space-4)' }} onClick={continueToMapping}>
+                Continue to mapping
               </Button>
             </div>
           )}
 
-          {rowResults && rowErrors.length > 0 && (
+          {showMapping && headers && mapping && (
+            <div style={{ marginTop: 'var(--space-4)' }}>
+              <p style={{ fontSize: 14, color: 'var(--color-text)', margin: '0 0 var(--space-3)' }}>
+                Map each CSV column to a database field. Fields marked <span style={{ color: '#b3261e' }}>*</span> are required.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {headers.map((header, i) => {
+                  const unmatchedColumn = !fieldForCanonicalHeader(header);
+                  return (
+                    <div
+                      key={`${header}-${i}`}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        gap: 'var(--space-3)', padding: 'var(--space-2) 0',
+                        borderBottom: '1px solid var(--color-neutral-200)',
+                      }}
+                    >
+                      <label htmlFor={`map-col-${i}`} style={{ fontSize: 14, color: 'var(--color-text)' }}>
+                        {header || `Column ${i + 1}`}
+                      </label>
+                      <select
+                        id={`map-col-${i}`}
+                        className="input"
+                        style={{ width: 260, backgroundColor: '#FFFFFF' }}
+                        value={selectValue(mapping[i] ?? { type: 'skip' })}
+                        onChange={e => updateMapping(i, e.target.value)}
+                      >
+                        <option value="">— Not mapped —</option>
+                        {unmatchedColumn && <option value="new">— Create new field —</option>}
+                        {csvFields.map(field => (
+                          <option key={field} value={field}>
+                            {fieldToHeader[field]}
+                            {REQUIRED_CSV_FIELDS.includes(field) ? ' *' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+              {stillNeed.length > 0 && (
+                <p style={{ fontSize: 13, color: 'var(--color-neutral-700)', margin: 'var(--space-3) 0 0' }}>
+                  Still need: {stillNeed.join(', ')}.
+                </p>
+              )}
+              {mappingError && <div style={{ marginTop: 'var(--space-3)', fontSize: 13, color: '#b3261e' }}>{mappingError}</div>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
+                <Button type="button" variant="primary" onClick={confirmMapping}>
+                  Apply mapping
+                </Button>
+                {unmatched.length > 0 && (
+                  <button type="button" className="btn btn-ghost" onClick={backToUnmatched}>
+                    Back
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {rowResults && mappingReady && rowErrors.length > 0 && (
             <div style={{ marginTop: 'var(--space-4)' }}>
               <div className="tag" style={{ background: '#fbe4e2', color: '#b3261e', marginBottom: 'var(--space-2)' }}>
                 {rowErrors.length} error{rowErrors.length === 1 ? '' : 's'} — fix and re-upload
@@ -207,14 +342,14 @@ export function ImportLandSalesClient() {
                 {rowErrors.map((err, i) => <li key={i}>{err}</li>)}
               </ul>
               {headers && (
-                <button type="button" className="btn btn-ghost" style={{ padding: 0, marginTop: 'var(--space-3)' }} onClick={() => setShowMapping(true)}>
+                <button type="button" className="btn btn-ghost" style={{ padding: 0, marginTop: 'var(--space-3)' }} onClick={openMapping}>
                   Adjust column mapping
                 </button>
               )}
             </div>
           )}
 
-          {rowResults && rowErrors.length === 0 && !outcome && (
+          {rowResults && mappingReady && rowErrors.length === 0 && !outcome && (
             <div style={{ marginTop: 'var(--space-4)' }}>
               <p style={{ fontSize: 14, color: 'var(--color-text)' }}>
                 {validRows.length} record{validRows.length === 1 ? '' : 's'} ready to import.
@@ -234,7 +369,7 @@ export function ImportLandSalesClient() {
                   {importing ? 'Importing…' : `Import ${validRows.length} record${validRows.length === 1 ? '' : 's'}`}
                 </Button>
                 {headers && (
-                  <button type="button" className="btn btn-ghost" onClick={() => setShowMapping(true)}>
+                  <button type="button" className="btn btn-ghost" onClick={openMapping}>
                     Adjust column mapping
                   </button>
                 )}
