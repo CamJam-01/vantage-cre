@@ -47,6 +47,16 @@ export function canEdit(role: Role): boolean {
   return role === 'Admin' || role === 'Editor';
 }
 
+/** Server-action gate: returns an error message when the caller must not
+ * write `land_sales`. UI checks are not enough — actions are callable directly. */
+export async function landSaleWriteDeniedMessage(supabase: SupabaseClient): Promise<string | null> {
+  const profile = await getCurrentUserProfile(supabase);
+  if (!profile || profile.is_suspended || !canEdit(profile.role)) {
+    return 'You do not have permission to edit records.';
+  }
+  return null;
+}
+
 /** Fetches the signed-in user's own profile row, or null if there's no
  * session. Relies on the `public.users` RLS policy that lets a user read
  * their own row (and everyone's, per the current "using (true)" select policy).

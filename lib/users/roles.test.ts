@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getCurrentUserProfile, listUserProfiles } from './roles.ts';
+import { getCurrentUserProfile, landSaleWriteDeniedMessage, listUserProfiles } from './roles.ts';
 
 const rowWithoutAvatar = {
   id: 'user-1',
@@ -74,6 +74,54 @@ describe('getCurrentUserProfile', () => {
   it('returns null when there is no signed-in user', async () => {
     const supabase = mockSupabase({ user: null, bySelect: {} });
     assert.equal(await getCurrentUserProfile(supabase), null);
+  });
+});
+
+describe('landSaleWriteDeniedMessage', () => {
+  function profileClient(row: typeof rowWithoutAvatar & { avatar_url?: string | null }) {
+    return mockSupabase({
+      user: { id: row.id },
+      bySelect: {
+        'id, email, full_name, username, role, is_suspended, avatar_url': {
+          data: { ...row, avatar_url: row.avatar_url ?? null },
+          error: null,
+        },
+      },
+    });
+  }
+
+  it('denies a Viewer so a direct server-action submit cannot write land_sales', async () => {
+    const supabase = profileClient({ ...rowWithoutAvatar, role: 'Viewer' });
+    assert.equal(
+      await landSaleWriteDeniedMessage(supabase),
+      'You do not have permission to edit records.',
+    );
+  });
+
+  it('denies a signed-out caller', async () => {
+    const supabase = mockSupabase({ user: null, bySelect: {} });
+    assert.equal(
+      await landSaleWriteDeniedMessage(supabase),
+      'You do not have permission to edit records.',
+    );
+  });
+
+  it('denies a suspended Editor', async () => {
+    const supabase = profileClient({ ...rowWithoutAvatar, role: 'Editor', is_suspended: true });
+    assert.equal(
+      await landSaleWriteDeniedMessage(supabase),
+      'You do not have permission to edit records.',
+    );
+  });
+
+  it('allows an Editor', async () => {
+    const supabase = profileClient({ ...rowWithoutAvatar, role: 'Editor' });
+    assert.equal(await landSaleWriteDeniedMessage(supabase), null);
+  });
+
+  it('allows an Admin', async () => {
+    const supabase = profileClient(rowWithoutAvatar);
+    assert.equal(await landSaleWriteDeniedMessage(supabase), null);
   });
 });
 

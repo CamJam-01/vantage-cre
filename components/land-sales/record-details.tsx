@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useActionState, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, TriangleAlert } from 'lucide-react';
@@ -82,6 +82,19 @@ function DetailField({
   );
 }
 
+function OptionalForm({
+  action,
+  formRef,
+  children,
+}: {
+  action?: (formData: FormData) => void;
+  formRef: RefObject<HTMLFormElement | null>;
+  children: ReactNode;
+}) {
+  if (!action) return children;
+  return <form ref={formRef} action={action}>{children}</form>;
+}
+
 export function RecordDetails({
   record,
   from,
@@ -93,10 +106,55 @@ export function RecordDetails({
   canEdit: boolean;
   startEditing?: boolean;
 }) {
+  if (!canEdit) {
+    return <RecordDetailsForm record={record} from={from} canEdit={false} />;
+  }
+  return <RecordDetailsEditor record={record} from={from} startEditing={startEditing} />;
+}
+
+function RecordDetailsEditor({
+  record,
+  from,
+  startEditing = false,
+}: {
+  record: LandSale;
+  from?: string;
+  startEditing?: boolean;
+}) {
+  const [state, formAction, pending] = useActionState(updateLandSale.bind(null, record.id), initialState);
+  return (
+    <RecordDetailsForm
+      record={record}
+      from={from}
+      canEdit
+      startEditing={startEditing}
+      state={state}
+      formAction={formAction}
+      pending={pending}
+    />
+  );
+}
+
+function RecordDetailsForm({
+  record,
+  from,
+  canEdit,
+  startEditing = false,
+  state = null,
+  formAction,
+  pending = false,
+}: {
+  record: LandSale;
+  from?: string;
+  canEdit: boolean;
+  startEditing?: boolean;
+  state?: CreateFormState;
+  formAction?: (formData: FormData) => void;
+  pending?: boolean;
+}) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [editing, setEditing] = useState(canEdit && startEditing);
-  const [state, formAction, pending] = useActionState(updateLandSale.bind(null, record.id), initialState);
   const errors = state?.errors ?? {};
   const backToSearchHref = from ? `/land-sales?${from}` : '/land-sales';
   const saleDateWarning = !record.sale_date && record.sale_date_raw
@@ -124,7 +182,7 @@ export function RecordDetails({
           Back to search
         </Link>
 
-        <form ref={formRef} action={formAction}>
+        <OptionalForm action={formAction} formRef={formRef}>
           {from && <input type="hidden" name="from" value={from} />}
 
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
@@ -384,7 +442,7 @@ export function RecordDetails({
               <div style={{ fontSize: 13, color: '#b3261e', marginTop: 'var(--space-4)' }}>{state.message}</div>
             )}
           </Blueprint>
-        </form>
+        </OptionalForm>
       </div>
     </main>
   );
