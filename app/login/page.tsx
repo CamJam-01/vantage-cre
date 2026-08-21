@@ -44,9 +44,9 @@ export default function LoginPage() {
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'calc(var(--space-2) * -1)' }}>
           <label className="radio" style={{ gap: 'var(--space-2)', cursor: 'pointer' }}>
-            <input type="checkbox" style={{ display: 'none' }} checked={remember} onChange={() => setRemember(r => !r)} />
-            <span className="dot" style={{ backgroundColor: '#FFFFFF' }} />
-            <span style={{ fontSize: 14, color: 'var(--color-text)' }}>Remember me</span>
+            <input type="checkbox" name="remember" checked={remember} onChange={() => setRemember(r => !r)} />
+            <span className="dot" />
+            <span style={{ fontSize: 14 }}>Remember me</span>
           </label>
           <Link href="/auth/reset-password" style={{ fontSize: 14 }}>Forgot password?</Link>
         </div>
