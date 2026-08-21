@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { getCurrentUserProfile, type UserProfile } from '@/lib/users/roles';
+import { getCurrentUserProfile, listUserProfiles, type UserProfile } from '@/lib/users/roles';
 import { AccountDetailsForm } from '@/components/profile/account-details-form';
 import { ChangePasswordForm } from '@/components/profile/change-password-form';
 import { UserAccessTable } from '@/components/profile/user-access-table';
@@ -14,11 +14,7 @@ export default async function ProfilePage() {
 
   let allUsers: UserProfile[] = [];
   if (profile.role === 'Admin') {
-    const { data } = await supabase
-      .from('users')
-      .select('id, email, full_name, username, role, is_suspended')
-      .order('created_at');
-    allUsers = (data as UserProfile[] | null) ?? [];
+    allUsers = await listUserProfiles(supabase);
   }
 
   return (
@@ -32,7 +28,11 @@ export default async function ProfilePage() {
           Your Profile
         </h1>
 
-        <AccountDetailsForm initialUsername={profile.username ?? ''} initialEmail={profile.email} />
+        <AccountDetailsForm
+          initialUsername={profile.username ?? ''}
+          initialEmail={profile.email}
+          initialAvatarUrl={profile.avatar_url}
+        />
         <ChangePasswordForm email={profile.email} />
 
         {profile.role === 'Admin' && (

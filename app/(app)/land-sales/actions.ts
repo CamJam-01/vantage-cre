@@ -9,6 +9,7 @@ import {
   missingRequiredMappings, parseCsv, recordKey, suggestHeaderMapping, validateDataRows,
   type ColumnMapping,
 } from '@/lib/land-sales/csv';
+import { landSaleWriteDeniedMessage } from '@/lib/users/roles';
 
 export async function signOutAction() {
   const supabase = await createClient();
@@ -19,6 +20,10 @@ export async function signOutAction() {
 export type CreateFormState = { errors?: Record<string, string>; message?: string } | null;
 
 export async function createLandSale(_prevState: CreateFormState, formData: FormData): Promise<CreateFormState> {
+  const supabase = await createClient();
+  const denied = await landSaleWriteDeniedMessage(supabase);
+  if (denied) return { message: denied };
+
   const raw = Object.fromEntries(formData.entries());
   const parsed = landSaleInputSchema.safeParse(raw);
   if (!parsed.success) {
@@ -27,7 +32,6 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
     return { errors };
   }
 
-  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from('land_sales')
@@ -45,6 +49,10 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
  * native date picker, so a successful edit always supersedes and clears any
  * `sale_date_raw` import flag. */
 export async function updateLandSale(id: string, _prevState: CreateFormState, formData: FormData): Promise<CreateFormState> {
+  const supabase = await createClient();
+  const denied = await landSaleWriteDeniedMessage(supabase);
+  if (denied) return { message: denied };
+
   // Carried through from the edit form's hidden `from` field (the results
   // page's filters at the time the user navigated to this edit) purely to
   // relay it onward to the post-save redirect — not part of the record shape.
@@ -59,7 +67,6 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
     return { errors };
   }
 
-  const supabase = await createClient();
   const { error } = await supabase
     .from('land_sales')
     .update({ ...parsed.data, sale_date_raw: null })
@@ -85,6 +92,10 @@ export type ImportOutcome = {
  * imports immediately; otherwise a mapping must be supplied (from the header-
  * mapping step in the UI) or this returns `needsMapping` for the caller to act on. */
 export async function importLandSales(csvText: string, mapping?: ColumnMapping): Promise<ImportOutcome> {
+  const supabase = await createClient();
+  const denied = await landSaleWriteDeniedMessage(supabase);
+  if (denied) return { rowErrors: [denied] };
+
   const rows = parseCsv(csvText);
   if (rows.length === 0) {
     return { headerError: `The CSV is empty. Add a header row: ${csvHeaders.join(', ')}.` };
@@ -122,7 +133,6 @@ export async function importLandSales(csvText: string, mapping?: ColumnMapping):
   if (!toInsert.length) return { rowErrors: ['No valid rows to import.'] };
   const warnings = results.flatMap(r => (r.ok ? r.warnings ?? [] : []));
 
-  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   const { data: existing } = await supabase.from('land_sales').select('parcel_id, sale_date, address');

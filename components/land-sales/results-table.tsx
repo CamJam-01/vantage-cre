@@ -107,7 +107,9 @@ export function ResultsTable({ records, canEdit, filters }: { records: LandSale[
   }
 
   function editDetails(id: string) {
-    router.push(searchQuery ? `/land-sales/${id}/edit?from=${encodeURIComponent(searchQuery)}` : `/land-sales/${id}/edit`);
+    const params = new URLSearchParams({ edit: '1' });
+    if (searchQuery) params.set('from', searchQuery);
+    router.push(`/land-sales/${id}?${params.toString()}`);
   }
 
   function toggleExportMenu() {
