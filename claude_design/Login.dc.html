@@ -42,9 +42,9 @@
 
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:calc(var(--space-2) * -1);">
         <label class="radio" style="gap:var(--space-2);cursor:pointer;">
-          <input type="checkbox" style="display:none;" checked="{{ remember }}" onChange="{{ toggleRemember }}">
-          <span class="dot" style="background-color: #FFFFFF"></span>
-          <span style="font-size:14px;color:var(--color-text);">Remember me</span>
+          <input type="checkbox" name="remember" checked="{{ remember }}" onChange="{{ toggleRemember }}">
+          <span class="dot"></span>
+          <span style="font-size:14px;">Remember me</span>
         </label>
         <a href="#" style="font-size:14px;">Forgot password?</a>
       </div>
