@@ -1,38 +1,31 @@
 'use client';
 
-import { useActionState, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { useActionState, useState, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, TriangleAlert } from 'lucide-react';
-import { Blueprint } from '@/components/ui/blueprint';
 import { Button } from '@/components/ui/button';
 import { PROPERTY_TYPES, US_STATES } from '@/lib/land-sales/constants';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/land-sales/format';
 import { updateLandSale, type CreateFormState } from '@/app/(app)/land-sales/actions';
 import { extraInputName, type LandSale } from '@/lib/land-sales/schema';
+import {
+  DETAIL_COMPUTED_FIELDS,
+  DETAIL_SHEETS,
+  detailSheetFields,
+  resultColumns,
+  type CoreResultField,
+  type DetailField,
+  type ResultColumn,
+} from '@/lib/land-sales/result-columns';
 
 const initialState: CreateFormState = null;
 
-const labelStyle: CSSProperties = {
-  fontSize: 12,
-  letterSpacing: '0.05em',
-  color: 'var(--color-neutral-700)',
-  textTransform: 'uppercase',
-  marginBottom: 'var(--space-1)',
-  display: 'block',
-};
-
-const valueStyle: CSSProperties = {
-  fontSize: 18,
-  fontWeight: 600,
-  color: 'var(--color-text)',
-};
-
-const errorStyle: CSSProperties = {
-  fontSize: 12,
-  color: '#b3261e',
-  marginTop: 4,
-};
+/** Fields whose value is a record number or a figure — set in the mono face so
+ * they line up column-wise down the sheet, as on a drafting title block. */
+const MONO_FIELDS: CoreResultField[] = ['parcel_id', 'sale_date'];
+const NUMERIC_FIELDS: CoreResultField[] = ['acreage', 'square_feet', 'sale_price', 'price_per_acre'];
 
 function detailsHref(id: string, from?: string) {
   const params = new URLSearchParams();
@@ -43,56 +36,265 @@ function detailsHref(id: string, from?: string) {
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
-  return <div style={errorStyle}>{message}</div>;
+  return <div className="record-error">{message}</div>;
 }
 
-function LockedValue({ children, warning }: { children: ReactNode; warning?: string }) {
-  if (warning) {
-    return (
-      <div title={warning} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 18, fontWeight: 600, color: '#92400e' }}>
-        <TriangleAlert size={16} strokeWidth={2} />
-        {children}
-      </div>
-    );
-  }
-  return <div style={valueStyle}>{children}</div>;
-}
+/** The Save/Cancel controls live in the sticky action bar, outside the form, so
+ * the form needs a stable id for their `form=` association. */
+const FORM_ID = 'record-form';
 
-function DetailField({
-  label,
-  htmlFor,
-  editing,
-  error,
-  locked,
+function OptionalForm({
+  action,
   children,
 }: {
-  label: string;
-  htmlFor?: string;
-  editing: boolean;
-  error?: string;
-  locked: ReactNode;
-  children?: ReactNode;
+  action?: (formData: FormData) => void;
+  children: ReactNode;
 }) {
+  if (!action) return children;
+  return <form id={FORM_ID} action={action}>{children}</form>;
+}
+
+function saleDateWarning(record: LandSale): string | undefined {
+  return !record.sale_date && record.sale_date_raw
+    ? `Unrecognized date from import: "${record.sale_date_raw}". Flagged for review.`
+    : undefined;
+}
+
+function fieldClassName(field: CoreResultField): string {
+  if (MONO_FIELDS.includes(field)) return 'input mono';
+  if (NUMERIC_FIELDS.includes(field)) return 'input num';
+  return 'input';
+}
+
+/** View mode renders the same field grid as edit mode, with the values already
+ * formatted for reading and the inputs locked — the design's sheets look
+ * identical either way, so the only thing that changes is whether the field
+ * accepts typing. Read-only inputs carry no `name`, so nothing here can reach a
+ * submit even while the surrounding form is mounted for an editor. */
+function lockedValue(record: LandSale, field: CoreResultField): string {
+  switch (field) {
+    case 'sale_date':
+      return record.sale_date
+        ? formatDate(record.sale_date)
+        : record.sale_date_raw || '—';
+    case 'sale_price':
+    case 'price_per_acre':
+      return formatCurrency(record[field]);
+    case 'acreage':
+      return record.acreage != null ? `${formatNumber(record.acreage)} AC` : '—';
+    case 'square_feet':
+      return record.square_feet != null ? `${formatNumber(record.square_feet)} SF` : '—';
+    case 'parcel_id':
+    case 'buyer':
+    case 'msa':
+    case 'property_type':
+    case 'address':
+    case 'city':
+    case 'county':
+    case 'state':
+      return record[field] || '—';
+    default: {
+      const _exhaustive: never = field;
+      return _exhaustive;
+    }
+  }
+}
+
+function LockedField({ record, field }: { record: LandSale; field: CoreResultField }) {
   return (
-    <div>
-      <label htmlFor={editing ? htmlFor : undefined} style={labelStyle}>{label}</label>
-      {editing ? children : locked}
-      {editing && <FieldError message={error} />}
+    <input
+      className={fieldClassName(field)}
+      readOnly
+      tabIndex={-1}
+      value={lockedValue(record, field)}
+    />
+  );
+}
+
+/** An affixed unit or currency marker, matching the design's `$` / `AC` field
+ * prefixes and suffixes. */
+function Affixed({ affix, children }: { affix: string; children: ReactNode }) {
+  return (
+    <div className="record-affix">
+      <span className="affix">{affix}</span>
+      {children}
     </div>
   );
 }
 
-function OptionalForm({
-  action,
-  formRef,
-  children,
+function EditableField({ record, field }: { record: LandSale; field: CoreResultField }) {
+  const importedPropertyType =
+    record.property_type && !(PROPERTY_TYPES as readonly string[]).includes(record.property_type)
+      ? record.property_type
+      : null;
+
+  switch (field) {
+    case 'sale_date':
+      return (
+        <input
+          id="sale_date"
+          name="sale_date"
+          type="date"
+          className="input mono"
+          required
+          defaultValue={record.sale_date ?? undefined}
+        />
+      );
+    case 'sale_price':
+      return (
+        <Affixed affix="$">
+          <input
+            id="sale_price"
+            name="sale_price"
+            type="number"
+            min={0}
+            step="any"
+            className="input num"
+            required
+            defaultValue={record.sale_price ?? undefined}
+          />
+        </Affixed>
+      );
+    case 'acreage':
+      return (
+        <input
+          id="acreage"
+          name="acreage"
+          type="number"
+          min={0}
+          step="any"
+          className="input num"
+          required
+          defaultValue={record.acreage ?? undefined}
+        />
+      );
+    case 'square_feet':
+      return (
+        <input
+          id="square_feet"
+          name="square_feet"
+          type="number"
+          min={0}
+          step="any"
+          className="input num"
+          defaultValue={record.square_feet ?? undefined}
+        />
+      );
+    case 'property_type':
+      return (
+        <select
+          id="property_type"
+          name="property_type"
+          className="input"
+          required
+          defaultValue={record.property_type ?? ''}
+        >
+          <option value="" disabled>Select a type</option>
+          {importedPropertyType && (
+            <option value={importedPropertyType}>{importedPropertyType} (imported)</option>
+          )}
+          {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      );
+    case 'state':
+      return (
+        <select
+          id="state"
+          name="state"
+          className="input"
+          required
+          defaultValue={record.state}
+        >
+          <option value="" disabled>Select</option>
+          {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+        </select>
+      );
+    case 'city':
+      return (
+        <input id="city" name="city" type="text" className="input" required defaultValue={record.city} />
+      );
+    case 'county':
+      return (
+        <input id="county" name="county" type="text" className="input" required defaultValue={record.county} />
+      );
+    case 'address':
+      return (
+        <input
+          id="address"
+          name="address"
+          type="text"
+          className="input"
+          placeholder="4820 County Road 12"
+          defaultValue={record.address}
+        />
+      );
+    case 'buyer':
+      return <input id="buyer" name="buyer" type="text" className="input" defaultValue={record.buyer} />;
+    case 'parcel_id':
+      return (
+        <input
+          id="parcel_id"
+          name="parcel_id"
+          type="text"
+          className="input mono"
+          placeholder="LND-10432"
+          defaultValue={record.parcel_id}
+        />
+      );
+    case 'msa':
+      return (
+        <input
+          id="msa"
+          name="msa"
+          type="text"
+          className="input"
+          placeholder="Dallas-Fort Worth"
+          defaultValue={record.msa}
+        />
+      );
+    case 'price_per_acre':
+      return null;
+    default: {
+      const _exhaustive: never = field;
+      return _exhaustive;
+    }
+  }
+}
+
+function SheetField({
+  record,
+  field,
+  editing,
+  error,
 }: {
-  action?: (formData: FormData) => void;
-  formRef: RefObject<HTMLFormElement | null>;
-  children: ReactNode;
+  record: LandSale;
+  field: DetailField;
+  editing: boolean;
+  error?: string;
 }) {
-  if (!action) return children;
-  return <form ref={formRef} action={action}>{children}</form>;
+  const computed = DETAIL_COMPUTED_FIELDS.includes(field.key);
+  const editable = editing && !computed;
+  const warning = field.key === 'sale_date' ? saleDateWarning(record) : undefined;
+
+  return (
+    <div className={`record-field record-span-${field.span}`}>
+      <label htmlFor={editable ? field.key : undefined}>{field.label}</label>
+      {editable && warning && (
+        <div className="record-flag" title={warning}>
+          <TriangleAlert size={13} strokeWidth={2} />
+          {record.sale_date_raw}
+        </div>
+      )}
+      {editable ? <EditableField record={record} field={field.key} /> : <LockedField record={record} field={field.key} />}
+      {!editing && warning && (
+        <div className="record-flag" title={warning}>
+          <TriangleAlert size={13} strokeWidth={2} />
+          Flagged for review
+        </div>
+      )}
+      {editable && <FieldError message={error} />}
+    </div>
+  );
 }
 
 export function RecordDetails({
@@ -100,26 +302,71 @@ export function RecordDetails({
   from,
   canEdit,
   startEditing = false,
+  catalogLabels = [],
 }: {
   record: LandSale;
   from?: string;
   canEdit: boolean;
   startEditing?: boolean;
+  catalogLabels?: string[];
 }) {
   if (!canEdit) {
-    return <RecordDetailsForm record={record} from={from} canEdit={false} />;
+    return <RecordDetailsForm record={record} from={from} canEdit={false} catalogLabels={catalogLabels} />;
   }
-  return <RecordDetailsEditor record={record} from={from} startEditing={startEditing} />;
+  return (
+    <RecordDetailsEditor
+      key={record.id}
+      record={record}
+      from={from}
+      startEditing={startEditing}
+      catalogLabels={catalogLabels}
+    />
+  );
 }
 
 function RecordDetailsEditor({
   record,
   from,
   startEditing = false,
+  catalogLabels,
 }: {
   record: LandSale;
   from?: string;
   startEditing?: boolean;
+  catalogLabels: string[];
+}) {
+  const router = useRouter();
+  const [resetKey, setResetKey] = useState(0);
+
+  function handleCancel() {
+    setResetKey(k => k + 1);
+    router.replace(detailsHref(record.id, from));
+  }
+
+  return (
+    <BoundRecordDetailsForm
+      key={resetKey}
+      record={record}
+      from={from}
+      startEditing={resetKey === 0 && startEditing}
+      onCancel={handleCancel}
+      catalogLabels={catalogLabels}
+    />
+  );
+}
+
+function BoundRecordDetailsForm({
+  record,
+  from,
+  startEditing,
+  onCancel,
+  catalogLabels,
+}: {
+  record: LandSale;
+  from?: string;
+  startEditing: boolean;
+  onCancel: () => void;
+  catalogLabels: string[];
 }) {
   const [state, formAction, pending] = useActionState(updateLandSale.bind(null, record.id), initialState);
   return (
@@ -131,6 +378,8 @@ function RecordDetailsEditor({
       state={state}
       formAction={formAction}
       pending={pending}
+      onCancel={onCancel}
+      catalogLabels={catalogLabels}
     />
   );
 }
@@ -143,6 +392,8 @@ function RecordDetailsForm({
   state = null,
   formAction,
   pending = false,
+  onCancel,
+  catalogLabels = [],
 }: {
   record: LandSale;
   from?: string;
@@ -151,318 +402,209 @@ function RecordDetailsForm({
   state?: CreateFormState;
   formAction?: (formData: FormData) => void;
   pending?: boolean;
+  onCancel?: () => void;
+  catalogLabels?: string[];
 }) {
-  const router = useRouter();
-  const formRef = useRef<HTMLFormElement>(null);
   const [editing, setEditing] = useState(canEdit && startEditing);
+  const [activeSheet, setActiveSheet] = useState(DETAIL_SHEETS[0].id);
   const errors = state?.errors ?? {};
   const backToSearchHref = from ? `/land-sales?${from}` : '/land-sales';
-  const saleDateWarning = !record.sale_date && record.sale_date_raw
-    ? `Unrecognized date from import: "${record.sale_date_raw}". Flagged for review.`
-    : undefined;
-  const importedPropertyType = record.property_type && !(PROPERTY_TYPES as readonly string[]).includes(record.property_type)
-    ? record.property_type
-    : null;
-  const extraEntries = Object.entries(record.extras ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  const extraColumns = resultColumns({ catalogLabels, records: [record] })
+    .filter((column): column is Extract<ResultColumn, { kind: 'extra' }> => column.kind === 'extra');
+  const activeIndex = Math.max(0, DETAIL_SHEETS.findIndex(sheet => sheet.id === activeSheet));
 
-  function handleCancel() {
-    formRef.current?.reset();
-    setEditing(false);
-    router.replace(detailsHref(record.id, from));
+  // Server-side validation can reject a field on whichever sheet isn't showing;
+  // surface that sheet so the message under the field is actually visible. This
+  // is the render-phase state adjustment React prescribes for reacting to new
+  // props — `shownErrorSheet` remembers which rejection has already been acted
+  // on, so the user stays free to tab away while the error is still standing.
+  const errorSheetId = Object.keys(errors).length
+    ? DETAIL_SHEETS.find(sheet => detailSheetFields(sheet).some(field => field.key in errors))?.id ?? null
+    : null;
+  const [shownErrorSheet, setShownErrorSheet] = useState<string | null>(null);
+  if (errorSheetId !== shownErrorSheet) {
+    setShownErrorSheet(errorSheetId);
+    if (errorSheetId) setActiveSheet(errorSheetId);
   }
 
   return (
-    <main style={{
-      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-      padding: 'var(--space-8) var(--space-6) calc(var(--space-8) * 3)', boxSizing: 'border-box',
-      background: 'var(--color-accent-2-200)',
-    }}>
-      <div style={{ width: '100%', maxWidth: 760 }}>
-        <Link href={backToSearchHref} style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 14, fontWeight: 600, marginBottom: 'var(--space-4)' }}>
-          <ArrowLeft size={16} strokeWidth={2} />
-          Back to search
+    <>
+      <div className="record-bar">
+        <Link href={backToSearchHref} className="record-bar-back">
+          <ArrowLeft size={15} strokeWidth={2} />
+          Land Sales
         </Link>
-
-        <OptionalForm action={formAction} formRef={formRef}>
-          {from && <input type="hidden" name="from" value={from} />}
-
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-4)', marginBottom: 'var(--space-6)' }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="tag tag-outline" style={{ marginBottom: 'var(--space-2)' }}>{record.parcel_id || record.id}</div>
-              {editing ? (
-                <>
-                  <input
-                    id="address"
-                    name="address"
-                    type="text"
-                    aria-label="Address"
-                    className="input"
-                    placeholder="4820 County Road 12"
-                    defaultValue={record.address}
-                    style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', minHeight: 48 }}
-                  />
-                  <FieldError message={errors.address} />
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-2)', marginTop: 'var(--space-2)', fontSize: 15, color: 'var(--color-neutral-700)' }}>
-                    <input
-                      id="city"
-                      name="city"
-                      type="text"
-                      aria-label="City"
-                      className="input"
-                      required
-                      defaultValue={record.city}
-                      style={{ width: 140 }}
-                    />
-                    <span>,</span>
-                    <select
-                      id="state"
-                      name="state"
-                      aria-label="State"
-                      className="input"
-                      required
-                      defaultValue={record.state}
-                      style={{ width: 200 }}
-                    >
-                      <option value="" disabled>Select a state</option>
-                      {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
-                    </select>
-                    <span>·</span>
-                    <input
-                      id="county"
-                      name="county"
-                      type="text"
-                      aria-label="County"
-                      className="input"
-                      required
-                      defaultValue={record.county}
-                      style={{ width: 140 }}
-                    />
-                    <span>County</span>
-                  </div>
-                  <FieldError message={errors.city} />
-                  <FieldError message={errors.state} />
-                  <FieldError message={errors.county} />
-                </>
-              ) : (
-                <>
-                  <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: 0 }}>
-                    {record.address || `${record.city}, ${record.state}`}
-                  </h1>
-                  <p style={{ fontSize: 15, color: 'var(--color-neutral-700)', margin: 'var(--space-1) 0 0' }}>
-                    {record.city}, {record.state} · {record.county} County
-                  </p>
-                </>
-              )}
-            </div>
-            {canEdit && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexShrink: 0 }}>
-                {editing ? (
-                  <>
-                    <Button type="button" variant="ghost" onClick={handleCancel} disabled={pending}>Cancel</Button>
-                    <Button type="submit" variant="primary" disabled={pending}>
-                      {pending ? 'Saving…' : 'Save Changes'}
-                    </Button>
-                  </>
-                ) : (
-                  <Button type="button" variant="ghost" onClick={() => setEditing(true)}>Edit</Button>
-                )}
-              </div>
+        {canEdit && (
+          <div className="record-bar-actions">
+            {editing ? (
+              <>
+                <Button type="button" variant="secondary" onClick={onCancel} disabled={pending}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" form={FORM_ID} disabled={pending}>
+                  {pending ? 'Saving…' : 'Save Record'}
+                </Button>
+              </>
+            ) : (
+              <Button type="button" variant="secondary" onClick={() => setEditing(true)}>Edit Record</Button>
             )}
           </div>
+        )}
+      </div>
 
-          <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: 'var(--color-neutral-100)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-5)' }}>
-              <DetailField
-                label="Sale Date"
-                htmlFor="sale_date"
-                editing={editing}
-                error={errors.sale_date}
-                locked={
-                  <LockedValue warning={saleDateWarning}>
-                    {record.sale_date ? formatDate(record.sale_date) : record.sale_date_raw ? record.sale_date_raw : '—'}
-                  </LockedValue>
-                }
-              >
-                {saleDateWarning && (
-                  <div title={saleDateWarning} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#92400e', marginBottom: 6 }}>
-                    <TriangleAlert size={14} strokeWidth={2} />
-                    {record.sale_date_raw}
-                  </div>
+      <main className="record-page">
+        <div className="record-col">
+          <OptionalForm action={formAction}>
+            {from && <input type="hidden" name="from" value={from} />}
+
+            <div className="record-head">
+              <div className="tags">
+                {record.parcel_id && (
+                  <span className="tag tag-on-ground mono">{record.parcel_id}</span>
                 )}
-                <input
-                  id="sale_date"
-                  name="sale_date"
-                  type="date"
-                  className="input"
-                  required
-                  defaultValue={record.sale_date ?? undefined}
-                />
-              </DetailField>
-
-              <DetailField
-                label="Sale Price"
-                htmlFor="sale_price"
-                editing={editing}
-                error={errors.sale_price}
-                locked={<LockedValue>{formatCurrency(record.sale_price)}</LockedValue>}
-              >
-                <input
-                  id="sale_price"
-                  name="sale_price"
-                  type="number"
-                  min={0}
-                  step="any"
-                  className="input"
-                  required
-                  defaultValue={record.sale_price ?? undefined}
-                />
-              </DetailField>
-
-              <DetailField
-                label="Acreage"
-                htmlFor="acreage"
-                editing={editing}
-                error={errors.acreage}
-                locked={<LockedValue>{record.acreage != null ? `${formatNumber(record.acreage)} AC` : '—'}</LockedValue>}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input
-                    id="acreage"
-                    name="acreage"
-                    type="number"
-                    min={0}
-                    step="any"
-                    className="input"
-                    required
-                    defaultValue={record.acreage ?? undefined}
-                  />
-                  <span style={valueStyle}>AC</span>
-                </div>
-              </DetailField>
-
-              <div>
-                <div style={labelStyle}>Price / Acre</div>
-                <LockedValue>{formatCurrency(record.price_per_acre)}</LockedValue>
+                {record.property_type && <span className="tag tag-accent">{record.property_type}</span>}
               </div>
+              <h1>{record.address || `${record.city}, ${record.state}`}</h1>
+              <p className="sub">
+                {record.city}, {record.state} · {record.county} County
+                {record.msa ? ` · ${record.msa}` : ''}
+              </p>
+            </div>
 
-              <DetailField
-                label="Square Feet"
-                htmlFor="square_feet"
-                editing={editing}
-                error={errors.square_feet}
-                locked={<LockedValue>{record.square_feet != null ? `${formatNumber(record.square_feet)} SF` : '—'}</LockedValue>}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input
-                    id="square_feet"
-                    name="square_feet"
-                    type="number"
-                    min={0}
-                    step="any"
-                    className="input"
-                    defaultValue={record.square_feet ?? undefined}
-                  />
-                  <span style={valueStyle}>SF</span>
-                </div>
-              </DetailField>
-
-              <DetailField
-                label="Property Type"
-                htmlFor="property_type"
-                editing={editing}
-                error={errors.property_type}
-                locked={<LockedValue>{record.property_type}</LockedValue>}
-              >
-                <select
-                  id="property_type"
-                  name="property_type"
-                  className="input"
-                  required
-                  defaultValue={record.property_type ?? ''}
+            <div className="record-tabs" role="tablist" aria-label="Record sheets">
+              {DETAIL_SHEETS.map((sheet, index) => (
+                <button
+                  key={sheet.id}
+                  type="button"
+                  role="tab"
+                  id={`record-tab-${sheet.id}`}
+                  aria-selected={sheet.id === activeSheet}
+                  aria-controls={`record-sheet-${sheet.id}`}
+                  className="record-tab"
+                  onClick={() => setActiveSheet(sheet.id)}
                 >
-                  <option value="" disabled>Select a type</option>
-                  {importedPropertyType && (
-                    <option value={importedPropertyType}>{importedPropertyType} (imported)</option>
-                  )}
-                  {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </DetailField>
-
-              <DetailField
-                label="Buyer"
-                htmlFor="buyer"
-                editing={editing}
-                error={errors.buyer}
-                locked={<LockedValue>{record.buyer || '—'}</LockedValue>}
-              >
-                <input
-                  id="buyer"
-                  name="buyer"
-                  type="text"
-                  className="input"
-                  defaultValue={record.buyer}
-                />
-              </DetailField>
-
-              <DetailField
-                label="Parcel ID"
-                htmlFor="parcel_id"
-                editing={editing}
-                error={errors.parcel_id}
-                locked={<LockedValue>{record.parcel_id || '—'}</LockedValue>}
-              >
-                <input
-                  id="parcel_id"
-                  name="parcel_id"
-                  type="text"
-                  className="input"
-                  placeholder="LND-10432"
-                  defaultValue={record.parcel_id}
-                />
-              </DetailField>
-
-              <DetailField
-                label="MSA"
-                htmlFor="msa"
-                editing={editing}
-                error={errors.msa}
-                locked={<LockedValue>{record.msa || '—'}</LockedValue>}
-              >
-                <input
-                  id="msa"
-                  name="msa"
-                  type="text"
-                  className="input"
-                  placeholder="Dallas-Fort Worth"
-                  defaultValue={record.msa}
-                />
-              </DetailField>
-
-              {extraEntries.map(([label, value]) => (
-                <DetailField
-                  key={label}
-                  label={label}
-                  htmlFor={extraInputName(label)}
-                  editing={editing}
-                  locked={<LockedValue>{value || '—'}</LockedValue>}
-                >
-                  <input
-                    id={extraInputName(label)}
-                    name={extraInputName(label)}
-                    type="text"
-                    className="input"
-                    defaultValue={value}
-                  />
-                </DetailField>
+                  <span className="sheet-no">{index + 1}</span>
+                  {sheet.tab}
+                </button>
               ))}
             </div>
 
-            {state?.message && (
-              <div style={{ fontSize: 13, color: '#b3261e', marginTop: 'var(--space-4)' }}>{state.message}</div>
-            )}
-          </Blueprint>
-        </OptionalForm>
-      </div>
-    </main>
+            {DETAIL_SHEETS.map((sheet, index) => (
+              <section
+                key={sheet.id}
+                id={`record-sheet-${sheet.id}`}
+                role="tabpanel"
+                aria-labelledby={`record-tab-${sheet.id}`}
+                className="record-panel"
+                /* Hidden rather than unmounted: a save submits every field on
+                   every sheet, including whatever the user typed before
+                   switching tabs. The flip side is that a `required` field can
+                   fail native validation while off-screen — which the browser
+                   reports by silently refusing to submit — so bring its sheet
+                   forward synchronously before the browser tries to focus it. */
+                hidden={sheet.id !== activeSheet}
+                onInvalidCapture={() => {
+                  if (sheet.id !== activeSheet) flushSync(() => setActiveSheet(sheet.id));
+                }}
+              >
+                <div className="record-panel-title">
+                  <h2>{sheet.title}</h2>
+                  <span className="hint">Sheet {index + 1} of {DETAIL_SHEETS.length}</span>
+                </div>
+
+                <div className="record-grid">
+                  {sheet.sections.map((section, sectionIndex) => (
+                    <SheetSection key={section.label ?? sectionIndex} first={sectionIndex === 0} label={section.label}>
+                      {section.fields.map(field => (
+                        <SheetField
+                          key={field.key}
+                          record={record}
+                          field={field}
+                          editing={editing}
+                          error={errors[field.key]}
+                        />
+                      ))}
+                    </SheetSection>
+                  ))}
+
+                  {/* Imported columns have no home in the drafting sheets, so
+                      they land as a final band on the last one. */}
+                  {index === DETAIL_SHEETS.length - 1 && extraColumns.length > 0 && (
+                    <SheetSection first={false} label="Additional Fields">
+                      {extraColumns.map(column => (
+                        <div key={column.key} className="record-field record-span-4">
+                          <label htmlFor={editing ? extraInputName(column.key) : undefined}>{column.label}</label>
+                          {editing ? (
+                            <input
+                              id={extraInputName(column.key)}
+                              name={extraInputName(column.key)}
+                              type="text"
+                              className="input"
+                              defaultValue={record.extras?.[column.key] ?? ''}
+                            />
+                          ) : (
+                            <input
+                              className="input"
+                              readOnly
+                              tabIndex={-1}
+                              value={record.extras?.[column.key] || '—'}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </SheetSection>
+                  )}
+                </div>
+
+                {editing && state?.message && (
+                  <div className="record-error" style={{ marginTop: 'var(--space-4)' }}>{state.message}</div>
+                )}
+              </section>
+            ))}
+
+            <div className="record-titleblock">
+              <div>
+                <span className="tb-label">Record</span>
+                <span className="tb-value">{record.parcel_id || '—'}</span>
+              </div>
+              <div>
+                <span className="tb-label">Type</span>
+                <span className="tb-value">{record.property_type || '—'}</span>
+              </div>
+              <div>
+                <span className="tb-label">Created</span>
+                <span className="tb-value">{formatDate(record.created_at?.slice(0, 10))}</span>
+              </div>
+              <div>
+                <span className="tb-label">Last Updated</span>
+                <span className="tb-value">{formatDate(record.updated_at?.slice(0, 10))}</span>
+              </div>
+              <div>
+                <span className="tb-label">Sheet</span>
+                <span className="tb-value">{activeIndex + 1}/{DETAIL_SHEETS.length}</span>
+              </div>
+            </div>
+          </OptionalForm>
+        </div>
+      </main>
+    </>
+  );
+}
+
+function SheetSection({
+  first,
+  label,
+  children,
+}: {
+  first: boolean;
+  label?: string;
+  children: ReactNode;
+}) {
+  return (
+    <>
+      {!first && <div className="record-divider" />}
+      {label && <div className="record-section-label">{label}</div>}
+      {children}
+    </>
   );
 }

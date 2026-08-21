@@ -1,11 +1,18 @@
 import type { Metadata } from 'next';
-import { Barlow, Barlow_Condensed } from 'next/font/google';
+import { Barlow, Barlow_Condensed, IBM_Plex_Mono } from 'next/font/google';
 import '@/styles/design-system/industry.css';
 
 const barlow = Barlow({
   subsets: ['latin'],
   weight: ['400', '500', '700'],
   variable: '--font-barlow',
+  display: 'swap',
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-ibm-plex-mono',
   display: 'swap',
 });
 
@@ -23,7 +30,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable}`}>
+    <html lang="en" className={`${barlow.variable} ${barlowCondensed.variable} ${ibmPlexMono.variable}`}>
       <body>{children}</body>
     </html>
   );

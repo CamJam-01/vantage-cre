@@ -1,6 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { resultColumns, resultSortValue } from './result-columns.ts';
+import {
+  DETAIL_COMPUTED_FIELDS,
+  DETAIL_SHEETS,
+  detailSheetFields,
+  resultColumns,
+  resultSortValue,
+} from './result-columns.ts';
 
 describe('resultColumns', () => {
   it('lists every core land_sales field, including MSA', () => {
@@ -85,5 +91,49 @@ describe('resultSortValue', () => {
       resultSortValue(row, { kind: 'extra', key: 'Missing', label: 'Missing' }),
       null,
     );
+  });
+});
+
+describe('record details sheets', () => {
+  const sheetFields = DETAIL_SHEETS.flatMap(detailSheetFields);
+
+  it('lays every core land_sales field onto exactly one sheet', () => {
+    const shown = sheetFields.map(f => f.key).sort();
+    const core = resultColumns({ catalogLabels: [] }).map(c => c.key).sort();
+    assert.deepEqual(shown, core);
+  });
+
+  it('never repeats a field across sheets — both stay mounted, so a repeat would submit twice', () => {
+    const keys = sheetFields.map(f => f.key);
+    assert.equal(new Set(keys).size, keys.length);
+  });
+
+  it('splits the record into a property sheet and a transaction sheet', () => {
+    assert.deepEqual(DETAIL_SHEETS.map(s => s.id), ['description', 'transaction']);
+    assert.deepEqual(
+      detailSheetFields(DETAIL_SHEETS[1]).map(f => f.key),
+      ['sale_date', 'sale_price', 'price_per_acre', 'buyer'],
+    );
+  });
+
+  it('fills whole rows of the 12-column grid within each section', () => {
+    for (const sheet of DETAIL_SHEETS) {
+      for (const section of sheet.sections) {
+        const span = section.fields.reduce((sum, f) => sum + f.span, 0);
+        assert.equal(span % 12, 0, `${sheet.id} / ${section.label ?? 'lead'} spans ${span}`);
+      }
+    }
+  });
+
+  it('marks price per acre read-only, since it is derived server-side', () => {
+    assert.deepEqual(DETAIL_COMPUTED_FIELDS, ['price_per_acre']);
+  });
+
+  it('includes catalog extras on a record that has none of those values yet', () => {
+    const extras = resultColumns({
+      catalogLabels: ['Sale Status', 'Zoning'],
+      records: [{ extras: {} }],
+    }).filter(c => c.kind === 'extra');
+    assert.deepEqual(extras.map(c => c.key), ['Sale Status', 'Zoning']);
   });
 });
