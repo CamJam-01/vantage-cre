@@ -4,6 +4,7 @@ out/
 .env*.local
 output/
 .playwright-cli/
+.worktrees/
 *.tsbuildinfo
 supabase/.temp/
 *.docx
