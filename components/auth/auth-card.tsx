@@ -24,7 +24,7 @@ export function AuthCard({ subtitle, children }: { subtitle: string; children: R
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-heading)', fontSize: 28, fontWeight: 600, letterSpacing: '0.02em', color: 'var(--color-text)', lineHeight: 1.1 }}>
-              VANTAGE CRE
+              BOWERY VALUATION
             </div>
             <div className="tag tag-outline" style={{ marginTop: 'var(--space-2)' }}>{subtitle}</div>
           </div>

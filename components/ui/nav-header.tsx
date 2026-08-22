@@ -20,7 +20,7 @@ export function NavHeader({ profile }: { profile: UserProfile | null }) {
           <Building2 size={16} strokeWidth={1.5} color="var(--color-accent-200)" />
         </div>
         <span style={{ fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 600, letterSpacing: '0.02em', color: 'var(--color-accent-2-100)' }}>
-          VANTAGE CRE
+          BOWERY VALUATION
         </span>
       </Link>
 
