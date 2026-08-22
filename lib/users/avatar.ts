@@ -49,6 +49,45 @@ export function avatarObjectPath(userId: string, mimeType: string, id: string): 
   return `${userId}/${id}.${ext}`;
 }
 
+const PUBLIC_OBJECT_MARKER = `/storage/v1/object/public/${AVATAR_BUCKET}/`;
+
+function avatarObjectPathFromPublicUrl(url: string): string | null {
+  try {
+    const { pathname } = new URL(url);
+    const markerAt = pathname.indexOf(PUBLIC_OBJECT_MARKER);
+    if (markerAt === -1) return null;
+    const path = decodeURIComponent(pathname.slice(markerAt + PUBLIC_OBJECT_MARKER.length));
+    if (!path || path.includes('..') || path.includes('\\')) return null;
+    return path;
+  } catch {
+    return null;
+  }
+}
+
+function ownedAvatarObjectPath(url: string | null | undefined, userId: string): string | null {
+  if (!url) return null;
+  const path = avatarObjectPathFromPublicUrl(url);
+  if (!path) return null;
+  const prefix = `${userId}/`;
+  if (!path.startsWith(prefix)) return null;
+  const filename = path.slice(prefix.length);
+  if (!filename || filename.includes('/')) return null;
+  return path;
+}
+
+/** Objects to delete after an avatar replace: the previous file on success, or the orphaned upload on a failed profile update. */
+export function avatarObjectsToRemove(input: {
+  previousUrl: string | null | undefined;
+  userId: string;
+  newPath: string;
+  profileUpdated: boolean;
+}): string[] {
+  if (!input.profileUpdated) return [input.newPath];
+  const previous = ownedAvatarObjectPath(input.previousUrl, input.userId);
+  if (!previous || previous === input.newPath) return [];
+  return [previous];
+}
+
 /** Synchronous lock so overlapping file picks cannot start two uploads. */
 export function createAvatarUploadLock() {
   let inFlight = false;

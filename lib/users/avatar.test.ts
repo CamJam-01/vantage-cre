@@ -1,13 +1,19 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  AVATAR_BUCKET,
   AVATAR_MAX_BYTES,
   avatarExtension,
   avatarFileErrorMessage,
   avatarObjectPath,
+  avatarObjectsToRemove,
   createAvatarUploadLock,
   validateAvatarFile,
 } from './avatar.ts';
+
+function publicAvatarUrl(path: string): string {
+  return `https://example.supabase.co/storage/v1/object/public/${AVATAR_BUCKET}/${path}`;
+}
 
 describe('validateAvatarFile', () => {
   it('accepts a jpeg under the size limit', () => {
@@ -70,5 +76,59 @@ describe('createAvatarUploadLock', () => {
     assert.equal(lock.tryAcquire(), true);
     lock.release();
     assert.equal(lock.tryAcquire(), true);
+  });
+});
+
+describe('avatarObjectsToRemove', () => {
+  const userId = 'user-123';
+  const previousPath = `${userId}/old.webp`;
+  const newPath = `${userId}/new.png`;
+
+  it('deletes the previous owned object after a successful replace', () => {
+    assert.deepEqual(
+      avatarObjectsToRemove({
+        previousUrl: publicAvatarUrl(previousPath),
+        userId,
+        newPath,
+        profileUpdated: true,
+      }),
+      [previousPath],
+    );
+  });
+
+  it('deletes the newly uploaded object when the profile update fails', () => {
+    assert.deepEqual(
+      avatarObjectsToRemove({
+        previousUrl: publicAvatarUrl(previousPath),
+        userId,
+        newPath,
+        profileUpdated: false,
+      }),
+      [newPath],
+    );
+  });
+
+  it('ignores a previous URL that is not this user\'s avatars object', () => {
+    assert.deepEqual(
+      avatarObjectsToRemove({
+        previousUrl: publicAvatarUrl('other-user/old.webp'),
+        userId,
+        newPath,
+        profileUpdated: true,
+      }),
+      [],
+    );
+  });
+
+  it('does not delete the new object when it is also the previous path', () => {
+    assert.deepEqual(
+      avatarObjectsToRemove({
+        previousUrl: publicAvatarUrl(newPath),
+        userId,
+        newPath,
+        profileUpdated: true,
+      }),
+      [],
+    );
   });
 });

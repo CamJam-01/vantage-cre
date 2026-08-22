@@ -8,6 +8,7 @@ import {
   AVATAR_BUCKET,
   avatarFileErrorMessage,
   avatarObjectPath,
+  avatarObjectsToRemove,
   validateAvatarFile,
 } from '@/lib/users/avatar';
 
@@ -43,6 +44,12 @@ export async function updateAvatarAction(formData: FormData): Promise<ProfileFor
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not signed in.' };
 
+  const { data: profile } = await supabase
+    .from('users')
+    .select('avatar_url')
+    .eq('id', user.id)
+    .maybeSingle();
+
   const path = avatarObjectPath(user.id, file.type, crypto.randomUUID());
   const { error: uploadError } = await supabase.storage.from(AVATAR_BUCKET).upload(path, file, {
     contentType: file.type,
@@ -55,6 +62,16 @@ export async function updateAvatarAction(formData: FormData): Promise<ProfileFor
     .from('users')
     .update({ avatar_url: data.publicUrl })
     .eq('id', user.id);
+
+  const stalePaths = avatarObjectsToRemove({
+    previousUrl: profile?.avatar_url,
+    userId: user.id,
+    newPath: path,
+    profileUpdated: !error,
+  });
+  if (stalePaths.length > 0) {
+    await supabase.storage.from(AVATAR_BUCKET).remove(stalePaths);
+  }
 
   if (error) return { error: error.message };
 
