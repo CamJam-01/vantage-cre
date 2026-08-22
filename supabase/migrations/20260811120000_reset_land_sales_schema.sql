@@ -1,5 +1,5 @@
 -- Total reset of the workspaces / configurable-data-tables era schema, replaced by a
--- single-tenant land_sales table matching the new Vantage CRE design mockups.
+-- single-tenant land_sales table matching the new Bowery Valuation design mockups.
 -- public.users, its handle_new_user()/set_updated_at() triggers, and RLS pattern are
 -- kept as-is (already the simple "any authenticated user" shape this rebuild wants).
 
