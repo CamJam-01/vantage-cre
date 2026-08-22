@@ -19,6 +19,10 @@ import {
   type DetailField,
   type ResultColumn,
 } from '@/lib/land-sales/result-columns';
+import {
+  CURRENT_ACTION_STATE,
+  visibleActionState,
+} from '@/lib/land-sales/visible-action-state';
 
 const initialState: CreateFormState = null;
 
@@ -407,7 +411,11 @@ function RecordDetailsForm({
 }) {
   const [editing, setEditing] = useState(canEdit && startEditing);
   const [activeSheet, setActiveSheet] = useState(DETAIL_SHEETS[0].id);
-  const errors = state?.errors ?? {};
+  const [actionBaseline, setActionBaseline] = useState<CreateFormState | typeof CURRENT_ACTION_STATE>(
+    startEditing ? CURRENT_ACTION_STATE : state,
+  );
+  const displayState = visibleActionState(state, actionBaseline);
+  const errors = displayState?.errors ?? {};
   const backToSearchHref = from ? `/land-sales?${from}` : '/land-sales';
   const extraColumns = resultColumns({ catalogLabels, records: [record] })
     .filter((column): column is Extract<ResultColumn, { kind: 'extra' }> => column.kind === 'extra');
@@ -446,7 +454,16 @@ function RecordDetailsForm({
                 </Button>
               </>
             ) : (
-              <Button type="button" variant="secondary" onClick={() => setEditing(true)}>Edit Record</Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setActionBaseline(state);
+                  setEditing(true);
+                }}
+              >
+                Edit Record
+              </Button>
             )}
           </div>
         )}
@@ -556,8 +573,8 @@ function RecordDetailsForm({
                   )}
                 </div>
 
-                {editing && state?.message && (
-                  <div className="record-error" style={{ marginTop: 'var(--space-4)' }}>{state.message}</div>
+                {editing && displayState?.message && (
+                  <div className="record-error" style={{ marginTop: 'var(--space-4)' }}>{displayState.message}</div>
                 )}
               </section>
             ))}
