@@ -19,7 +19,7 @@ export type ResultColumn =
   | { kind: 'core'; key: CoreResultField; label: string }
   | { kind: 'extra'; key: string; label: string };
 
-const CORE_RESULT_COLUMNS: Extract<ResultColumn, { kind: 'core' }>[] = [
+export const CORE_RESULT_COLUMNS: Extract<ResultColumn, { kind: 'core' }>[] = [
   { kind: 'core', key: 'parcel_id', label: 'Parcel ID' },
   { kind: 'core', key: 'address', label: 'Address' },
   { kind: 'core', key: 'city', label: 'City' },
