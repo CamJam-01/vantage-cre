@@ -1,21 +1,15 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { getCurrentUserProfile, listUserProfiles, type UserProfile } from '@/lib/users/roles';
+import { getCurrentUserProfile } from '@/lib/users/roles';
+import { Blueprint } from '@/components/ui/blueprint';
 import { AccountDetailsForm } from '@/components/profile/account-details-form';
 import { ChangePasswordForm } from '@/components/profile/change-password-form';
-import { UserAccessTable } from '@/components/profile/user-access-table';
 
 export default async function ProfilePage() {
   const supabase = await createClient();
   const profile = await getCurrentUserProfile(supabase);
   if (!profile) redirect('/login');
-
-  let allUsers: UserProfile[] = [];
-  if (profile.role === 'Admin') {
-    allUsers = await listUserProfiles(supabase);
-  }
 
   return (
     <main style={{
@@ -36,23 +30,16 @@ export default async function ProfilePage() {
         <ChangePasswordForm email={profile.email} />
 
         {profile.role === 'Admin' && (
-          <>
-            <UserAccessTable users={allUsers} currentUserId={profile.id} />
-            <div>
-              <Link href="/admin/database-manager" className="btn btn-secondary">Open Database Manager</Link>
+          <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', background: 'var(--color-bg)', padding: 'var(--space-6)' }}>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)', marginBottom: 'var(--space-4)' }}>
+              Admin Settings
             </div>
-          </>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <Link href="/admin/database-manager" className="btn btn-primary">Open</Link>
+            </div>
+          </Blueprint>
         )}
       </div>
-
-      <Link href="/search" className="blueprint" style={{
-        position: 'fixed', bottom: 'var(--space-6)', left: 'var(--space-6)', display: 'flex',
-        alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4) var(--space-6)',
-        background: 'var(--color-bg)', color: 'var(--color-text)', boxShadow: 'var(--shadow-md)', textDecoration: 'none',
-      }}>
-        <ArrowLeft size={18} strokeWidth={2} />
-        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.03em' }}>BACK</span>
-      </Link>
     </main>
   );
 }

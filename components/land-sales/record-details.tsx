@@ -17,8 +17,11 @@ import {
   resultColumns,
   type CoreResultField,
   type DetailField,
-  type ResultColumn,
 } from '@/lib/land-sales/result-columns';
+import {
+  buildRecordDisplaySheets,
+  visibleCoreField,
+} from '@/lib/land-sales/field-visibility';
 import {
   CURRENT_ACTION_STATE,
   visibleActionState,
@@ -140,7 +143,6 @@ function EditableField({ record, field }: { record: LandSale; field: CoreResultF
           name="sale_date"
           type="date"
           className="input mono"
-          required
           defaultValue={record.sale_date ?? undefined}
         />
       );
@@ -154,7 +156,6 @@ function EditableField({ record, field }: { record: LandSale; field: CoreResultF
             min={0}
             step="any"
             className="input num"
-            required
             defaultValue={record.sale_price ?? undefined}
           />
         </Affixed>
@@ -168,7 +169,6 @@ function EditableField({ record, field }: { record: LandSale; field: CoreResultF
           min={0}
           step="any"
           className="input num"
-          required
           defaultValue={record.acreage ?? undefined}
         />
       );
@@ -190,10 +190,9 @@ function EditableField({ record, field }: { record: LandSale; field: CoreResultF
           id="property_type"
           name="property_type"
           className="input"
-          required
           defaultValue={record.property_type ?? ''}
         >
-          <option value="" disabled>Select a type</option>
+          <option value="">Select a type</option>
           {importedPropertyType && (
             <option value={importedPropertyType}>{importedPropertyType} (imported)</option>
           )}
@@ -206,20 +205,19 @@ function EditableField({ record, field }: { record: LandSale; field: CoreResultF
           id="state"
           name="state"
           className="input"
-          required
           defaultValue={record.state}
         >
-          <option value="" disabled>Select</option>
+          <option value="">Select</option>
           {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
         </select>
       );
     case 'city':
       return (
-        <input id="city" name="city" type="text" className="input" required defaultValue={record.city} />
+        <input id="city" name="city" type="text" className="input" defaultValue={record.city} />
       );
     case 'county':
       return (
-        <input id="county" name="county" type="text" className="input" required defaultValue={record.county} />
+        <input id="county" name="county" type="text" className="input" defaultValue={record.county} />
       );
     case 'address':
       return (
@@ -307,15 +305,17 @@ export function RecordDetails({
   canEdit,
   startEditing = false,
   catalogLabels = [],
+  hiddenFieldIds = [],
 }: {
   record: LandSale;
   from?: string;
   canEdit: boolean;
   startEditing?: boolean;
   catalogLabels?: string[];
+  hiddenFieldIds?: string[];
 }) {
   if (!canEdit) {
-    return <RecordDetailsForm record={record} from={from} canEdit={false} catalogLabels={catalogLabels} />;
+    return <RecordDetailsForm record={record} from={from} canEdit={false} catalogLabels={catalogLabels} hiddenFieldIds={hiddenFieldIds} />;
   }
   return (
     <RecordDetailsEditor
@@ -324,6 +324,7 @@ export function RecordDetails({
       from={from}
       startEditing={startEditing}
       catalogLabels={catalogLabels}
+      hiddenFieldIds={hiddenFieldIds}
     />
   );
 }
@@ -333,11 +334,13 @@ function RecordDetailsEditor({
   from,
   startEditing = false,
   catalogLabels,
+  hiddenFieldIds,
 }: {
   record: LandSale;
   from?: string;
   startEditing?: boolean;
   catalogLabels: string[];
+  hiddenFieldIds: string[];
 }) {
   const router = useRouter();
   const [resetKey, setResetKey] = useState(0);
@@ -355,6 +358,7 @@ function RecordDetailsEditor({
       startEditing={resetKey === 0 && startEditing}
       onCancel={handleCancel}
       catalogLabels={catalogLabels}
+      hiddenFieldIds={hiddenFieldIds}
     />
   );
 }
@@ -365,12 +369,14 @@ function BoundRecordDetailsForm({
   startEditing,
   onCancel,
   catalogLabels,
+  hiddenFieldIds,
 }: {
   record: LandSale;
   from?: string;
   startEditing: boolean;
   onCancel: () => void;
   catalogLabels: string[];
+  hiddenFieldIds: string[];
 }) {
   const [state, formAction, pending] = useActionState(updateLandSale.bind(null, record.id), initialState);
   return (
@@ -384,6 +390,7 @@ function BoundRecordDetailsForm({
       pending={pending}
       onCancel={onCancel}
       catalogLabels={catalogLabels}
+      hiddenFieldIds={hiddenFieldIds}
     />
   );
 }
@@ -398,6 +405,7 @@ function RecordDetailsForm({
   pending = false,
   onCancel,
   catalogLabels = [],
+  hiddenFieldIds = [],
 }: {
   record: LandSale;
   from?: string;
@@ -408,18 +416,20 @@ function RecordDetailsForm({
   pending?: boolean;
   onCancel?: () => void;
   catalogLabels?: string[];
+  hiddenFieldIds?: string[];
 }) {
+  const hidden = new Set(hiddenFieldIds);
+  const columns = resultColumns({ catalogLabels, records: [record] });
+  const visibleSheets = buildRecordDisplaySheets(DETAIL_SHEETS, columns, hidden);
   const [editing, setEditing] = useState(canEdit && startEditing);
-  const [activeSheet, setActiveSheet] = useState(DETAIL_SHEETS[0].id);
+  const [activeSheet, setActiveSheet] = useState(visibleSheets[0]?.id ?? 'additional');
   const [actionBaseline, setActionBaseline] = useState<CreateFormState | typeof CURRENT_ACTION_STATE>(
     startEditing ? CURRENT_ACTION_STATE : state,
   );
   const displayState = visibleActionState(state, actionBaseline);
   const errors = displayState?.errors ?? {};
   const backToSearchHref = from ? `/land-sales?${from}` : '/land-sales';
-  const extraColumns = resultColumns({ catalogLabels, records: [record] })
-    .filter((column): column is Extract<ResultColumn, { kind: 'extra' }> => column.kind === 'extra');
-  const activeIndex = Math.max(0, DETAIL_SHEETS.findIndex(sheet => sheet.id === activeSheet));
+  const activeIndex = Math.max(0, visibleSheets.findIndex(sheet => sheet.id === activeSheet));
 
   // Server-side validation can reject a field on whichever sheet isn't showing;
   // surface that sheet so the message under the field is actually visible. This
@@ -427,7 +437,7 @@ function RecordDetailsForm({
   // props — `shownErrorSheet` remembers which rejection has already been acted
   // on, so the user stays free to tab away while the error is still standing.
   const errorSheetId = Object.keys(errors).length
-    ? DETAIL_SHEETS.find(sheet => detailSheetFields(sheet).some(field => field.key in errors))?.id ?? null
+    ? visibleSheets.find(sheet => detailSheetFields(sheet).some(field => field.key in errors))?.id ?? null
     : null;
   const [shownErrorSheet, setShownErrorSheet] = useState<string | null>(null);
   if (errorSheetId !== shownErrorSheet) {
@@ -476,20 +486,44 @@ function RecordDetailsForm({
 
             <div className="record-head">
               <div className="tags">
-                {record.parcel_id && (
+                {visibleCoreField('parcel_id', hidden) && record.parcel_id && (
                   <span className="tag tag-on-ground mono">{record.parcel_id}</span>
                 )}
-                {record.property_type && <span className="tag tag-accent">{record.property_type}</span>}
+                {visibleCoreField('property_type', hidden) && record.property_type && (
+                  <span className="tag tag-accent">{record.property_type}</span>
+                )}
               </div>
-              <h1>{record.address || `${record.city}, ${record.state}`}</h1>
-              <p className="sub">
-                {record.city}, {record.state} · {record.county} County
-                {record.msa ? ` · ${record.msa}` : ''}
-              </p>
+              <h1>
+                {visibleCoreField('address', hidden) && record.address
+                  ? record.address
+                  : [
+                      visibleCoreField('city', hidden) ? record.city : '',
+                      visibleCoreField('state', hidden) ? record.state : '',
+                    ].filter(Boolean).join(', ') || 'Land Sale Record'}
+              </h1>
+              {[
+                [
+                  visibleCoreField('city', hidden) ? record.city : '',
+                  visibleCoreField('state', hidden) ? record.state : '',
+                ].filter(Boolean).join(', '),
+                visibleCoreField('county', hidden) && record.county ? `${record.county} County` : '',
+                visibleCoreField('msa', hidden) ? record.msa : '',
+              ].filter(Boolean).length > 0 && (
+                <p className="sub">
+                  {[
+                    [
+                      visibleCoreField('city', hidden) ? record.city : '',
+                      visibleCoreField('state', hidden) ? record.state : '',
+                    ].filter(Boolean).join(', '),
+                    visibleCoreField('county', hidden) && record.county ? `${record.county} County` : '',
+                    visibleCoreField('msa', hidden) ? record.msa : '',
+                  ].filter(Boolean).join(' · ')}
+                </p>
+              )}
             </div>
 
             <div className="record-tabs" role="tablist" aria-label="Record sheets">
-              {DETAIL_SHEETS.map((sheet, index) => (
+              {visibleSheets.map((sheet, index) => (
                 <button
                   key={sheet.id}
                   type="button"
@@ -506,7 +540,7 @@ function RecordDetailsForm({
               ))}
             </div>
 
-            {DETAIL_SHEETS.map((sheet, index) => (
+            {visibleSheets.map((sheet, index) => (
               <section
                 key={sheet.id}
                 id={`record-sheet-${sheet.id}`}
@@ -526,7 +560,7 @@ function RecordDetailsForm({
               >
                 <div className="record-panel-title">
                   <h2>{sheet.title}</h2>
-                  <span className="hint">Sheet {index + 1} of {DETAIL_SHEETS.length}</span>
+                  <span className="hint">Sheet {index + 1} of {visibleSheets.length}</span>
                 </div>
 
                 <div className="record-grid">
@@ -546,9 +580,9 @@ function RecordDetailsForm({
 
                   {/* Imported columns have no home in the drafting sheets, so
                       they land as a final band on the last one. */}
-                  {index === DETAIL_SHEETS.length - 1 && extraColumns.length > 0 && (
+                  {sheet.extraColumns.length > 0 && (
                     <SheetSection first={false} label="Additional Fields">
-                      {extraColumns.map(column => (
+                      {sheet.extraColumns.map(column => (
                         <div key={column.key} className="record-field record-span-4">
                           <label htmlFor={editing ? extraInputName(column.key) : undefined}>{column.label}</label>
                           {editing ? (
@@ -598,7 +632,7 @@ function RecordDetailsForm({
               </div>
               <div>
                 <span className="tb-label">Sheet</span>
-                <span className="tb-value">{activeIndex + 1}/{DETAIL_SHEETS.length}</span>
+                <span className="tb-value">{activeIndex + 1}/{visibleSheets.length}</span>
               </div>
             </div>
           </OptionalForm>

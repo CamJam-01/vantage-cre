@@ -9,6 +9,49 @@ const core = {
   property_type: 'Land',
 };
 
+describe('landSaleInputSchema empty records', () => {
+  it('accepts a completely empty payload', () => {
+    const parsed = landSaleInputSchema.parse({});
+    assert.equal(parsed.city, '');
+    assert.equal(parsed.county, '');
+    assert.equal(parsed.state, '');
+    assert.equal(parsed.property_type, '');
+    assert.equal(parsed.parcel_id, '');
+    assert.equal(parsed.address, '');
+    assert.equal(parsed.buyer, '');
+    assert.equal(parsed.acreage, undefined);
+    assert.equal(parsed.sale_price, undefined);
+    assert.equal(parsed.sale_date, undefined);
+  });
+
+  it('accepts blank strings from an empty form or CSV row', () => {
+    const parsed = landSaleInputSchema.parse({
+      parcel_id: '',
+      address: '',
+      city: '',
+      county: '',
+      state: '',
+      msa: '',
+      property_type: '',
+      square_feet: '',
+      acreage: '',
+      sale_date: '',
+      sale_price: '',
+      buyer: '',
+    });
+    assert.equal(parsed.city, '');
+    assert.equal(parsed.state, '');
+    assert.equal(parsed.property_type, '');
+    assert.equal(parsed.acreage, undefined);
+    assert.equal(parsed.sale_date, undefined);
+  });
+
+  it('still rejects a present but invalid state code', () => {
+    const parsed = landSaleInputSchema.safeParse({ ...core, state: 'N' });
+    assert.equal(parsed.success, false);
+  });
+});
+
 describe('landSaleInputSchema extras', () => {
   it('defaults extras to an empty object when omitted', () => {
     const parsed = landSaleInputSchema.parse(core);

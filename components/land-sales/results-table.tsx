@@ -12,12 +12,9 @@ import { encodeFilters, type LandSaleFilters } from '@/lib/land-sales/search-par
 import { formatCurrency, formatDate, formatNumber } from '@/lib/land-sales/format';
 import { makeCsv, downloadCsv } from '@/lib/land-sales/csv';
 import { resultSortValue, type CoreResultField, type ResultColumn } from '@/lib/land-sales/result-columns';
+import { fieldVisibilityId } from '@/lib/land-sales/field-visibility';
 
 type Sort = { column: ResultColumn; dir: 'asc' | 'desc' };
-
-function columnId(column: ResultColumn): string {
-  return column.kind === 'core' ? column.key : `extra:${column.key}`;
-}
 
 function sameColumn(a: ResultColumn, b: ResultColumn): boolean {
   return a.kind === b.kind && a.key === b.key;
@@ -233,7 +230,7 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
                       <input type="checkbox" checked={records.length > 0 && selectedCount === records.length} onChange={toggleAll} aria-label="Select all rows" />
                     </th>
                     <th style={{ ...stickyHeaderCellStyle, width: 52 }} />
-                    {columns.map(col => <SortableHeader key={columnId(col)} column={col} sort={sort} onSort={handleSort} />)}
+                    {columns.map(col => <SortableHeader key={fieldVisibilityId(col)} column={col} sort={sort} onSort={handleSort} />)}
                   </tr>
                 </thead>
                 <tbody style={{ background: '#FFFFFF' }}>
@@ -279,7 +276,7 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
                           </div>
                         </td>
                         {columns.map(col => (
-                          <td key={columnId(col)}>
+                          <td key={fieldVisibilityId(col)}>
                             <ResultCell record={r} column={col} />
                           </td>
                         ))}

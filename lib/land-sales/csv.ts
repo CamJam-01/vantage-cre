@@ -1,7 +1,10 @@
+import { COSTAR_CORE_HEADER_MAP, COSTAR_HEADERS, COSTAR_TYPED_COLUMNS, costarFields } from './costar-fields';
 import { parseFlexibleDate } from './dates';
 import { landSaleInputSchema, type LandSale, type LandSaleInput } from './schema';
 
-export const csvHeaders = [
+export const csvHeaders = COSTAR_HEADERS;
+
+const exportHeaders = [
   'Parcel ID', 'Address', 'City', 'County', 'State', 'MSA', 'Type',
   'Square Feet', 'Acreage', 'Sale Date', 'Sale Price', 'Buyer',
 ] as const;
@@ -13,150 +16,11 @@ export const csvFields = [
 
 export type CsvField = (typeof csvFields)[number];
 
-/** Fields the schema requires — a mapping is unusable until every one of these
- * is assigned to a source column. */
-export const REQUIRED_CSV_FIELDS: CsvField[] = [
-  'city', 'county', 'state', 'property_type', 'acreage', 'sale_date', 'sale_price',
-];
-
 export const fieldToHeader: Record<CsvField, string> = {
   parcel_id: 'Parcel ID', address: 'Address', city: 'City', county: 'County', state: 'State',
   msa: 'MSA', property_type: 'Type', square_feet: 'Square Feet', acreage: 'Acreage',
   sale_date: 'Sale Date', sale_price: 'Sale Price', buyer: 'Buyer',
 };
-
-const fieldByCanonicalLabel = new Map<string, CsvField>(
-  csvHeaders.map((label, i) => [label.toLowerCase(), csvFields[i]]),
-);
-
-export function fieldForCanonicalHeader(header: string): CsvField | undefined {
-  return fieldByCanonicalLabel.get(header.trim().toLowerCase());
-}
-
-export function unmatchedHeaders(headers: string[]): { index: number; header: string }[] {
-  return headers.flatMap((header, index) =>
-    fieldForCanonicalHeader(header) ? [] : [{ index, header }],
-  );
-}
-
-export type MappingAction =
-  | { type: 'existing'; field: CsvField }
-  | { type: 'new' }
-  | { type: 'skip' };
-
-/** Per-source-column mapping: index in the array is the CSV column index. */
-export type SourceMapping = MappingAction[];
-
-export function suggestSourceMapping(
-  headers: string[],
-  newFieldIndexes: ReadonlySet<number> = new Set(),
-): SourceMapping {
-  return headers.map((header, index) => {
-    const field = fieldForCanonicalHeader(header);
-    if (field) return { type: 'existing' as const, field };
-    if (newFieldIndexes.has(index)) return { type: 'new' as const };
-    return { type: 'skip' as const };
-  });
-}
-
-function existingTargetCounts(mapping: SourceMapping): Map<CsvField, number> {
-  const counts = new Map<CsvField, number>();
-  for (const action of mapping) {
-    if (action.type !== 'existing') continue;
-    counts.set(action.field, (counts.get(action.field) ?? 0) + 1);
-  }
-  return counts;
-}
-
-export function missingRequiredTargets(mapping: SourceMapping): string[] {
-  const counts = existingTargetCounts(mapping);
-  return REQUIRED_CSV_FIELDS.filter(f => !counts.get(f)).map(f => fieldToHeader[f]);
-}
-
-export function duplicateTargetLabels(mapping: SourceMapping): string[] {
-  const counts = existingTargetCounts(mapping);
-  return csvFields.filter(f => (counts.get(f) ?? 0) > 1).map(f => fieldToHeader[f]);
-}
-
-export function mappingIssues(mapping: SourceMapping): string[] {
-  const issues: string[] = [];
-  const dupes = duplicateTargetLabels(mapping);
-  if (dupes.length) {
-    issues.push(`Each database field can only be mapped once. Duplicates: ${dupes.join(', ')}.`);
-  }
-  const missing = missingRequiredTargets(mapping);
-  if (missing.length) issues.push(`Map a column for: ${missing.join(', ')}.`);
-  return issues;
-}
-
-export function newFieldLabels(headers: string[], mapping: SourceMapping): string[] {
-  return mapping.flatMap((action, index) => {
-    if (action.type !== 'new') return [];
-    return [headers[index] || `Column ${index + 1}`];
-  });
-}
-
-export function applySourceMapping(
-  dataRows: string[][],
-  headers: string[],
-  mapping: SourceMapping,
-): { canonical: string[][]; extras: Record<string, string>[] } {
-  return {
-    canonical: dataRows.map(row => {
-      const cells = csvFields.map(() => '');
-      mapping.forEach((action, index) => {
-        switch (action.type) {
-          case 'existing': {
-            const fieldIndex = csvFields.indexOf(action.field);
-            cells[fieldIndex] = (row[index] ?? '').trim();
-            return;
-          }
-          case 'new':
-          case 'skip':
-            return;
-          default: {
-            const _exhaustive: never = action;
-            return _exhaustive;
-          }
-        }
-      });
-      return cells;
-    }),
-    extras: dataRows.map(row => {
-      const extra: Record<string, string> = {};
-      mapping.forEach((action, index) => {
-        switch (action.type) {
-          case 'new': {
-            const value = (row[index] ?? '').trim();
-            if (!value) return;
-            extra[headers[index] || `Column ${index + 1}`] = value;
-            return;
-          }
-          case 'existing':
-          case 'skip':
-            return;
-          default: {
-            const _exhaustive: never = action;
-            return _exhaustive;
-          }
-        }
-      });
-      return extra;
-    }),
-  };
-}
-
-export function validateMappedRows(
-  dataRows: string[][],
-  headers: string[],
-  mapping: SourceMapping,
-): ImportRowResult[] {
-  const { canonical, extras } = applySourceMapping(dataRows, headers, mapping);
-  return validateDataRows(canonical).map((result, i) => {
-    if (!result.ok) return result;
-    return { ...result, data: { ...result.data, extras: extras[i] ?? {} } };
-  });
-}
 
 export function csvCell(value: string | number | null | undefined): string {
   const text = String(value ?? '');
@@ -175,7 +39,7 @@ export function extraKeys(rows: Array<{ extras?: Record<string, string> }>): str
  * button (selected rows only) and to generate the import-template download. */
 export function makeCsv(rows: LandSale[]): string {
   const extras = extraKeys(rows);
-  const header = [...csvHeaders, 'Price / Acre', ...extras].join(',');
+  const header = [...exportHeaders, 'Price / Acre', ...extras].join(',');
   const body = rows.map(row => [
     ...csvFields.map(field => csvCell(row[field] as string | number | null)),
     csvCell(row.price_per_acre),
@@ -194,9 +58,10 @@ export function downloadCsv(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-/** Import template: header row only, for users to fill in and re-upload. */
+/** Import template: header row plus one blank data row so an unmodified
+ * template uploads as a single empty record. */
 export function makeCsvTemplate(): string {
-  return csvHeaders.join(',');
+  return [csvHeaders.join(','), csvHeaders.map(() => '').join(',')].join('\r\n');
 }
 
 /** RFC4180-ish CSV tokenizer: handles quoted fields with embedded commas,
@@ -243,29 +108,77 @@ export function headersMatchExactly(headers: string[]): boolean {
   return headers.every((h, i) => h.trim().toLowerCase() === csvHeaders[i].toLowerCase());
 }
 
+/** Import only accepts the template header row. Extra or renamed columns are
+ * rejected rather than mapped or turned into new database fields. */
+export function csvHeaderError(headers: string[]): string | undefined {
+  if (headersMatchExactly(headers)) return undefined;
+  return `CSV headers must match the import template exactly (${csvHeaders.length} columns).`;
+}
+
 export type ImportRowResult =
-  | { row: number; ok: true; data: LandSaleInput; warnings?: string[] }
+  | { row: number; ok: true; data: LandSaleInput; columns: Record<string, string | null>; warnings?: string[] }
   | { row: number; ok: false; errors: string[] };
 
-/** Validates already-mapped data rows (canonical field order, one string per
- * csvField) against the schema, producing specific per-row/column error
- * messages (e.g. "Row 4, Sale Price: ..."). Runs identically client-side
- * (instant feedback) and server-side (never trust the client).
+function costarCell(values: string[], header: string): string {
+  const index = csvHeaders.indexOf(header);
+  return index >= 0 ? (values[index] ?? '') : '';
+}
+
+function headerForCore(field: (typeof COSTAR_CORE_HEADER_MAP)[keyof typeof COSTAR_CORE_HEADER_MAP]): string {
+  const entry = Object.entries(COSTAR_CORE_HEADER_MAP).find(([, value]) => value === field);
+  if (!entry) throw new Error(`No CoStar header mapped to ${field}`);
+  return entry[0];
+}
+
+function costarTextValues(values: string[]): Record<string, string | null> {
+  const typed = new Set<string>(COSTAR_TYPED_COLUMNS);
+  const columns: Record<string, string | null> = {};
+  costarFields().forEach((field, index) => {
+    if (typed.has(field.column)) return;
+    const raw = (values[index] ?? '').trim();
+    columns[field.column] = raw ? raw : null;
+  });
+  return columns;
+}
+
+/** Merge validated core fields with CoStar text columns for a land_sales insert. */
+export function importLandSaleRow(row: Extract<ImportRowResult, { ok: true }>): Record<string, unknown> {
+  const { extras: _extras, ...core } = row.data;
+  return { ...row.columns, ...core };
+}
+
+/** Validates template-ordered CoStar data rows against the schema, producing
+ * specific per-row/column error messages (e.g. "Row 4, Sale Price: ...").
+ * Runs identically client-side (instant feedback) and server-side (never trust
+ * the client).
  *
  * Sale Date is never a blocking error: if it doesn't parse, the row still
  * imports with sale_date left blank and the original text captured in
- * sale_date_raw, surfaced back as a warning rather than a rejection. */
+ * sale_date_raw, surfaced back as a warning rather than a rejection.
+ * A Property State that isn't a 2-letter code stays on the CoStar column
+ * and leaves the core state field empty. */
 export function validateDataRows(rows: string[][]): ImportRowResult[] {
   return rows.map((values, index) => {
     const rowNumber = index + 2; // +1 for the header row, +1 to make it 1-indexed
-    const [parcelId, address, city, county, state, msa, type, sf, ac, saleDate, salePrice, buyer] = values;
-    const dateRecognized = !!saleDate && parseFlexibleDate(saleDate) !== null;
+    const core = {
+      parcel_id: costarCell(values, headerForCore('parcel_id')),
+      address: costarCell(values, headerForCore('address')),
+      city: costarCell(values, headerForCore('city')),
+      county: costarCell(values, headerForCore('county')),
+      state: costarCell(values, headerForCore('state')).trim(),
+      msa: costarCell(values, headerForCore('msa')) || undefined,
+      property_type: costarCell(values, headerForCore('property_type')),
+      square_feet: costarCell(values, headerForCore('square_feet')) || undefined,
+      acreage: costarCell(values, headerForCore('acreage')),
+      sale_date: costarCell(values, headerForCore('sale_date')),
+      sale_price: costarCell(values, headerForCore('sale_price')),
+      buyer: costarCell(values, headerForCore('buyer')),
+    };
+    const dateRecognized = !!core.sale_date && parseFlexibleDate(core.sale_date) !== null;
     const parsed = landSaleInputSchema.safeParse({
-      parcel_id: parcelId, address, city, county, state, msa: msa || undefined,
-      property_type: type, square_feet: sf || undefined, acreage: ac,
-      sale_date: saleDate,
-      sale_date_raw: dateRecognized ? undefined : (saleDate?.trim() || undefined),
-      sale_price: salePrice, buyer,
+      ...core,
+      state: core.state.length === 2 ? core.state : '',
+      sale_date_raw: dateRecognized ? undefined : (core.sale_date.trim() || undefined),
     });
     if (!parsed.success) {
       const errors = parsed.error.issues.map(issue => {
@@ -278,7 +191,7 @@ export function validateDataRows(rows: string[][]): ImportRowResult[] {
     const warnings = parsed.data.sale_date_raw
       ? [`Row ${rowNumber}, Sale Date: "${parsed.data.sale_date_raw}" wasn't recognized as a date — imported without a Sale Date and flagged for review.`]
       : undefined;
-    return { row: rowNumber, ok: true, data: parsed.data, warnings };
+    return { row: rowNumber, ok: true, data: parsed.data, columns: costarTextValues(values), warnings };
   });
 }
 

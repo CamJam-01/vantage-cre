@@ -3,6 +3,7 @@ import { Building2 } from 'lucide-react';
 import { signOutAction } from '@/app/(app)/land-sales/actions';
 import type { UserProfile } from '@/lib/users/roles';
 import { ProfileAvatar } from '@/components/ui/profile-avatar';
+import { SearchNavMenu } from '@/components/ui/search-nav-menu';
 
 export function NavHeader({ profile }: { profile: UserProfile | null }) {
   return (
@@ -20,19 +21,12 @@ export function NavHeader({ profile }: { profile: UserProfile | null }) {
           <Building2 size={16} strokeWidth={1.5} color="var(--color-accent-200)" />
         </div>
         <span style={{ fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 600, letterSpacing: '0.02em', color: 'var(--color-accent-2-100)' }}>
-          VANTAGE CRE
+          BOWERY VALUATION DBMS
         </span>
       </Link>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
-        <Link href="/search" style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-accent-200)' }}>
-          New Search
-        </Link>
-        {profile?.role === 'Admin' && (
-          <Link href="/admin/database-manager" style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-accent-200)' }}>
-            Database Manager
-          </Link>
-        )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)', alignSelf: 'stretch' }}>
+        <SearchNavMenu />
         <form action={signOutAction}>
           <button type="submit" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 500, color: 'var(--color-accent-200)', fontFamily: 'inherit' }}>
             Logout

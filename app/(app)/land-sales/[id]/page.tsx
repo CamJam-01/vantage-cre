@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { RecordDetails } from '@/components/land-sales/record-details';
 import type { LandSale } from '@/lib/land-sales/schema';
 import { canEdit, getCurrentUserProfile } from '@/lib/users/roles';
+import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
+import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -13,10 +15,11 @@ export default async function RecordDetailsPage({ params, searchParams }: PagePr
   const { id } = await params;
   const { from, edit } = await searchParams;
   const supabase = await createClient();
-  const [{ data: record, error }, profile, customFields] = await Promise.all([
+  const [{ data: record, error }, profile, customFields, hiddenFieldIds] = await Promise.all([
     supabase.from('land_sales').select('*').eq('id', id).maybeSingle(),
     getCurrentUserProfile(supabase),
     supabase.from('land_sales_custom_fields').select('label').order('label'),
+    loadHiddenFieldIds(supabase, SALES_DATABASE_KEY),
   ]);
   if (error) throw new Error(error.message);
   if (!record) notFound();
@@ -36,6 +39,7 @@ export default async function RecordDetailsPage({ params, searchParams }: PagePr
       canEdit={editable}
       startEditing={edit === '1' && editable}
       catalogLabels={catalogLabels}
+      hiddenFieldIds={[...hiddenFieldIds]}
     />
   );
 }

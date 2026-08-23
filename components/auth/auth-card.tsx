@@ -2,7 +2,7 @@ import { type ReactNode } from 'react';
 import { Building2 } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
 
-export function AuthCard({ subtitle, children }: { subtitle: string; children: ReactNode }) {
+export function AuthCard({ subtitle, children }: { subtitle?: string; children: ReactNode }) {
   return (
     <div
       style={{
@@ -24,9 +24,9 @@ export function AuthCard({ subtitle, children }: { subtitle: string; children: R
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-heading)', fontSize: 28, fontWeight: 600, letterSpacing: '0.02em', color: 'var(--color-text)', lineHeight: 1.1 }}>
-              VANTAGE CRE
+              BOWERY VALUATION DBMS
             </div>
-            <div className="tag tag-outline" style={{ marginTop: 'var(--space-2)' }}>{subtitle}</div>
+            {subtitle ? <div className="tag tag-outline" style={{ marginTop: 'var(--space-2)' }}>{subtitle}</div> : null}
           </div>
         </div>
         {children}

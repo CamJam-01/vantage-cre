@@ -27,7 +27,7 @@ export function UserAccessTable({ users, currentUserId }: { users: UserProfile[]
   }
 
   return (
-    <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', background: 'var(--color-bg)', padding: 'var(--space-6)', marginTop: 'var(--space-2)' }}>
+    <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', background: 'var(--color-bg)', padding: 'var(--space-6)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
         <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)' }}>User Access Management</div>
         <span className="tag tag-accent">ADMIN</span>

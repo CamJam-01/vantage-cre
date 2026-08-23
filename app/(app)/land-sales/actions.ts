@@ -3,13 +3,16 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { logAudit } from '@/lib/audit/log';
-import { extrasFromFormData, formDataHasExtras, landSaleInputSchema, type LandSaleInput } from '@/lib/land-sales/schema';
+import { extrasFromFormData, formDataHasExtras, landSaleInputSchema, type LandSale } from '@/lib/land-sales/schema';
 import {
-  csvHeaders, headersMatchExactly, looksLikeWrongDelimiter, mappingIssues,
-  newFieldLabels, parseCsv, recordKey, suggestSourceMapping, validateMappedRows,
-  type SourceMapping,
+  looksLikeWrongDelimiter, parseCsv, recordKey, csvHeaderError,
+  importLandSaleRow, validateDataRows,
 } from '@/lib/land-sales/csv';
 import { landSaleWriteDeniedMessage } from '@/lib/users/roles';
+import { resultColumns } from '@/lib/land-sales/result-columns';
+import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
+import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
+import { mergeVisibleUpdate, sanitizeVisibleCreate } from '@/lib/land-sales/visible-record-input';
 
 export async function signOutAction() {
   const supabase = await createClient();
@@ -24,34 +27,75 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { message: denied };
 
+  const [customFields, settings] = await Promise.all([
+    supabase.from('land_sales_custom_fields').select('label').order('label'),
+    loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
+      .then(hidden => ({ hidden, error: null }))
+      .catch((error: unknown) => ({
+        hidden: new Set<string>(),
+        error: error instanceof Error ? error.message : 'Could not load field visibility.',
+      })),
+  ]);
+  if (customFields.error) return { message: `Could not load the field catalog: ${customFields.error.message}` };
+  if (settings.error) return { message: settings.error };
+
+  const catalogLabels = (customFields.data ?? []).map(row => row.label as string);
+  const extras = extrasFromFormData(formData);
   const raw = Object.fromEntries(formData.entries());
-  const parsed = landSaleInputSchema.safeParse(raw);
+  const parsed = landSaleInputSchema.safeParse({ ...raw, extras });
   if (!parsed.success) {
     const errors: Record<string, string> = {};
     for (const issue of parsed.error.issues) errors[String(issue.path[0])] = issue.message;
     return { errors };
   }
+  const sanitized = sanitizeVisibleCreate(
+    parsed.data,
+    catalogLabels,
+    settings.hidden,
+  );
 
   const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from('land_sales')
-    .insert({ ...parsed.data, created_by: user?.id ?? null })
+    .insert({ ...sanitized, created_by: user?.id ?? null })
     .select('id')
     .single();
 
   if (error) return { message: error.message };
-  await logAudit(supabase, 'Created Record', `${parsed.data.parcel_id || parsed.data.address || data.id} added`);
+  await logAudit(supabase, 'Created Record', `${sanitized.parcel_id || sanitized.address || data.id} added`);
   redirect(`/land-sales/${data.id}`);
 }
 
 /** Bound to the record id via `updateLandSale.bind(null, id)` when wired into
- * useActionState — the edit form always submits a valid date through the
- * native date picker, so a successful edit always supersedes and clears any
- * `sale_date_raw` import flag. */
+ * useActionState. Editing a visible date supersedes its raw import flag;
+ * hiding the date preserves both stored date fields untouched. */
 export async function updateLandSale(id: string, _prevState: CreateFormState, formData: FormData): Promise<CreateFormState> {
   const supabase = await createClient();
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { message: denied };
+
+  const [existingResult, customFields, settings] = await Promise.all([
+    supabase.from('land_sales').select('*').eq('id', id).maybeSingle(),
+    supabase.from('land_sales_custom_fields').select('label').order('label'),
+    loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
+      .then(hidden => ({ hidden, error: null }))
+      .catch((error: unknown) => ({
+        hidden: new Set<string>(),
+        error: error instanceof Error ? error.message : 'Could not load field visibility.',
+      })),
+  ]);
+  if (existingResult.error) return { message: existingResult.error.message };
+  if (!existingResult.data) return { message: 'This record no longer exists.' };
+  if (customFields.error) return { message: `Could not load the field catalog: ${customFields.error.message}` };
+  if (settings.error) return { message: settings.error };
+
+  const existing = {
+    ...(existingResult.data as LandSale),
+    extras: (existingResult.data as LandSale).extras ?? {},
+  };
+  const catalogLabels = (customFields.data ?? []).map(row => row.label as string);
+  const availableExtraLabels = resultColumns({ catalogLabels, records: [existing] })
+    .flatMap(column => column.kind === 'extra' ? [column.key] : []);
 
   // Carried through from the edit form's hidden `from` field (the results
   // page's filters at the time the user navigated to this edit) purely to
@@ -69,10 +113,18 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
     return { errors };
   }
 
-  const { extras: parsedExtras, ...core } = parsed.data;
-  const payload = extrasPresent
-    ? { ...core, extras: parsedExtras, sale_date_raw: null }
-    : { ...core, sale_date_raw: null };
+  const merged = mergeVisibleUpdate(
+    existing,
+    parsed.data,
+    availableExtraLabels,
+    settings.hidden,
+  );
+  const { extras: mergedExtras, sale_date_raw: mergedSaleDateRaw, ...core } = merged;
+  const payload = {
+    ...core,
+    extras: mergedExtras,
+    sale_date_raw: mergedSaleDateRaw ?? null,
+  };
 
   const { error } = await supabase
     .from('land_sales')
@@ -80,85 +132,62 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
     .eq('id', id);
 
   if (error) return { message: error.message };
-  await logAudit(supabase, 'Updated Record', `${parsed.data.parcel_id || parsed.data.address || id} updated`);
+  await logAudit(supabase, 'Updated Record', `${merged.parcel_id || merged.address || id} updated`);
   redirect(from ? `/land-sales/${id}?from=${encodeURIComponent(String(from))}` : `/land-sales/${id}`);
 }
 
 export type ImportOutcome = {
   headerError?: string;
-  needsMapping?: { headers: string[]; suggested: SourceMapping };
   rowErrors?: string[];
   warnings?: string[];
   duplicates?: string[];
   inserted?: number;
 };
 
-/** Re-parses the raw CSV text server-side (never trusts the client parse or its
- * mapping choices for anything beyond reshaping columns — every value still goes
- * through schema validation below). If headers match the expected set exactly,
- * imports immediately; otherwise a mapping must be supplied (from the header-
- * mapping step in the UI) or this returns `needsMapping` for the caller to act on. */
-export async function importLandSales(csvText: string, mapping?: SourceMapping): Promise<ImportOutcome> {
+/** Re-parses the raw CSV text server-side (never trusts the client parse).
+ * Headers must match the import template exactly — extra or renamed columns
+ * are rejected rather than mapped or stored as new fields. */
+export async function importLandSales(csvText: string): Promise<ImportOutcome> {
   const supabase = await createClient();
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { rowErrors: [denied] };
 
   const rows = parseCsv(csvText);
   if (rows.length === 0) {
-    return { headerError: `The CSV is empty. Add a header row: ${csvHeaders.join(', ')}.` };
+    return { headerError: 'The CSV is empty. Download the CSV template and use those headers.' };
   }
   const headers = rows[0].map(h => h.trim());
   if (looksLikeWrongDelimiter(headers)) {
     return { headerError: 'This file appears to use semicolons or tabs instead of commas. Re-export it as a comma-separated CSV and try again.' };
   }
+  const headerError = csvHeaderError(headers);
+  if (headerError) return { headerError };
+
   const dataRowsRaw = rows.slice(1);
   if (dataRowsRaw.length === 0) {
     return { headerError: 'The CSV contains a header row but no data rows.' };
   }
 
-  let effectiveMapping = mapping;
-  if (!effectiveMapping) {
-    if (headersMatchExactly(headers)) {
-      effectiveMapping = suggestSourceMapping(headers);
-    } else {
-      return { needsMapping: { headers, suggested: suggestSourceMapping(headers) } };
-    }
-  }
-  if (effectiveMapping.length !== headers.length) {
-    return { rowErrors: ['Column mapping does not match the CSV headers.'] };
-  }
-
-  const issues = mappingIssues(effectiveMapping);
-  if (issues.length) return { rowErrors: issues };
-
-  const results = validateMappedRows(dataRowsRaw, headers, effectiveMapping);
+  const results = validateDataRows(dataRowsRaw);
 
   const rowErrors = results.filter(r => !r.ok).flatMap(r => (r.ok ? [] : r.errors));
   if (rowErrors.length) return { rowErrors };
 
-  const toInsert: LandSaleInput[] = results.flatMap(r => (r.ok ? [r.data] : []));
+  const toInsert = results.flatMap(r => (r.ok ? [r] : []));
   if (!toInsert.length) return { rowErrors: ['No valid rows to import.'] };
   const warnings = results.flatMap(r => (r.ok ? r.warnings ?? [] : []));
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  const labels = newFieldLabels(headers, effectiveMapping);
-  if (labels.length) {
-    const { error: catalogError } = await supabase
-      .from('land_sales_custom_fields')
-      .upsert(labels.map(label => ({ label })), { onConflict: 'label', ignoreDuplicates: true });
-    if (catalogError) return { rowErrors: [catalogError.message] };
-  }
-
   const { data: existing } = await supabase.from('land_sales').select('parcel_id, sale_date, address');
   const existingKeys = new Set((existing ?? []).map(r => recordKey(r)));
 
   const duplicates: string[] = [];
-  const fresh: LandSaleInput[] = [];
+  const fresh: Record<string, unknown>[] = [];
   for (const row of toInsert) {
-    const key = recordKey(row);
-    if (existingKeys.has(key)) duplicates.push(row.parcel_id || row.address);
-    else fresh.push(row);
+    const key = recordKey(row.data);
+    if (existingKeys.has(key)) duplicates.push(row.data.parcel_id || row.data.address);
+    else fresh.push(importLandSaleRow(row));
   }
 
   let inserted = 0;

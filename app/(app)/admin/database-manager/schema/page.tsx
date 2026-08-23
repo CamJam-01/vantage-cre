@@ -2,7 +2,11 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUserProfile } from '@/lib/users/roles';
 import { Blueprint } from '@/components/ui/blueprint';
-import { DATABASE_CATEGORIES, LAND_SALES_FIELDS, customFieldDescriptor } from '@/lib/admin/database-descriptor';
+import { FieldVisibilityForm } from '@/components/admin/field-visibility-form';
+import { DATABASE_CATEGORIES } from '@/lib/admin/database-descriptor';
+import { resultColumns } from '@/lib/land-sales/result-columns';
+import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
+import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
 
 type PageProps = { searchParams: Promise<{ db?: string }> };
 
@@ -16,14 +20,22 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
   const category = DATABASE_CATEGORIES.find(c => c.key === db);
   if (!category || !category.available) redirect('/admin/database-manager');
 
-  const { data: customRows, error: customError } = await supabase
-    .from('land_sales_custom_fields')
-    .select('label')
-    .order('label');
-  const fields = [
-    ...LAND_SALES_FIELDS,
-    ...(customError ? [] : (customRows ?? []).map(row => customFieldDescriptor(row.label as string))),
-  ];
+  const [customFields, settings] = await Promise.all([
+    supabase.from('land_sales_custom_fields').select('label').order('label'),
+    loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
+      .then(hidden => ({ hidden, error: null }))
+      .catch((error: unknown) => ({
+        hidden: new Set<string>(),
+        error: error instanceof Error ? error.message : 'Could not load field visibility.',
+      })),
+  ]);
+  const catalogLabels = customFields.error
+    ? []
+    : (customFields.data ?? []).map(row => row.label as string);
+  const columns = resultColumns({ catalogLabels });
+  const disabledReason = customFields.error
+    ? `Field visibility cannot be changed because the field catalog could not be loaded: ${customFields.error.message}`
+    : settings.error ?? undefined;
 
   return (
     <main style={{
@@ -35,42 +47,27 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
         <div>
           <div className="tag tag-outline" style={{ marginBottom: 'var(--space-2)' }}>DATABASE MANAGER</div>
           <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: 0 }}>
-            Schema — {category.name}
+            {category.name}
           </h1>
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 'var(--space-2) 0 0' }}>
-            Read-only for now — live field editing is planned for a later phase.
+            Choose the fields shown to every user in results, record details, editing, and manual entry.
+            Stored data and CSV imports and exports are not changed.
           </p>
         </div>
 
         <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: 'var(--color-neutral-100)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
-            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)' }}>Fields</div>
-            <button type="button" className="btn btn-primary" disabled style={{ opacity: 0.45, cursor: 'not-allowed' }} title="Coming in a later phase">
-              Add Field
-            </button>
+          <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)', marginBottom: 'var(--space-4)' }}>
+            Results &amp; Record Display
           </div>
-          <table className="table" style={{ width: '100%' }}>
-            <thead><tr><th>Field Name</th><th>Type</th><th>Required</th><th>Visible in Search</th><th></th></tr></thead>
-            <tbody>
-              {fields.map(f => (
-                <tr key={f.name}>
-                  <td>{f.name}</td>
-                  <td>
-                    {f.type}
-                    {f.custom ? (
-                      <span className="tag tag-neutral" style={{ marginLeft: 8 }}>Custom</span>
-                    ) : null}
-                  </td>
-                  <td><span className={`tag ${f.required ? 'tag-accent' : 'tag-neutral'}`}>{f.required ? 'Required' : 'Optional'}</span></td>
-                  <td><span className={`tag ${f.visibleInSearch ? 'tag-accent' : 'tag-neutral'}`}>{f.visibleInSearch ? 'Visible' : 'Hidden'}</span></td>
-                  <td style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                    <button type="button" className="btn btn-ghost" disabled style={{ opacity: 0.45, cursor: 'not-allowed' }} title="Coming in a later phase">Edit</button>
-                    <button type="button" className="btn btn-ghost" disabled style={{ opacity: 0.45, cursor: 'not-allowed' }} title="Coming in a later phase">Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: '0 0 var(--space-4)' }}>
+            This is one global display configuration for the selected table. Hidden fields keep their data and remain available to CSV workflows.
+          </p>
+          <FieldVisibilityForm
+            databaseKey={SALES_DATABASE_KEY}
+            columns={columns}
+            initialHiddenFieldIds={[...settings.hidden]}
+            disabledReason={disabledReason}
+          />
         </Blueprint>
       </div>
     </main>
