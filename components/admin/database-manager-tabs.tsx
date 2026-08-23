@@ -2,7 +2,6 @@
 
 import { useState, type CSSProperties } from 'react';
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -86,7 +85,6 @@ export function DatabaseManagerTabs({ salesCount, auditLog }: { salesCount: numb
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {DATABASE_CATEGORIES.map(db => {
             const recordLabel = db.key === 'sales' ? `${salesCount} record${salesCount === 1 ? '' : 's'}` : 'Coming in a later phase';
-            const fieldLabel = db.key === 'sales' ? '13 fields' : '';
             const style: CSSProperties = {
               position: 'relative', boxSizing: 'border-box', background: 'var(--color-bg)',
               padding: 'var(--space-6) var(--space-8)', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -97,7 +95,7 @@ export function DatabaseManagerTabs({ salesCount, auditLog }: { salesCount: numb
                 <div>
                   <div style={{ fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 600, color: 'var(--color-text)' }}>{db.name}</div>
                   <div style={{ fontSize: 13, color: 'var(--color-neutral-700)', marginTop: 'var(--space-1)' }}>
-                    {recordLabel}{fieldLabel && ` · ${fieldLabel}`}
+                    {recordLabel}
                   </div>
                 </div>
                 {db.available && (
@@ -105,12 +103,8 @@ export function DatabaseManagerTabs({ salesCount, auditLog }: { salesCount: numb
                     {db.key === 'sales' && (
                       <Link href="/land-sales/import" className="btn btn-ghost">Import CSV</Link>
                     )}
-                    <Link
-                      href={`/admin/database-manager/schema?db=${db.key}`}
-                      style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', color: 'var(--color-accent-700)', textDecoration: 'none' }}
-                    >
-                      <span style={{ fontSize: 14, fontWeight: 600 }}>View Schema</span>
-                      <ArrowRight size={18} strokeWidth={1.5} />
+                    <Link href={`/admin/database-manager/schema?db=${db.key}`} className="btn btn-ghost">
+                      Edit Fields
                     </Link>
                   </div>
                 )}

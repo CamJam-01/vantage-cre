@@ -34,13 +34,13 @@ export function LandSaleForm() {
           <form action={formAction} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
             <Field id="parcel_id" name="parcel_id" label="Parcel ID" type="text" placeholder="LND-10432" error={errors.parcel_id} />
             <Field id="address" name="address" label="Address" type="text" placeholder="4820 County Road 12" error={errors.address} />
-            <Field id="city" name="city" label="City" type="text" required error={errors.city} />
-            <Field id="county" name="county" label="County" type="text" required error={errors.county} />
+            <Field id="city" name="city" label="City" type="text" error={errors.city} />
+            <Field id="county" name="county" label="County" type="text" error={errors.county} />
 
             <div className="field">
               <label htmlFor="state">State</label>
-              <select id="state" name="state" className="input" required defaultValue="">
-                <option value="" disabled>Select a state</option>
+              <select id="state" name="state" className="input" defaultValue="">
+                <option value="">Select a state</option>
                 {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
               </select>
               {errors.state && <div style={{ fontSize: 12, color: '#b3261e', marginTop: 4 }}>{errors.state}</div>}
@@ -49,18 +49,18 @@ export function LandSaleForm() {
 
             <div className="field">
               <label htmlFor="property_type">Property Type</label>
-              <select id="property_type" name="property_type" className="input" required defaultValue="">
-                <option value="" disabled>Select a type</option>
+              <select id="property_type" name="property_type" className="input" defaultValue="">
+                <option value="">Select a type</option>
                 {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
               {errors.property_type && <div style={{ fontSize: 12, color: '#b3261e', marginTop: 4 }}>{errors.property_type}</div>}
             </div>
             <Field id="square_feet" name="square_feet" label="Square Feet" type="number" min={0} step="any" error={errors.square_feet} />
 
-            <Field id="acreage" name="acreage" label="Acreage" type="number" min={0} step="any" required error={errors.acreage} />
-            <Field id="sale_date" name="sale_date" label="Sale Date" type="date" required error={errors.sale_date} />
+            <Field id="acreage" name="acreage" label="Acreage" type="number" min={0} step="any" error={errors.acreage} />
+            <Field id="sale_date" name="sale_date" label="Sale Date" type="date" error={errors.sale_date} />
 
-            <Field id="sale_price" name="sale_price" label="Sale Price" type="number" min={0} step="any" required error={errors.sale_price} />
+            <Field id="sale_price" name="sale_price" label="Sale Price" type="number" min={0} step="any" error={errors.sale_price} />
             <Field id="buyer" name="buyer" label="Buyer" type="text" error={errors.buyer} />
 
             {state?.message && (

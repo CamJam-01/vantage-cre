@@ -140,7 +140,6 @@ function EditableField({ record, field }: { record: LandSale; field: CoreResultF
           name="sale_date"
           type="date"
           className="input mono"
-          required
           defaultValue={record.sale_date ?? undefined}
         />
       );
@@ -154,7 +153,6 @@ function EditableField({ record, field }: { record: LandSale; field: CoreResultF
             min={0}
             step="any"
             className="input num"
-            required
             defaultValue={record.sale_price ?? undefined}
           />
         </Affixed>
@@ -168,7 +166,6 @@ function EditableField({ record, field }: { record: LandSale; field: CoreResultF
           min={0}
           step="any"
           className="input num"
-          required
           defaultValue={record.acreage ?? undefined}
         />
       );
@@ -190,10 +187,9 @@ function EditableField({ record, field }: { record: LandSale; field: CoreResultF
           id="property_type"
           name="property_type"
           className="input"
-          required
           defaultValue={record.property_type ?? ''}
         >
-          <option value="" disabled>Select a type</option>
+          <option value="">Select a type</option>
           {importedPropertyType && (
             <option value={importedPropertyType}>{importedPropertyType} (imported)</option>
           )}
@@ -206,20 +202,19 @@ function EditableField({ record, field }: { record: LandSale; field: CoreResultF
           id="state"
           name="state"
           className="input"
-          required
           defaultValue={record.state}
         >
-          <option value="" disabled>Select</option>
+          <option value="">Select</option>
           {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
         </select>
       );
     case 'city':
       return (
-        <input id="city" name="city" type="text" className="input" required defaultValue={record.city} />
+        <input id="city" name="city" type="text" className="input" defaultValue={record.city} />
       );
     case 'county':
       return (
-        <input id="county" name="county" type="text" className="input" required defaultValue={record.county} />
+        <input id="county" name="county" type="text" className="input" defaultValue={record.county} />
       );
     case 'address':
       return (

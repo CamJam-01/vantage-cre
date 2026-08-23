@@ -19,21 +19,23 @@ function numericField(validate: (n: number) => boolean) {
 /** Single source of truth for the land-sale record shape: the manual-create form,
  * the CSV row validator, and Supabase insert typing all consume this.
  *
- * Property type, the numeric fields, and the sale date are intentionally
- * permissive: real-world CSV exports carry property-type labels beyond our
- * curated five, numeric cells in all sorts of formats, and dates in shapes
- * `parseFlexibleDate` doesn't recognize. Rather than block an import, an
- * unrecognized type is stored as free text, an unparseable number is stored
- * as null, and an unparseable date is stored as null with the original text
- * preserved in `sale_date_raw` for the UI to flag. */
+ * No user-facing field is required — empty records and blank CSV rows are valid.
+ * When a value *is* present, property type is stored as free text, numbers are
+ * best-effort coerced (unparseable cells become null), and dates go through
+ * `parseFlexibleDate` (unrecognized dates become null with the original text
+ * preserved in `sale_date_raw` for the UI to flag). A present state must still
+ * be a 2-letter code. */
 export const landSaleInputSchema = z.object({
   parcel_id: z.string().trim().default(''),
   address: z.string().trim().default(''),
-  city: z.string().trim().min(1, 'City is required'),
-  county: z.string().trim().min(1, 'County is required'),
-  state: z.string().trim().length(2, 'State must be a 2-letter code').toUpperCase(),
+  city: z.string().trim().default(''),
+  county: z.string().trim().default(''),
+  state: z.string().trim().default('').transform(v => v.toUpperCase()).refine(
+    v => v === '' || v.length === 2,
+    'State must be a 2-letter code',
+  ),
   msa: z.string().trim().optional().transform(v => (v ? v : undefined)),
-  property_type: z.string().trim().min(1, 'Type is required'),
+  property_type: z.string().trim().default(''),
   square_feet: numericField(n => n > 0),
   acreage: numericField(n => n > 0),
   /** Never blocks import: an unparseable date just comes through as undefined

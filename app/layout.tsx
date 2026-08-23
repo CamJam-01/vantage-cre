@@ -24,7 +24,7 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: 'Bowery Valuation',
+  title: 'Bowery Valuation DBMS',
   description: 'Commercial real estate comp database',
 };
 

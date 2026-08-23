@@ -29,15 +29,15 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthCard subtitle="DATABASE MANAGEMENT SYSTEM">
+    <AuthCard>
       <form style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }} onSubmit={handleSubmit}>
         <Field
-          id="email" label="Email address" type="email" placeholder="you@company.com"
+          label="Email address" type="email" id="email" autoComplete="on" placeholder="you@company.com"
           required value={email} onChange={e => setEmail(e.target.value)}
           style={{ backgroundColor: '#FFFFFF' }}
         />
         <Field
-          id="password" label="Password" type="password" placeholder="••••••••"
+          label="Password" type="password" id="password" autoComplete="on" placeholder="••••••••"
           required value={password} onChange={e => setPassword(e.target.value)}
           style={{ backgroundColor: '#FFFFFF' }}
         />

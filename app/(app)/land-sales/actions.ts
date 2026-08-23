@@ -5,9 +5,8 @@ import { createClient } from '@/lib/supabase/server';
 import { logAudit } from '@/lib/audit/log';
 import { extrasFromFormData, formDataHasExtras, landSaleInputSchema, type LandSaleInput } from '@/lib/land-sales/schema';
 import {
-  csvHeaders, headersMatchExactly, looksLikeWrongDelimiter, mappingIssues,
-  newFieldLabels, parseCsv, recordKey, suggestSourceMapping, validateMappedRows,
-  type SourceMapping,
+  csvHeaders, looksLikeWrongDelimiter, parseCsv, recordKey, csvHeaderError,
+  validateDataRows,
 } from '@/lib/land-sales/csv';
 import { landSaleWriteDeniedMessage } from '@/lib/users/roles';
 
@@ -86,19 +85,16 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
 
 export type ImportOutcome = {
   headerError?: string;
-  needsMapping?: { headers: string[]; suggested: SourceMapping };
   rowErrors?: string[];
   warnings?: string[];
   duplicates?: string[];
   inserted?: number;
 };
 
-/** Re-parses the raw CSV text server-side (never trusts the client parse or its
- * mapping choices for anything beyond reshaping columns — every value still goes
- * through schema validation below). If headers match the expected set exactly,
- * imports immediately; otherwise a mapping must be supplied (from the header-
- * mapping step in the UI) or this returns `needsMapping` for the caller to act on. */
-export async function importLandSales(csvText: string, mapping?: SourceMapping): Promise<ImportOutcome> {
+/** Re-parses the raw CSV text server-side (never trusts the client parse).
+ * Headers must match the import template exactly — extra or renamed columns
+ * are rejected rather than mapped or stored as new fields. */
+export async function importLandSales(csvText: string): Promise<ImportOutcome> {
   const supabase = await createClient();
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { rowErrors: [denied] };
@@ -111,27 +107,15 @@ export async function importLandSales(csvText: string, mapping?: SourceMapping):
   if (looksLikeWrongDelimiter(headers)) {
     return { headerError: 'This file appears to use semicolons or tabs instead of commas. Re-export it as a comma-separated CSV and try again.' };
   }
+  const headerError = csvHeaderError(headers);
+  if (headerError) return { headerError };
+
   const dataRowsRaw = rows.slice(1);
   if (dataRowsRaw.length === 0) {
     return { headerError: 'The CSV contains a header row but no data rows.' };
   }
 
-  let effectiveMapping = mapping;
-  if (!effectiveMapping) {
-    if (headersMatchExactly(headers)) {
-      effectiveMapping = suggestSourceMapping(headers);
-    } else {
-      return { needsMapping: { headers, suggested: suggestSourceMapping(headers) } };
-    }
-  }
-  if (effectiveMapping.length !== headers.length) {
-    return { rowErrors: ['Column mapping does not match the CSV headers.'] };
-  }
-
-  const issues = mappingIssues(effectiveMapping);
-  if (issues.length) return { rowErrors: issues };
-
-  const results = validateMappedRows(dataRowsRaw, headers, effectiveMapping);
+  const results = validateDataRows(dataRowsRaw);
 
   const rowErrors = results.filter(r => !r.ok).flatMap(r => (r.ok ? [] : r.errors));
   if (rowErrors.length) return { rowErrors };
@@ -141,14 +125,6 @@ export async function importLandSales(csvText: string, mapping?: SourceMapping):
   const warnings = results.flatMap(r => (r.ok ? r.warnings ?? [] : []));
 
   const { data: { user } } = await supabase.auth.getUser();
-
-  const labels = newFieldLabels(headers, effectiveMapping);
-  if (labels.length) {
-    const { error: catalogError } = await supabase
-      .from('land_sales_custom_fields')
-      .upsert(labels.map(label => ({ label })), { onConflict: 'label', ignoreDuplicates: true });
-    if (catalogError) return { rowErrors: [catalogError.message] };
-  }
 
   const { data: existing } = await supabase.from('land_sales').select('parcel_id, sale_date, address');
   const existingKeys = new Set((existing ?? []).map(r => recordKey(r)));

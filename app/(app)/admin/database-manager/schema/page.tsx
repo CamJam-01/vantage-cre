@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUserProfile } from '@/lib/users/roles';
 import { Blueprint } from '@/components/ui/blueprint';
-import { DATABASE_CATEGORIES, LAND_SALES_FIELDS, customFieldDescriptor } from '@/lib/admin/database-descriptor';
+import { DATABASE_CATEGORIES, customFieldDescriptor, type FieldDescriptor } from '@/lib/admin/database-descriptor';
 
 type PageProps = { searchParams: Promise<{ db?: string }> };
 
@@ -20,10 +20,9 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
     .from('land_sales_custom_fields')
     .select('label')
     .order('label');
-  const fields = [
-    ...LAND_SALES_FIELDS,
-    ...(customError ? [] : (customRows ?? []).map(row => customFieldDescriptor(row.label as string))),
-  ];
+  const fields: FieldDescriptor[] = customError
+    ? []
+    : (customRows ?? []).map(row => customFieldDescriptor(row.label as string));
 
   return (
     <main style={{
@@ -35,42 +34,41 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
         <div>
           <div className="tag tag-outline" style={{ marginBottom: 'var(--space-2)' }}>DATABASE MANAGER</div>
           <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: 0 }}>
-            Schema — {category.name}
+            {category.name}
           </h1>
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 'var(--space-2) 0 0' }}>
-            Read-only for now — live field editing is planned for a later phase.
+            Columns are managed in Supabase. This app cannot add, edit, or delete table fields.
           </p>
         </div>
 
         <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: 'var(--color-neutral-100)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
-            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)' }}>Fields</div>
-            <button type="button" className="btn btn-primary" disabled style={{ opacity: 0.45, cursor: 'not-allowed' }} title="Coming in a later phase">
-              Add Field
-            </button>
+          <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)', marginBottom: 'var(--space-4)' }}>
+            Fields
           </div>
-          <table className="table" style={{ width: '100%' }}>
-            <thead><tr><th>Field Name</th><th>Type</th><th>Required</th><th>Visible in Search</th><th></th></tr></thead>
-            <tbody>
-              {fields.map(f => (
-                <tr key={f.name}>
-                  <td>{f.name}</td>
-                  <td>
-                    {f.type}
-                    {f.custom ? (
-                      <span className="tag tag-neutral" style={{ marginLeft: 8 }}>Custom</span>
-                    ) : null}
-                  </td>
-                  <td><span className={`tag ${f.required ? 'tag-accent' : 'tag-neutral'}`}>{f.required ? 'Required' : 'Optional'}</span></td>
-                  <td><span className={`tag ${f.visibleInSearch ? 'tag-accent' : 'tag-neutral'}`}>{f.visibleInSearch ? 'Visible' : 'Hidden'}</span></td>
-                  <td style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                    <button type="button" className="btn btn-ghost" disabled style={{ opacity: 0.45, cursor: 'not-allowed' }} title="Coming in a later phase">Edit</button>
-                    <button type="button" className="btn btn-ghost" disabled style={{ opacity: 0.45, cursor: 'not-allowed' }} title="Coming in a later phase">Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {fields.length === 0 ? (
+            <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
+              No extra fields are catalogued here. Add or remove columns in the Supabase table editor.
+            </p>
+          ) : (
+            <table className="table" style={{ width: '100%' }}>
+              <thead><tr><th>Field Name</th><th>Type</th><th>Required</th><th>Visible in Search</th></tr></thead>
+              <tbody>
+                {fields.map(f => (
+                  <tr key={f.name}>
+                    <td>{f.name}</td>
+                    <td>
+                      {f.type}
+                      {f.custom ? (
+                        <span className="tag tag-neutral" style={{ marginLeft: 8 }}>Custom</span>
+                      ) : null}
+                    </td>
+                    <td><span className={`tag ${f.required ? 'tag-accent' : 'tag-neutral'}`}>{f.required ? 'Required' : 'Optional'}</span></td>
+                    <td><span className={`tag ${f.visibleInSearch ? 'tag-accent' : 'tag-neutral'}`}>{f.visibleInSearch ? 'Visible' : 'Hidden'}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </Blueprint>
       </div>
     </main>
