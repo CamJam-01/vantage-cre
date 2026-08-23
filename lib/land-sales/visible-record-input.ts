@@ -1,5 +1,5 @@
 import type { HiddenFieldIds } from './field-visibility';
-import type { LandSaleInput } from './schema';
+import { landSaleInputSchema, type LandSaleInput } from './schema';
 
 const WRITABLE_CORE_FIELDS = [
   'parcel_id',
@@ -41,4 +41,28 @@ export function mergeVisibleUpdate(
   }
 
   return merged;
+}
+
+export function sanitizeVisibleCreate(
+  submitted: LandSaleInput,
+  availableExtraLabels: string[],
+  hidden: HiddenFieldIds,
+): LandSaleInput {
+  const defaults = landSaleInputSchema.parse({});
+  const sanitized: LandSaleInput = { ...submitted, extras: {} };
+
+  for (const field of WRITABLE_CORE_FIELDS) {
+    if (!hidden.has(`core:${field}`)) continue;
+    Object.assign(sanitized, { [field]: defaults[field] });
+  }
+
+  if (hidden.has('core:sale_date')) sanitized.sale_date_raw = undefined;
+
+  for (const label of availableExtraLabels) {
+    if (hidden.has(`extra:${label}`)) continue;
+    const value = submitted.extras[label];
+    if (value) sanitized.extras[label] = value;
+  }
+
+  return sanitized;
 }

@@ -12,7 +12,7 @@ import { landSaleWriteDeniedMessage } from '@/lib/users/roles';
 import { resultColumns } from '@/lib/land-sales/result-columns';
 import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
 import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
-import { mergeVisibleUpdate } from '@/lib/land-sales/visible-record-input';
+import { mergeVisibleUpdate, sanitizeVisibleCreate } from '@/lib/land-sales/visible-record-input';
 
 export async function signOutAction() {
   const supabase = await createClient();
@@ -27,23 +27,42 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { message: denied };
 
+  const [customFields, settings] = await Promise.all([
+    supabase.from('land_sales_custom_fields').select('label').order('label'),
+    loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
+      .then(hidden => ({ hidden, error: null }))
+      .catch((error: unknown) => ({
+        hidden: new Set<string>(),
+        error: error instanceof Error ? error.message : 'Could not load field visibility.',
+      })),
+  ]);
+  if (customFields.error) return { message: `Could not load the field catalog: ${customFields.error.message}` };
+  if (settings.error) return { message: settings.error };
+
+  const catalogLabels = (customFields.data ?? []).map(row => row.label as string);
+  const extras = extrasFromFormData(formData);
   const raw = Object.fromEntries(formData.entries());
-  const parsed = landSaleInputSchema.safeParse(raw);
+  const parsed = landSaleInputSchema.safeParse({ ...raw, extras });
   if (!parsed.success) {
     const errors: Record<string, string> = {};
     for (const issue of parsed.error.issues) errors[String(issue.path[0])] = issue.message;
     return { errors };
   }
+  const sanitized = sanitizeVisibleCreate(
+    parsed.data,
+    catalogLabels,
+    settings.hidden,
+  );
 
   const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from('land_sales')
-    .insert({ ...parsed.data, created_by: user?.id ?? null })
+    .insert({ ...sanitized, created_by: user?.id ?? null })
     .select('id')
     .single();
 
   if (error) return { message: error.message };
-  await logAudit(supabase, 'Created Record', `${parsed.data.parcel_id || parsed.data.address || data.id} added`);
+  await logAudit(supabase, 'Created Record', `${sanitized.parcel_id || sanitized.address || data.id} added`);
   redirect(`/land-sales/${data.id}`);
 }
 

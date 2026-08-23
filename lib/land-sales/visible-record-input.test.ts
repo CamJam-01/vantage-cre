@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { landSaleInputSchema } from './schema.ts';
-import { mergeVisibleUpdate } from './visible-record-input.ts';
+import { mergeVisibleUpdate, sanitizeVisibleCreate } from './visible-record-input.ts';
 
 describe('mergeVisibleUpdate', () => {
   const existing = landSaleInputSchema.parse({
@@ -57,5 +57,56 @@ describe('mergeVisibleUpdate', () => {
     const merged = mergeVisibleUpdate(existing, submitted, ['Zoning', 'Market', 'Legacy'], new Set());
 
     assert.equal('Injected' in merged.extras, false);
+  });
+});
+
+describe('sanitizeVisibleCreate', () => {
+  it('drops crafted hidden and unknown values while retaining visible inputs', () => {
+    const submitted = landSaleInputSchema.parse({
+      address: 'Hidden address',
+      city: 'Dallas',
+      buyer: 'Visible buyer',
+      extras: {
+        Zoning: 'Hidden zoning',
+        Market: 'Dallas-Fort Worth',
+        Injected: 'Not allowed',
+      },
+    });
+    const sanitized = sanitizeVisibleCreate(
+      submitted,
+      ['Zoning', 'Market'],
+      new Set(['core:address', 'extra:Zoning']),
+    );
+
+    assert.equal(sanitized.address, '');
+    assert.equal(sanitized.city, 'Dallas');
+    assert.equal(sanitized.buyer, 'Visible buyer');
+    assert.deepEqual(sanitized.extras, { Market: 'Dallas-Fort Worth' });
+  });
+
+  it('removes a crafted hidden sale date and its raw import value', () => {
+    const submitted = landSaleInputSchema.parse({
+      sale_date: '2026-08-01',
+      sale_date_raw: 'August 1, 2026',
+    });
+    const sanitized = sanitizeVisibleCreate(
+      submitted,
+      [],
+      new Set(['core:sale_date']),
+    );
+
+    assert.equal(sanitized.sale_date, undefined);
+    assert.equal(sanitized.sale_date_raw, undefined);
+  });
+
+  it('does not accept the computed price per acre as manual input', () => {
+    const submitted = landSaleInputSchema.parse({
+      sale_price: 500000,
+      acreage: 2,
+      price_per_acre: 1,
+    });
+    const sanitized = sanitizeVisibleCreate(submitted, [], new Set());
+
+    assert.equal('price_per_acre' in sanitized, false);
   });
 });
