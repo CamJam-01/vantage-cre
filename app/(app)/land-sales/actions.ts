@@ -3,12 +3,16 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { logAudit } from '@/lib/audit/log';
-import { extrasFromFormData, formDataHasExtras, landSaleInputSchema, type LandSaleInput } from '@/lib/land-sales/schema';
+import { extrasFromFormData, formDataHasExtras, landSaleInputSchema, type LandSale } from '@/lib/land-sales/schema';
 import {
   csvHeaders, looksLikeWrongDelimiter, parseCsv, recordKey, csvHeaderError,
   validateDataRows,
 } from '@/lib/land-sales/csv';
 import { landSaleWriteDeniedMessage } from '@/lib/users/roles';
+import { resultColumns } from '@/lib/land-sales/result-columns';
+import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
+import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
+import { mergeVisibleUpdate } from '@/lib/land-sales/visible-record-input';
 
 export async function signOutAction() {
   const supabase = await createClient();
@@ -44,13 +48,35 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
 }
 
 /** Bound to the record id via `updateLandSale.bind(null, id)` when wired into
- * useActionState — the edit form always submits a valid date through the
- * native date picker, so a successful edit always supersedes and clears any
- * `sale_date_raw` import flag. */
+ * useActionState. Editing a visible date supersedes its raw import flag;
+ * hiding the date preserves both stored date fields untouched. */
 export async function updateLandSale(id: string, _prevState: CreateFormState, formData: FormData): Promise<CreateFormState> {
   const supabase = await createClient();
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { message: denied };
+
+  const [existingResult, customFields, settings] = await Promise.all([
+    supabase.from('land_sales').select('*').eq('id', id).maybeSingle(),
+    supabase.from('land_sales_custom_fields').select('label').order('label'),
+    loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
+      .then(hidden => ({ hidden, error: null }))
+      .catch((error: unknown) => ({
+        hidden: new Set<string>(),
+        error: error instanceof Error ? error.message : 'Could not load field visibility.',
+      })),
+  ]);
+  if (existingResult.error) return { message: existingResult.error.message };
+  if (!existingResult.data) return { message: 'This record no longer exists.' };
+  if (customFields.error) return { message: `Could not load the field catalog: ${customFields.error.message}` };
+  if (settings.error) return { message: settings.error };
+
+  const existing = {
+    ...(existingResult.data as LandSale),
+    extras: (existingResult.data as LandSale).extras ?? {},
+  };
+  const catalogLabels = (customFields.data ?? []).map(row => row.label as string);
+  const availableExtraLabels = resultColumns({ catalogLabels, records: [existing] })
+    .flatMap(column => column.kind === 'extra' ? [column.key] : []);
 
   // Carried through from the edit form's hidden `from` field (the results
   // page's filters at the time the user navigated to this edit) purely to
@@ -68,10 +94,18 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
     return { errors };
   }
 
-  const { extras: parsedExtras, ...core } = parsed.data;
-  const payload = extrasPresent
-    ? { ...core, extras: parsedExtras, sale_date_raw: null }
-    : { ...core, sale_date_raw: null };
+  const merged = mergeVisibleUpdate(
+    existing,
+    parsed.data,
+    availableExtraLabels,
+    settings.hidden,
+  );
+  const { extras: mergedExtras, sale_date_raw: mergedSaleDateRaw, ...core } = merged;
+  const payload = {
+    ...core,
+    extras: mergedExtras,
+    sale_date_raw: mergedSaleDateRaw ?? null,
+  };
 
   const { error } = await supabase
     .from('land_sales')
@@ -79,7 +113,7 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
     .eq('id', id);
 
   if (error) return { message: error.message };
-  await logAudit(supabase, 'Updated Record', `${parsed.data.parcel_id || parsed.data.address || id} updated`);
+  await logAudit(supabase, 'Updated Record', `${merged.parcel_id || merged.address || id} updated`);
   redirect(from ? `/land-sales/${id}?from=${encodeURIComponent(String(from))}` : `/land-sales/${id}`);
 }
 
