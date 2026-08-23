@@ -2,7 +2,11 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUserProfile } from '@/lib/users/roles';
 import { Blueprint } from '@/components/ui/blueprint';
-import { DATABASE_CATEGORIES, customFieldDescriptor, type FieldDescriptor } from '@/lib/admin/database-descriptor';
+import { FieldVisibilityForm } from '@/components/admin/field-visibility-form';
+import { DATABASE_CATEGORIES } from '@/lib/admin/database-descriptor';
+import { resultColumns } from '@/lib/land-sales/result-columns';
+import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
+import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
 
 type PageProps = { searchParams: Promise<{ db?: string }> };
 
@@ -16,13 +20,22 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
   const category = DATABASE_CATEGORIES.find(c => c.key === db);
   if (!category || !category.available) redirect('/admin/database-manager');
 
-  const { data: customRows, error: customError } = await supabase
-    .from('land_sales_custom_fields')
-    .select('label')
-    .order('label');
-  const fields: FieldDescriptor[] = customError
+  const [customFields, settings] = await Promise.all([
+    supabase.from('land_sales_custom_fields').select('label').order('label'),
+    loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
+      .then(hidden => ({ hidden, error: null }))
+      .catch((error: unknown) => ({
+        hidden: new Set<string>(),
+        error: error instanceof Error ? error.message : 'Could not load field visibility.',
+      })),
+  ]);
+  const catalogLabels = customFields.error
     ? []
-    : (customRows ?? []).map(row => customFieldDescriptor(row.label as string));
+    : (customFields.data ?? []).map(row => row.label as string);
+  const columns = resultColumns({ catalogLabels });
+  const disabledReason = customFields.error
+    ? `Field visibility cannot be changed because the field catalog could not be loaded: ${customFields.error.message}`
+    : settings.error ?? undefined;
 
   return (
     <main style={{
@@ -37,38 +50,24 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
             {category.name}
           </h1>
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 'var(--space-2) 0 0' }}>
-            Columns are managed in Supabase. This app cannot add, edit, or delete table fields.
+            Choose the fields shown to every user in results, record details, editing, and manual entry.
+            Stored data and CSV imports and exports are not changed.
           </p>
         </div>
 
         <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: 'var(--color-neutral-100)' }}>
           <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)', marginBottom: 'var(--space-4)' }}>
-            Fields
+            Results &amp; Record Display
           </div>
-          {fields.length === 0 ? (
-            <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
-              No extra fields are catalogued here. Add or remove columns in the Supabase table editor.
-            </p>
-          ) : (
-            <table className="table" style={{ width: '100%' }}>
-              <thead><tr><th>Field Name</th><th>Type</th><th>Required</th><th>Visible in Search</th></tr></thead>
-              <tbody>
-                {fields.map(f => (
-                  <tr key={f.name}>
-                    <td>{f.name}</td>
-                    <td>
-                      {f.type}
-                      {f.custom ? (
-                        <span className="tag tag-neutral" style={{ marginLeft: 8 }}>Custom</span>
-                      ) : null}
-                    </td>
-                    <td><span className={`tag ${f.required ? 'tag-accent' : 'tag-neutral'}`}>{f.required ? 'Required' : 'Optional'}</span></td>
-                    <td><span className={`tag ${f.visibleInSearch ? 'tag-accent' : 'tag-neutral'}`}>{f.visibleInSearch ? 'Visible' : 'Hidden'}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: '0 0 var(--space-4)' }}>
+            This is one global display configuration for the selected table. Hidden fields keep their data and remain available to CSV workflows.
+          </p>
+          <FieldVisibilityForm
+            databaseKey={SALES_DATABASE_KEY}
+            columns={columns}
+            initialHiddenFieldIds={[...settings.hidden]}
+            disabledReason={disabledReason}
+          />
         </Blueprint>
       </div>
     </main>
