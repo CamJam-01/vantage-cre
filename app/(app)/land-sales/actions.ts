@@ -3,7 +3,13 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { logAudit } from '@/lib/audit/log';
-import { extrasFromFormData, formDataHasExtras, landSaleInputSchema, type LandSale } from '@/lib/land-sales/schema';
+import {
+  extrasFromFormData,
+  formDataHasExtras,
+  landSaleInputSchema,
+  type LandSale,
+  type LandSaleInput,
+} from '@/lib/land-sales/schema';
 import {
   csvHeaders, looksLikeWrongDelimiter, parseCsv, recordKey, csvHeaderError,
   validateDataRows,
