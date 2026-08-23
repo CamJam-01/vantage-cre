@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { getCurrentUserProfile } from '@/lib/users/roles';
+import { getCurrentUserProfile, listUserProfiles } from '@/lib/users/roles';
 import { DatabaseManagerTabs, type AuditRow } from '@/components/admin/database-manager-tabs';
 
 const timestampFormat = new Intl.DateTimeFormat('en-US', {
@@ -13,9 +13,10 @@ export default async function DatabaseManagerPage() {
   if (!profile) redirect('/login');
   if (profile.role !== 'Admin') redirect('/search');
 
-  const [{ count: salesCount }, { data: auditRows }] = await Promise.all([
+  const [{ count: salesCount }, { data: auditRows }, users] = await Promise.all([
     supabase.from('land_sales').select('id', { count: 'exact', head: true }),
     supabase.from('audit_log').select('actor_name, action, detail, created_at').order('created_at', { ascending: false }).limit(25),
+    listUserProfiles(supabase),
   ]);
 
   const auditLog: AuditRow[] = (auditRows ?? []).map(a => ({
@@ -34,12 +35,17 @@ export default async function DatabaseManagerPage() {
       <div style={{ width: '100%', maxWidth: 1100, display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
           <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: 0 }}>
-            Database Manager
+            Settings
           </h1>
           <div className="tag tag-outline">ADMIN</div>
         </div>
 
-        <DatabaseManagerTabs salesCount={salesCount ?? 0} auditLog={auditLog} />
+        <DatabaseManagerTabs
+          salesCount={salesCount ?? 0}
+          auditLog={auditLog}
+          users={users}
+          currentUserId={profile.id}
+        />
       </div>
     </main>
   );

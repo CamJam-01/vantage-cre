@@ -5,8 +5,8 @@ import { createClient } from '@/lib/supabase/server';
 import { logAudit } from '@/lib/audit/log';
 import { extrasFromFormData, formDataHasExtras, landSaleInputSchema, type LandSale } from '@/lib/land-sales/schema';
 import {
-  csvHeaders, looksLikeWrongDelimiter, parseCsv, recordKey, csvHeaderError,
-  validateDataRows,
+  looksLikeWrongDelimiter, parseCsv, recordKey, csvHeaderError,
+  importLandSaleRow, validateDataRows,
 } from '@/lib/land-sales/csv';
 import { landSaleWriteDeniedMessage } from '@/lib/users/roles';
 import { resultColumns } from '@/lib/land-sales/result-columns';
@@ -154,7 +154,7 @@ export async function importLandSales(csvText: string): Promise<ImportOutcome> {
 
   const rows = parseCsv(csvText);
   if (rows.length === 0) {
-    return { headerError: `The CSV is empty. Add a header row: ${csvHeaders.join(', ')}.` };
+    return { headerError: 'The CSV is empty. Download the CSV template and use those headers.' };
   }
   const headers = rows[0].map(h => h.trim());
   if (looksLikeWrongDelimiter(headers)) {
@@ -173,7 +173,7 @@ export async function importLandSales(csvText: string): Promise<ImportOutcome> {
   const rowErrors = results.filter(r => !r.ok).flatMap(r => (r.ok ? [] : r.errors));
   if (rowErrors.length) return { rowErrors };
 
-  const toInsert: LandSaleInput[] = results.flatMap(r => (r.ok ? [r.data] : []));
+  const toInsert = results.flatMap(r => (r.ok ? [r] : []));
   if (!toInsert.length) return { rowErrors: ['No valid rows to import.'] };
   const warnings = results.flatMap(r => (r.ok ? r.warnings ?? [] : []));
 
@@ -183,11 +183,11 @@ export async function importLandSales(csvText: string): Promise<ImportOutcome> {
   const existingKeys = new Set((existing ?? []).map(r => recordKey(r)));
 
   const duplicates: string[] = [];
-  const fresh: LandSaleInput[] = [];
+  const fresh: Record<string, unknown>[] = [];
   for (const row of toInsert) {
-    const key = recordKey(row);
-    if (existingKeys.has(key)) duplicates.push(row.parcel_id || row.address);
-    else fresh.push(row);
+    const key = recordKey(row.data);
+    if (existingKeys.has(key)) duplicates.push(row.data.parcel_id || row.data.address);
+    else fresh.push(importLandSaleRow(row));
   }
 
   let inserted = 0;

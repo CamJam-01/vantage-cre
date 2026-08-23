@@ -3,6 +3,7 @@ import { Building2 } from 'lucide-react';
 import { signOutAction } from '@/app/(app)/land-sales/actions';
 import type { UserProfile } from '@/lib/users/roles';
 import { ProfileAvatar } from '@/components/ui/profile-avatar';
+import { SearchNavMenu } from '@/components/ui/search-nav-menu';
 
 export function NavHeader({ profile }: { profile: UserProfile | null }) {
   return (
@@ -24,15 +25,8 @@ export function NavHeader({ profile }: { profile: UserProfile | null }) {
         </span>
       </Link>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
-        <Link href="/search" style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-accent-200)' }}>
-          New Search
-        </Link>
-        {profile?.role === 'Admin' && (
-          <Link href="/admin/database-manager" style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-accent-200)' }}>
-            Database Manager
-          </Link>
-        )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)', alignSelf: 'stretch' }}>
+        <SearchNavMenu />
         <form action={signOutAction}>
           <button type="submit" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 500, color: 'var(--color-accent-200)', fontFamily: 'inherit' }}>
             Logout

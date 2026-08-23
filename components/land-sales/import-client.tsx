@@ -6,7 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
 import { Button } from '@/components/ui/button';
 import {
-  csvHeaders, csvHeaderError, downloadCsv, looksLikeWrongDelimiter,
+  csvHeaderError, downloadCsv, looksLikeWrongDelimiter,
   makeCsvTemplate, parseCsv, validateDataRows, type ImportRowResult,
 } from '@/lib/land-sales/csv';
 import { importLandSales, type ImportOutcome } from '@/app/(app)/land-sales/actions';
@@ -35,7 +35,7 @@ export function ImportLandSalesClient() {
 
     const rows = parseCsv(text);
     if (rows.length === 0) {
-      setFileError(`The CSV is empty. Add a header row: ${csvHeaders.join(', ')}.`);
+      setFileError('The CSV is empty. Download the CSV template and use those headers.');
       return;
     }
     const hdrs = rows[0].map(h => h.trim());

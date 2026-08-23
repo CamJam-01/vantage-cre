@@ -1,7 +1,10 @@
+import { COSTAR_CORE_HEADER_MAP, COSTAR_HEADERS, COSTAR_TYPED_COLUMNS, costarFields } from './costar-fields';
 import { parseFlexibleDate } from './dates';
 import { landSaleInputSchema, type LandSale, type LandSaleInput } from './schema';
 
-export const csvHeaders = [
+export const csvHeaders = COSTAR_HEADERS;
+
+const exportHeaders = [
   'Parcel ID', 'Address', 'City', 'County', 'State', 'MSA', 'Type',
   'Square Feet', 'Acreage', 'Sale Date', 'Sale Price', 'Buyer',
 ] as const;
@@ -36,7 +39,7 @@ export function extraKeys(rows: Array<{ extras?: Record<string, string> }>): str
  * button (selected rows only) and to generate the import-template download. */
 export function makeCsv(rows: LandSale[]): string {
   const extras = extraKeys(rows);
-  const header = [...csvHeaders, 'Price / Acre', ...extras].join(',');
+  const header = [...exportHeaders, 'Price / Acre', ...extras].join(',');
   const body = rows.map(row => [
     ...csvFields.map(field => csvCell(row[field] as string | number | null)),
     csvCell(row.price_per_acre),
@@ -58,7 +61,7 @@ export function downloadCsv(filename: string, content: string) {
 /** Import template: header row plus one blank data row so an unmodified
  * template uploads as a single empty record. */
 export function makeCsvTemplate(): string {
-  return [csvHeaders.join(','), csvFields.map(() => '').join(',')].join('\r\n');
+  return [csvHeaders.join(','), csvHeaders.map(() => '').join(',')].join('\r\n');
 }
 
 /** RFC4180-ish CSV tokenizer: handles quoted fields with embedded commas,
@@ -109,32 +112,73 @@ export function headersMatchExactly(headers: string[]): boolean {
  * rejected rather than mapped or turned into new database fields. */
 export function csvHeaderError(headers: string[]): string | undefined {
   if (headersMatchExactly(headers)) return undefined;
-  return `CSV headers must match the import template exactly: ${csvHeaders.join(', ')}.`;
+  return `CSV headers must match the import template exactly (${csvHeaders.length} columns).`;
 }
 
 export type ImportRowResult =
-  | { row: number; ok: true; data: LandSaleInput; warnings?: string[] }
+  | { row: number; ok: true; data: LandSaleInput; columns: Record<string, string | null>; warnings?: string[] }
   | { row: number; ok: false; errors: string[] };
 
-/** Validates template-ordered data rows (one string per csvField) against the
- * schema, producing specific per-row/column error messages (e.g. "Row 4, Sale
- * Price: ..."). Runs identically client-side (instant feedback) and server-side
- * (never trust the client).
+function costarCell(values: string[], header: string): string {
+  const index = csvHeaders.indexOf(header);
+  return index >= 0 ? (values[index] ?? '') : '';
+}
+
+function headerForCore(field: (typeof COSTAR_CORE_HEADER_MAP)[keyof typeof COSTAR_CORE_HEADER_MAP]): string {
+  const entry = Object.entries(COSTAR_CORE_HEADER_MAP).find(([, value]) => value === field);
+  if (!entry) throw new Error(`No CoStar header mapped to ${field}`);
+  return entry[0];
+}
+
+function costarTextValues(values: string[]): Record<string, string | null> {
+  const typed = new Set<string>(COSTAR_TYPED_COLUMNS);
+  const columns: Record<string, string | null> = {};
+  costarFields().forEach((field, index) => {
+    if (typed.has(field.column)) return;
+    const raw = (values[index] ?? '').trim();
+    columns[field.column] = raw ? raw : null;
+  });
+  return columns;
+}
+
+/** Merge validated core fields with CoStar text columns for a land_sales insert. */
+export function importLandSaleRow(row: Extract<ImportRowResult, { ok: true }>): Record<string, unknown> {
+  const { extras: _extras, ...core } = row.data;
+  return { ...row.columns, ...core };
+}
+
+/** Validates template-ordered CoStar data rows against the schema, producing
+ * specific per-row/column error messages (e.g. "Row 4, Sale Price: ...").
+ * Runs identically client-side (instant feedback) and server-side (never trust
+ * the client).
  *
  * Sale Date is never a blocking error: if it doesn't parse, the row still
  * imports with sale_date left blank and the original text captured in
- * sale_date_raw, surfaced back as a warning rather than a rejection. */
+ * sale_date_raw, surfaced back as a warning rather than a rejection.
+ * A Property State that isn't a 2-letter code stays on the CoStar column
+ * and leaves the core state field empty. */
 export function validateDataRows(rows: string[][]): ImportRowResult[] {
   return rows.map((values, index) => {
     const rowNumber = index + 2; // +1 for the header row, +1 to make it 1-indexed
-    const [parcelId, address, city, county, state, msa, type, sf, ac, saleDate, salePrice, buyer] = values;
-    const dateRecognized = !!saleDate && parseFlexibleDate(saleDate) !== null;
+    const core = {
+      parcel_id: costarCell(values, headerForCore('parcel_id')),
+      address: costarCell(values, headerForCore('address')),
+      city: costarCell(values, headerForCore('city')),
+      county: costarCell(values, headerForCore('county')),
+      state: costarCell(values, headerForCore('state')).trim(),
+      msa: costarCell(values, headerForCore('msa')) || undefined,
+      property_type: costarCell(values, headerForCore('property_type')),
+      square_feet: costarCell(values, headerForCore('square_feet')) || undefined,
+      acreage: costarCell(values, headerForCore('acreage')),
+      sale_date: costarCell(values, headerForCore('sale_date')),
+      sale_price: costarCell(values, headerForCore('sale_price')),
+      buyer: costarCell(values, headerForCore('buyer')),
+    };
+    const dateRecognized = !!core.sale_date && parseFlexibleDate(core.sale_date) !== null;
     const parsed = landSaleInputSchema.safeParse({
-      parcel_id: parcelId, address, city, county, state, msa: msa || undefined,
-      property_type: type, square_feet: sf || undefined, acreage: ac,
-      sale_date: saleDate,
-      sale_date_raw: dateRecognized ? undefined : (saleDate?.trim() || undefined),
-      sale_price: salePrice, buyer,
+      ...core,
+      state: core.state.length === 2 ? core.state : '',
+      sale_date_raw: dateRecognized ? undefined : (core.sale_date.trim() || undefined),
     });
     if (!parsed.success) {
       const errors = parsed.error.issues.map(issue => {
@@ -147,7 +191,7 @@ export function validateDataRows(rows: string[][]): ImportRowResult[] {
     const warnings = parsed.data.sale_date_raw
       ? [`Row ${rowNumber}, Sale Date: "${parsed.data.sale_date_raw}" wasn't recognized as a date — imported without a Sale Date and flagged for review.`]
       : undefined;
-    return { row: rowNumber, ok: true, data: parsed.data, warnings };
+    return { row: rowNumber, ok: true, data: parsed.data, columns: costarTextValues(values), warnings };
   });
 }
 
