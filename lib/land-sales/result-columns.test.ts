@@ -36,25 +36,25 @@ describe('resultColumns', () => {
     assert.equal(cols.at(-1)?.key, 'Zoning');
   });
 
-  it('includes extras present on records even when the catalog is empty', () => {
+  it('does not turn extras on records into extra columns when the catalog is empty', () => {
     const cols = resultColumns({
       catalogLabels: [],
       records: [{ extras: { Zoning: 'RA' } }, { extras: { Market: 'Raleigh, NC' } }],
     });
     assert.deepEqual(
       cols.filter(c => c.kind === 'extra').map(c => c.key),
-      ['Market', 'Zoning'],
+      [],
     );
   });
 
-  it('unions catalog labels with extras on the current records without duplicates', () => {
+  it('uses only catalog labels for extra columns, not extras keys on records', () => {
     const cols = resultColumns({
       catalogLabels: ['Zoning', 'Submarket'],
       records: [{ extras: { Zoning: 'RA', Market: 'Raleigh, NC' } }],
     });
     assert.deepEqual(
       cols.filter(c => c.kind === 'extra').map(c => c.key),
-      ['Market', 'Submarket', 'Zoning'],
+      ['Submarket', 'Zoning'],
     );
   });
 });

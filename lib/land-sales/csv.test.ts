@@ -1,33 +1,39 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { csvFields, csvHeaderError, csvHeaders, makeCsv, makeCsvTemplate, validateDataRows } from './csv.ts';
+import { COSTAR_HEADERS } from './costar-fields.ts';
+import { csvHeaderError, csvHeaders, importLandSaleRow, makeCsv, makeCsvTemplate, validateDataRows } from './csv.ts';
 
-const templateHeaders = [
-  'Parcel ID', 'Address', 'City', 'County', 'State', 'MSA', 'Type',
-  'Square Feet', 'Acreage', 'Sale Date', 'Sale Price', 'Buyer',
-];
+function blankCostarRow(): string[] {
+  return COSTAR_HEADERS.map(() => '');
+}
+
+function costarRow(values: Record<string, string>): string[] {
+  const row = blankCostarRow();
+  for (const [header, value] of Object.entries(values)) {
+    const index = COSTAR_HEADERS.indexOf(header);
+    assert.notEqual(index, -1, `unknown CoStar header: ${header}`);
+    row[index] = value;
+  }
+  return row;
+}
 
 describe('csvHeaderError', () => {
-  it('accepts the import template headers regardless of case or surrounding space', () => {
-    const headers = [
-      'parcel id', '  Address', 'CITY', 'County', 'State', 'msa', 'Type',
-      'Square Feet', 'Acreage', 'Sale Date', 'Sale Price', 'Buyer',
-    ];
+  it('accepts the CoStar import template headers regardless of case or surrounding space', () => {
+    const headers = [...COSTAR_HEADERS];
+    headers[0] = '  property address';
+    headers[1] = 'PROPERTY CITY';
     assert.equal(csvHeaderError(headers), undefined);
   });
 
   it('rejects extra columns instead of turning them into custom fields', () => {
-    const error = csvHeaderError([...templateHeaders, 'Zoning']);
+    const error = csvHeaderError([...COSTAR_HEADERS, 'Zoning Extra']);
     assert.equal(typeof error, 'string');
     assert.match(error as string, /template/i);
     assert.doesNotMatch(error as string, /map|custom field|new field/i);
   });
 
   it('rejects renamed headers instead of offering a mapping step', () => {
-    const headers = [
-      'Property Address', 'Property City', 'County', 'State', 'MSA', 'Type',
-      'Square Feet', 'Acreage', 'Sale Date', 'Sale Price', 'Buyer', 'Parcel ID',
-    ];
+    const headers = ['Property Address', 'City', ...COSTAR_HEADERS.slice(2)];
     const error = csvHeaderError(headers);
     assert.equal(typeof error, 'string');
     assert.match(error as string, /template/i);
@@ -39,19 +45,81 @@ describe('makeCsvTemplate', () => {
   it('includes a blank data row so the template itself can import', () => {
     const rows = makeCsvTemplate().split('\r\n');
     assert.equal(rows[0], csvHeaders.join(','));
-    assert.equal(rows[1], csvFields.map(() => '').join(','));
+    assert.equal(rows[0], COSTAR_HEADERS.join(','));
+    assert.equal(rows[1], COSTAR_HEADERS.map(() => '').join(','));
   });
 });
 
 describe('validateDataRows', () => {
   it('accepts a row with every cell blank', () => {
-    const results = validateDataRows([templateHeaders.map(() => '')]);
+    const results = validateDataRows([blankCostarRow()]);
     assert.equal(results[0].ok, true);
     if (results[0].ok) {
       assert.equal(results[0].data.city, '');
       assert.equal(results[0].data.state, '');
       assert.equal(results[0].data.property_type, '');
       assert.equal(results[0].data.acreage, undefined);
+      assert.equal(results[0].columns['Property Address'], null);
+    }
+  });
+
+  it('copies CoStar cells onto exact header columns and mapped core fields', () => {
+    const results = validateDataRows([costarRow({
+      'Property Address': '123 Main St',
+      'Property City': 'Wendell',
+      'Property State': 'NC',
+      'Sale Price': '$1,000',
+      'Buyer (True) Company': 'Acme LLC',
+      'Parcel Number 1 (Min)': 'PIN-1',
+    })]);
+    assert.equal(results[0].ok, true);
+    if (results[0].ok) {
+      assert.equal(results[0].data.address, '123 Main St');
+      assert.equal(results[0].data.city, 'Wendell');
+      assert.equal(results[0].data.state, 'NC');
+      assert.equal(results[0].data.sale_price, 1000);
+      assert.equal(results[0].data.buyer, 'Acme LLC');
+      assert.equal(results[0].data.parcel_id, 'PIN-1');
+      assert.equal(results[0].columns['Property Address'], '123 Main St');
+      assert.equal(results[0].columns['Buyer (True) Company'], 'Acme LLC');
+      assert.equal(results[0].columns['Sale Price'], '$1,000');
+    }
+  });
+
+  it('imports onto CoStar columns without the old parcel_id/address fields', () => {
+    const results = validateDataRows([costarRow({
+      'Property Address': '123 Main St',
+      'Property State': 'North Carolina',
+      'Sale Price': '$1,000',
+      'Land Area AC': '2.5',
+    })]);
+    assert.equal(results[0].ok, true);
+    if (!results[0].ok) return;
+    const inserted = importLandSaleRow(results[0]);
+    assert.equal('parcel_id' in inserted, false);
+    assert.equal('address' in inserted, false);
+    assert.equal(inserted['Property Address'], '123 Main St');
+    assert.equal(inserted['Property State'], 'North Carolina');
+    assert.equal(inserted['Sale Price'], 1000);
+    assert.equal(inserted['Land Area AC'], 2.5);
+  });
+
+  it('keeps a non-code Property State on the CoStar column without failing the row', () => {
+    const results = validateDataRows([costarRow({ 'Property State': 'North Carolina' })]);
+    assert.equal(results[0].ok, true);
+    if (results[0].ok) {
+      assert.equal(results[0].data.state, '');
+      assert.equal(results[0].columns['Property State'], 'North Carolina');
+    }
+  });
+
+  it('accepts Sale Date values with a trailing Excel/CoStar timestamp', () => {
+    const results = validateDataRows([costarRow({ 'Sale Date': '8/13/2026 0:00' })]);
+    assert.equal(results[0].ok, true);
+    if (results[0].ok) {
+      assert.equal(results[0].data.sale_date, '2026-08-13');
+      assert.equal(results[0].data.sale_date_raw, undefined);
+      assert.equal(results[0].warnings, undefined);
     }
   });
 });

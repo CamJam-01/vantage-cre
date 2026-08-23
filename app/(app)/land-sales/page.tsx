@@ -1,11 +1,11 @@
 import { createClient } from '@/lib/supabase/server';
 import { decodeFilters } from '@/lib/land-sales/search-params';
 import { applyLandSaleFilters } from '@/lib/land-sales/query';
+import { landSaleFromRow } from '@/lib/land-sales/db';
 import { resultColumns } from '@/lib/land-sales/result-columns';
 import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
 import { filterVisibleColumns, SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
 import { ResultsTable } from '@/components/land-sales/results-table';
-import type { LandSale } from '@/lib/land-sales/schema';
 import { canEdit, getCurrentUserProfile } from '@/lib/users/roles';
 
 type PageProps = {
@@ -24,11 +24,11 @@ export default async function LandSalesPage({ searchParams }: PageProps) {
     loadHiddenFieldIds(supabase, SALES_DATABASE_KEY),
   ]);
   if (error) throw new Error(error.message);
-  const records = (data ?? []) as LandSale[];
+  const records = (data ?? []).map(row => landSaleFromRow(row as Record<string, unknown>));
   const catalogLabels = customFields.error
     ? []
     : (customFields.data ?? []).map(row => row.label as string);
-  const columns = resultColumns({ catalogLabels, records });
+  const columns = resultColumns({ catalogLabels });
   const visibleColumns = filterVisibleColumns(columns, hiddenFieldIds);
 
   return <ResultsTable records={records} columns={visibleColumns} canEdit={canEdit(profile?.role ?? 'Viewer')} filters={filters} />;

@@ -36,10 +36,11 @@ function fullYear(yy: number): number {
  * shape below in turn and returns the first one that resolves to a real
  * calendar date, or null if nothing matches.
  *
- * Recognized shapes:
- *  - ISO:              2026-06-12, 2026/06/12, 2026-06-12T00:00:00Z, 2026-06-12 00:00:00
- *  - Numeric + 4yr:     6/12/2026, 06-12-2026, 6.12.2026
+ * Recognized shapes (CSV/CoStar exports are the primary input; trailing times
+ * like "8/13/2026 0:00" are stripped — only the calendar date is kept):
+ *  - Numeric + 4yr:     6/12/2026, 06-12-2026, 6.12.2026, 8/13/2026 0:00
  *  - Numeric + 2yr:     6/12/26, 06-12-26
+ *  - ISO:              2026-06-12, 2026/06/12, 2026-06-12T00:00:00Z, 2026-06-12 00:00:00
  *  - Month name:        June 12, 2026 / Jun 12th 2026 / 12 June 2026 / 12-Jun-2026
  *
  * All-numeric dates are read month-first (6/12/2026 = June 12), matching US
@@ -51,14 +52,8 @@ export function parseFlexibleDate(raw: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
-  const iso = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T ].*)?$/);
-  if (iso) {
-    const [, y, m, d] = iso;
-    const yn = Number(y), mn = Number(m), dn = Number(d);
-    return isValidDate(yn, mn, dn) ? toIso(yn, mn, dn) : null;
-  }
-
-  const numeric = trimmed.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/);
+  // Prefer month/day/year (CoStar/Excel CSV default) before ISO year-first.
+  const numeric = trimmed.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})(?:[T ].*)?$/);
   if (numeric) {
     const [, a, b, yy] = numeric;
     const yn = yy.length === 2 ? fullYear(Number(yy)) : Number(yy);
@@ -66,6 +61,13 @@ export function parseFlexibleDate(raw: string): string | null {
     if (isValidDate(yn, an, bn)) return toIso(yn, an, bn); // month-first
     if (isValidDate(yn, bn, an)) return toIso(yn, bn, an); // day-first fallback
     return null;
+  }
+
+  const iso = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T ].*)?$/);
+  if (iso) {
+    const [, y, m, d] = iso;
+    const yn = Number(y), mn = Number(m), dn = Number(d);
+    return isValidDate(yn, mn, dn) ? toIso(yn, mn, dn) : null;
   }
 
   const monthDayYear = trimmed.match(/^([A-Za-z]+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/);

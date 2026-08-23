@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { RecordDetails } from '@/components/land-sales/record-details';
-import type { LandSale } from '@/lib/land-sales/schema';
+import { landSaleFromRow } from '@/lib/land-sales/db';
 import { canEdit, getCurrentUserProfile } from '@/lib/users/roles';
 import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
 import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
@@ -23,10 +23,7 @@ export default async function RecordDetailsPage({ params, searchParams }: PagePr
   ]);
   if (error) throw new Error(error.message);
   if (!record) notFound();
-  const r = {
-    ...(record as LandSale),
-    extras: (record as LandSale).extras ?? {},
-  };
+  const r = landSaleFromRow(record as Record<string, unknown>);
   const editable = canEdit(profile?.role ?? 'Viewer');
   const catalogLabels = customFields.error
     ? []

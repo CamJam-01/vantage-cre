@@ -3,16 +3,15 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { logAudit } from '@/lib/audit/log';
+import { landSaleFromRow, landSaleToRow } from '@/lib/land-sales/db';
 import {
   extrasFromFormData,
   formDataHasExtras,
   landSaleInputSchema,
-  type LandSale,
-  type LandSaleInput,
 } from '@/lib/land-sales/schema';
 import {
-  csvHeaders, looksLikeWrongDelimiter, parseCsv, recordKey, csvHeaderError,
-  validateDataRows,
+  looksLikeWrongDelimiter, parseCsv, recordKey, csvHeaderError,
+  importLandSaleRow, validateDataRows,
 } from '@/lib/land-sales/csv';
 import { landSaleWriteDeniedMessage } from '@/lib/users/roles';
 import { resultColumns } from '@/lib/land-sales/result-columns';
@@ -63,7 +62,7 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
   const { data: { user } } = await supabase.auth.getUser();
   const { data, error } = await supabase
     .from('land_sales')
-    .insert({ ...sanitized, created_by: user?.id ?? null })
+    .insert({ ...landSaleToRow(sanitized), created_by: user?.id ?? null })
     .select('id')
     .single();
 
@@ -95,10 +94,7 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
   if (customFields.error) return { message: `Could not load the field catalog: ${customFields.error.message}` };
   if (settings.error) return { message: settings.error };
 
-  const existing = {
-    ...(existingResult.data as LandSale),
-    extras: (existingResult.data as LandSale).extras ?? {},
-  };
+  const existing = landSaleFromRow(existingResult.data as Record<string, unknown>);
   const catalogLabels = (customFields.data ?? []).map(row => row.label as string);
   const availableExtraLabels = resultColumns({ catalogLabels, records: [existing] })
     .flatMap(column => column.kind === 'extra' ? [column.key] : []);
@@ -125,16 +121,9 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
     availableExtraLabels,
     settings.hidden,
   );
-  const { extras: mergedExtras, sale_date_raw: mergedSaleDateRaw, ...core } = merged;
-  const payload = {
-    ...core,
-    extras: mergedExtras,
-    sale_date_raw: mergedSaleDateRaw ?? null,
-  };
-
   const { error } = await supabase
     .from('land_sales')
-    .update(payload)
+    .update(landSaleToRow(merged))
     .eq('id', id);
 
   if (error) return { message: error.message };
@@ -160,7 +149,7 @@ export async function importLandSales(csvText: string): Promise<ImportOutcome> {
 
   const rows = parseCsv(csvText);
   if (rows.length === 0) {
-    return { headerError: `The CSV is empty. Add a header row: ${csvHeaders.join(', ')}.` };
+    return { headerError: 'The CSV is empty. Download the CSV template and use those headers.' };
   }
   const headers = rows[0].map(h => h.trim());
   if (looksLikeWrongDelimiter(headers)) {
@@ -179,21 +168,21 @@ export async function importLandSales(csvText: string): Promise<ImportOutcome> {
   const rowErrors = results.filter(r => !r.ok).flatMap(r => (r.ok ? [] : r.errors));
   if (rowErrors.length) return { rowErrors };
 
-  const toInsert: LandSaleInput[] = results.flatMap(r => (r.ok ? [r.data] : []));
+  const toInsert = results.flatMap(r => (r.ok ? [r] : []));
   if (!toInsert.length) return { rowErrors: ['No valid rows to import.'] };
   const warnings = results.flatMap(r => (r.ok ? r.warnings ?? [] : []));
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: existing } = await supabase.from('land_sales').select('parcel_id, sale_date, address');
-  const existingKeys = new Set((existing ?? []).map(r => recordKey(r)));
+  const { data: existing } = await supabase.from('land_sales').select('*');
+  const existingKeys = new Set((existing ?? []).map(r => recordKey(landSaleFromRow(r as Record<string, unknown>))));
 
   const duplicates: string[] = [];
-  const fresh: LandSaleInput[] = [];
+  const fresh: Record<string, unknown>[] = [];
   for (const row of toInsert) {
-    const key = recordKey(row);
-    if (existingKeys.has(key)) duplicates.push(row.parcel_id || row.address);
-    else fresh.push(row);
+    const key = recordKey(row.data);
+    if (existingKeys.has(key)) duplicates.push(row.data.parcel_id || row.data.address);
+    else fresh.push(importLandSaleRow(row));
   }
 
   let inserted = 0;

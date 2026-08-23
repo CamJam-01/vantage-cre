@@ -8,11 +8,14 @@ import { Dialog } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Tag } from '@/components/ui/tag';
 import { DATABASE_CATEGORIES } from '@/lib/admin/database-descriptor';
+import { UserAccessTable } from '@/components/profile/user-access-table';
+import type { UserProfile } from '@/lib/users/roles';
 
-type Tab = 'connections' | 'databases' | 'audit';
+type Tab = 'connections' | 'databases' | 'audit' | 'users';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'databases', label: 'Databases' },
+  { key: 'users', label: 'Users' },
   { key: 'audit', label: 'Audit Log' },
   { key: 'connections', label: 'Connections' },
 ];
@@ -26,7 +29,17 @@ const SAMPLE_CONNECTIONS = [
 
 export type AuditRow = { timestamp: string; user: string; action: string; detail: string };
 
-export function DatabaseManagerTabs({ salesCount, auditLog }: { salesCount: number; auditLog: AuditRow[] }) {
+export function DatabaseManagerTabs({
+  salesCount,
+  auditLog,
+  users,
+  currentUserId,
+}: {
+  salesCount: number;
+  auditLog: AuditRow[];
+  users: UserProfile[];
+  currentUserId: string;
+}) {
   const [tab, setTab] = useState<Tab>('databases');
   const [modalOpen, setModalOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
@@ -112,6 +125,10 @@ export function DatabaseManagerTabs({ salesCount, auditLog }: { salesCount: numb
             );
           })}
         </div>
+      )}
+
+      {tab === 'users' && (
+        <UserAccessTable users={users} currentUserId={currentUserId} />
       )}
 
       {tab === 'audit' && (

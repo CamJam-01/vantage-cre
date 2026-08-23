@@ -105,13 +105,11 @@ export function detailSheetFields(sheet: DetailSheet): DetailField[] {
 
 export function resultColumns(options: {
   catalogLabels?: string[];
+  /** Ignored. Extra columns come only from the catalog, never from record extras. */
   records?: Array<{ extras?: Record<string, string> }>;
 } = {}): ResultColumn[] {
-  const labels = new Set<string>(options.catalogLabels ?? []);
-  for (const row of options.records ?? []) {
-    for (const key of Object.keys(row.extras ?? {})) labels.add(key);
-  }
-  const extras: Extract<ResultColumn, { kind: 'extra' }>[] = [...labels]
+  void options.records;
+  const extras: Extract<ResultColumn, { kind: 'extra' }>[] = [...new Set(options.catalogLabels ?? [])]
     .sort((a, b) => a.localeCompare(b))
     .map(label => ({ kind: 'extra', key: label, label }));
   return [...CORE_RESULT_COLUMNS, ...extras];
