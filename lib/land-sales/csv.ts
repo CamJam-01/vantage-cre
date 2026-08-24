@@ -1,4 +1,5 @@
-import { COSTAR_CORE_HEADER_MAP, COSTAR_HEADERS, COSTAR_TYPED_COLUMNS, costarFields } from './costar-fields';
+import { COSTAR_CORE_HEADER_MAP, COSTAR_HEADERS } from './costar-fields';
+import { costarTextValues } from './db';
 import { parseFlexibleDate } from './dates';
 import { landSaleInputSchema, type LandSale, type LandSaleInput } from './schema';
 
@@ -130,21 +131,20 @@ function headerForCore(field: (typeof COSTAR_CORE_HEADER_MAP)[keyof typeof COSTA
   return entry[0];
 }
 
-function costarTextValues(values: string[]): Record<string, string | null> {
-  const typed = new Set<string>(COSTAR_TYPED_COLUMNS);
-  const columns: Record<string, string | null> = {};
-  costarFields().forEach((field, index) => {
-    if (typed.has(field.column)) return;
-    const raw = (values[index] ?? '').trim();
-    columns[field.column] = raw ? raw : null;
-  });
-  return columns;
-}
-
-/** Merge validated core fields with CoStar text columns for a land_sales insert. */
+/** Merge validated core fields with CoStar columns for a land_sales insert.
+ * Parsed numeric/date values overlay the CSV text so typed columns accept the row. */
 export function importLandSaleRow(row: Extract<ImportRowResult, { ok: true }>): Record<string, unknown> {
-  const { extras: _extras, ...core } = row.data;
-  return { ...row.columns, ...core };
+  const lab = row.columns['Has Lab Space'];
+  return {
+    ...row.columns,
+    'Sale Price': row.data.sale_price ?? null,
+    'Sale Date': row.data.sale_date ?? parseFlexibleDate(row.columns['Sale Date'] ?? '') ?? null,
+    'Publication Date': parseFlexibleDate(row.columns['Publication Date'] ?? '') ?? null,
+    'Recording Date': parseFlexibleDate(row.columns['Recording Date'] ?? '') ?? null,
+    'Land Area AC': row.data.acreage ?? null,
+    'Land Area SF': row.data.square_feet ?? null,
+    'Has Lab Space': lab == null || lab === '' ? null : /^(true|yes)$/i.test(lab),
+  };
 }
 
 /** Validates template-ordered CoStar data rows against the schema, producing

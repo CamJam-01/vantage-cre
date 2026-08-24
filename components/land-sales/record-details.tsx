@@ -419,7 +419,7 @@ function RecordDetailsForm({
   hiddenFieldIds?: string[];
 }) {
   const hidden = new Set(hiddenFieldIds);
-  const columns = resultColumns({ catalogLabels, records: [record] });
+  const columns = resultColumns({ catalogLabels });
   const visibleSheets = buildRecordDisplaySheets(DETAIL_SHEETS, columns, hidden);
   const [editing, setEditing] = useState(canEdit && startEditing);
   const [activeSheet, setActiveSheet] = useState(visibleSheets[0]?.id ?? 'additional');

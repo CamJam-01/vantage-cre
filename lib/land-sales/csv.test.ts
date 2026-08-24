@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { COSTAR_HEADERS } from './costar-fields.ts';
-import { csvHeaderError, csvHeaders, makeCsv, makeCsvTemplate, validateDataRows } from './csv.ts';
+import { csvHeaderError, csvHeaders, importLandSaleRow, makeCsv, makeCsvTemplate, validateDataRows } from './csv.ts';
 
 function blankCostarRow(): string[] {
   return COSTAR_HEADERS.map(() => '');
@@ -59,11 +59,11 @@ describe('validateDataRows', () => {
       assert.equal(results[0].data.state, '');
       assert.equal(results[0].data.property_type, '');
       assert.equal(results[0].data.acreage, undefined);
-      assert.equal(results[0].columns.property_address, null);
+      assert.equal(results[0].columns['Property Address'], null);
     }
   });
 
-  it('copies CoStar cells onto matching snake_case columns and mapped core fields', () => {
+  it('copies CoStar cells onto exact header columns and mapped core fields', () => {
     const results = validateDataRows([costarRow({
       'Property Address': '123 Main St',
       'Property City': 'Wendell',
@@ -80,10 +80,28 @@ describe('validateDataRows', () => {
       assert.equal(results[0].data.sale_price, 1000);
       assert.equal(results[0].data.buyer, 'Acme LLC');
       assert.equal(results[0].data.parcel_id, 'PIN-1');
-      assert.equal(results[0].columns.property_address, '123 Main St');
-      assert.equal(results[0].columns.buyer_true_company, 'Acme LLC');
-      assert.equal('sale_price' in results[0].columns, false);
+      assert.equal(results[0].columns['Property Address'], '123 Main St');
+      assert.equal(results[0].columns['Buyer (True) Company'], 'Acme LLC');
+      assert.equal(results[0].columns['Sale Price'], '$1,000');
     }
+  });
+
+  it('imports onto CoStar columns without the old parcel_id/address fields', () => {
+    const results = validateDataRows([costarRow({
+      'Property Address': '123 Main St',
+      'Property State': 'North Carolina',
+      'Sale Price': '$1,000',
+      'Land Area AC': '2.5',
+    })]);
+    assert.equal(results[0].ok, true);
+    if (!results[0].ok) return;
+    const inserted = importLandSaleRow(results[0]);
+    assert.equal('parcel_id' in inserted, false);
+    assert.equal('address' in inserted, false);
+    assert.equal(inserted['Property Address'], '123 Main St');
+    assert.equal(inserted['Property State'], 'North Carolina');
+    assert.equal(inserted['Sale Price'], 1000);
+    assert.equal(inserted['Land Area AC'], 2.5);
   });
 
   it('keeps a non-code Property State on the CoStar column without failing the row', () => {
@@ -91,7 +109,17 @@ describe('validateDataRows', () => {
     assert.equal(results[0].ok, true);
     if (results[0].ok) {
       assert.equal(results[0].data.state, '');
-      assert.equal(results[0].columns.property_state, 'North Carolina');
+      assert.equal(results[0].columns['Property State'], 'North Carolina');
+    }
+  });
+
+  it('accepts Sale Date values with a trailing Excel/CoStar timestamp', () => {
+    const results = validateDataRows([costarRow({ 'Sale Date': '8/13/2026 0:00' })]);
+    assert.equal(results[0].ok, true);
+    if (results[0].ok) {
+      assert.equal(results[0].data.sale_date, '2026-08-13');
+      assert.equal(results[0].data.sale_date_raw, undefined);
+      assert.equal(results[0].warnings, undefined);
     }
   });
 });

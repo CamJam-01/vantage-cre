@@ -20,22 +20,15 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
   const category = DATABASE_CATEGORIES.find(c => c.key === db);
   if (!category || !category.available) redirect('/admin/database-manager');
 
-  const [customFields, settings] = await Promise.all([
-    supabase.from('land_sales_custom_fields').select('label').order('label'),
-    loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
-      .then(hidden => ({ hidden, error: null }))
-      .catch((error: unknown) => ({
-        hidden: new Set<string>(),
-        error: error instanceof Error ? error.message : 'Could not load field visibility.',
-      })),
-  ]);
-  const catalogLabels = customFields.error
-    ? []
-    : (customFields.data ?? []).map(row => row.label as string);
+  const settings = await loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
+    .then(hidden => ({ hidden, error: null as string | null }))
+    .catch((error: unknown) => ({
+      hidden: new Set<string>(),
+      error: error instanceof Error ? error.message : 'Could not load field visibility.',
+    }));
+  const catalogLabels: string[] = [];
   const columns = resultColumns({ catalogLabels });
-  const disabledReason = customFields.error
-    ? `Field visibility cannot be changed because the field catalog could not be loaded: ${customFields.error.message}`
-    : settings.error ?? undefined;
+  const disabledReason = settings.error ?? undefined;
 
   return (
     <main style={{

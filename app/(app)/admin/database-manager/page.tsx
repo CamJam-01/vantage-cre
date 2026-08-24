@@ -14,7 +14,7 @@ export default async function DatabaseManagerPage() {
   if (profile.role !== 'Admin') redirect('/search');
 
   const [{ count: salesCount }, { data: auditRows }, users] = await Promise.all([
-    supabase.from('land_sales').select('id', { count: 'exact', head: true }),
+    supabase.from('land_sales').select('"Comp ID"', { count: 'exact', head: true }),
     supabase.from('audit_log').select('actor_name, action, detail, created_at').order('created_at', { ascending: false }).limit(25),
     listUserProfiles(supabase),
   ]);

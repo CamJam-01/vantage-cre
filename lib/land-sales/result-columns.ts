@@ -1,3 +1,4 @@
+import { costarColumnNames } from './costar-fields';
 import type { LandSale } from './schema';
 
 export type CoreResultField =
@@ -105,16 +106,12 @@ export function detailSheetFields(sheet: DetailSheet): DetailField[] {
 
 export function resultColumns(options: {
   catalogLabels?: string[];
+  /** Ignored. Result columns are the unique land_sales / CoStar headers. */
   records?: Array<{ extras?: Record<string, string> }>;
 } = {}): ResultColumn[] {
-  const labels = new Set<string>(options.catalogLabels ?? []);
-  for (const row of options.records ?? []) {
-    for (const key of Object.keys(row.extras ?? {})) labels.add(key);
-  }
-  const extras: Extract<ResultColumn, { kind: 'extra' }>[] = [...labels]
-    .sort((a, b) => a.localeCompare(b))
-    .map(label => ({ kind: 'extra', key: label, label }));
-  return [...CORE_RESULT_COLUMNS, ...extras];
+  void options.catalogLabels;
+  void options.records;
+  return costarColumnNames().map(label => ({ kind: 'extra', key: label, label }));
 }
 
 export function resultSortValue(
