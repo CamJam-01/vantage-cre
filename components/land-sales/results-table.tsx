@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { ChevronDown, ChevronUp, ChevronsUpDown, Eye, Pencil, TriangleAlert } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
-import { Button } from '@/components/ui/button';
 import { FiltersSidebar } from '@/components/land-sales/filters-sidebar';
+import { ResultsAddMenu } from '@/components/land-sales/results-add-menu';
+import { ResultsExportMenu } from '@/components/land-sales/results-export-menu';
 import type { LandSale } from '@/lib/land-sales/schema';
 import { encodeFilters, type LandSaleFilters } from '@/lib/land-sales/search-params';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/land-sales/format';
@@ -128,16 +128,6 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<Sort | null>(null);
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
-  const exportRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportMenuOpen(false);
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   function handleSort(column: ResultColumn) {
     setSort(prev => (prev && sameColumn(prev.column, column) ? { column, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { column, dir: 'asc' }));
@@ -191,15 +181,9 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
     router.push(`/land-sales/${id}?${params.toString()}`);
   }
 
-  function toggleExportMenu() {
-    if (!selectedCount) return;
-    setExportMenuOpen(o => !o);
-  }
-
   function exportCsv() {
     const selected = records.filter(r => selectedIds.has(r.id));
     if (!selected.length) return;
-    setExportMenuOpen(false);
     downloadCsv('land-sales-export.csv', makeCsv(selected));
   }
 
@@ -210,39 +194,24 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
   return (
     <>
       <div style={{ width: '100%', boxSizing: 'border-box', padding: 'var(--space-6) var(--space-6) var(--space-4)', background: 'var(--color-accent-2-200)', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div>
-          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: '0 0 var(--space-1)' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: 0 }}>
             Land Sales Results
           </h1>
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
             {records.length} record{records.length === 1 ? '' : 's'} matching your search criteria
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 14, color: 'var(--color-neutral-700)' }}>{selectionLabel}</span>
-            <div ref={exportRef} style={{ position: 'relative' }}>
-              <Button variant="secondary" onClick={toggleExportMenu} disabled={selectedCount < 1}>Export</Button>
-              {exportMenuOpen && (
-                <Blueprint elevation="md" style={{ position: 'absolute', top: 'calc(100% + var(--space-2))', right: 0, width: 180, background: '#FFFFFF', zIndex: 6 }}>
-                  <button type="button" onClick={exportCsv} style={{ display: 'block', width: '100%', textAlign: 'left', padding: 'var(--space-3) var(--space-4)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--color-text)' }}>
-                    Export CSV
-                  </button>
-                  <button type="button" disabled style={{ display: 'block', width: '100%', textAlign: 'left', padding: 'var(--space-3) var(--space-4)', border: 'none', borderTop: '1px solid var(--color-neutral-300)', background: 'none', cursor: 'not-allowed', opacity: 0.45, fontSize: 14, color: 'var(--color-text)' }} title="Coming in a later phase">
-                    Merge to DOCX
-                  </button>
-                </Blueprint>
-              )}
-            </div>
-            {canEdit && (
-              <Link href="/land-sales/import" className="btn btn-ghost">Import CSV</Link>
-            )}
-            {canEdit && (
-              <Link href="/land-sales/new" className="btn btn-ghost">+ Add Record</Link>
-            )}
-          </div>
+          <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
+            {selectionLabel}
+          </p>
         </div>
       </div>
 
-      <FiltersSidebar filters={filters} />
+      <div className="results-fab-dock">
+        {canEdit && <ResultsAddMenu />}
+        <FiltersSidebar filters={filters} />
+        <ResultsExportMenu disabled={selectedCount < 1} onExportCsv={exportCsv} />
+      </div>
       <div className="results-shell" style={{ flex: 1, display: 'flex', gap: 'var(--space-6)', boxSizing: 'border-box', background: 'var(--color-accent-2-200)' }}>
         <main style={{ flex: 1, minWidth: 0, paddingTop: 0, boxSizing: 'border-box' }}>
           <div style={{ width: '100%' }}>
@@ -301,7 +270,9 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
                         </td>
                         {columns.map(col => (
                           <td key={fieldVisibilityId(col)}>
-                            <ResultCell record={r} column={col} />
+                            <div className="results-cell">
+                              <ResultCell record={r} column={col} />
+                            </div>
                           </td>
                         ))}
                       </tr>

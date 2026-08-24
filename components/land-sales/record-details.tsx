@@ -11,6 +11,7 @@ import { formatCurrency, formatDate, formatNumber } from '@/lib/land-sales/forma
 import { updateLandSale, type CreateFormState } from '@/app/(app)/land-sales/actions';
 import { extraInputName, type LandSale } from '@/lib/land-sales/schema';
 import {
+  CORE_RESULT_COLUMNS,
   DETAIL_COMPUTED_FIELDS,
   DETAIL_SHEETS,
   detailSheetFields,
@@ -395,11 +396,12 @@ function BoundRecordDetailsForm({
   );
 }
 
-function RecordDetailsForm({
+export function RecordDetailsForm({
   record,
   from,
   canEdit,
   startEditing = false,
+  createMode = false,
   state = null,
   formAction,
   pending = false,
@@ -411,6 +413,7 @@ function RecordDetailsForm({
   from?: string;
   canEdit: boolean;
   startEditing?: boolean;
+  createMode?: boolean;
   state?: CreateFormState;
   formAction?: (formData: FormData) => void;
   pending?: boolean;
@@ -419,9 +422,9 @@ function RecordDetailsForm({
   hiddenFieldIds?: string[];
 }) {
   const hidden = new Set(hiddenFieldIds);
-  const columns = resultColumns({ catalogLabels });
+  const columns = [...CORE_RESULT_COLUMNS, ...resultColumns({ catalogLabels })];
   const visibleSheets = buildRecordDisplaySheets(DETAIL_SHEETS, columns, hidden);
-  const [editing, setEditing] = useState(canEdit && startEditing);
+  const [editing, setEditing] = useState(canEdit && (startEditing || createMode));
   const [activeSheet, setActiveSheet] = useState(visibleSheets[0]?.id ?? 'additional');
   const [actionBaseline, setActionBaseline] = useState<CreateFormState | typeof CURRENT_ACTION_STATE>(
     startEditing ? CURRENT_ACTION_STATE : state,
@@ -456,9 +459,15 @@ function RecordDetailsForm({
           <div className="record-bar-actions">
             {editing ? (
               <>
-                <Button type="button" variant="secondary" onClick={onCancel} disabled={pending}>
-                  Cancel
-                </Button>
+                {createMode ? (
+                  <Link href="/land-sales" className="btn btn-secondary">
+                    Cancel
+                  </Link>
+                ) : (
+                  <Button type="button" variant="secondary" onClick={onCancel} disabled={pending}>
+                    Cancel
+                  </Button>
+                )}
                 <Button type="submit" variant="primary" form={FORM_ID} disabled={pending}>
                   {pending ? 'Saving…' : 'Save Record'}
                 </Button>
@@ -485,31 +494,29 @@ function RecordDetailsForm({
             {from && <input type="hidden" name="from" value={from} />}
 
             <div className="record-head">
-              <div className="tags">
-                {visibleCoreField('parcel_id', hidden) && record.parcel_id && (
-                  <span className="tag tag-on-ground mono">{record.parcel_id}</span>
-                )}
-                {visibleCoreField('property_type', hidden) && record.property_type && (
-                  <span className="tag tag-accent">{record.property_type}</span>
-                )}
-              </div>
-              <h1>
-                {visibleCoreField('address', hidden) && record.address
-                  ? record.address
-                  : [
-                      visibleCoreField('city', hidden) ? record.city : '',
-                      visibleCoreField('state', hidden) ? record.state : '',
-                    ].filter(Boolean).join(', ') || 'Land Sale Record'}
-              </h1>
-              {[
-                [
-                  visibleCoreField('city', hidden) ? record.city : '',
-                  visibleCoreField('state', hidden) ? record.state : '',
-                ].filter(Boolean).join(', '),
-                visibleCoreField('county', hidden) && record.county ? `${record.county} County` : '',
-                visibleCoreField('msa', hidden) ? record.msa : '',
-              ].filter(Boolean).length > 0 && (
-                <p className="sub">
+              {createMode ? (
+                <>
+                  <h1>Add Land Sale Record</h1>
+                  <p className="sub">Manually enter a comp not covered by CSV import.</p>
+                </>
+              ) : (
+                <>
+                  <div className="tags">
+                    {visibleCoreField('parcel_id', hidden) && record.parcel_id && (
+                      <span className="tag tag-on-ground mono">{record.parcel_id}</span>
+                    )}
+                    {visibleCoreField('property_type', hidden) && record.property_type && (
+                      <span className="tag tag-accent">{record.property_type}</span>
+                    )}
+                  </div>
+                  <h1>
+                    {visibleCoreField('address', hidden) && record.address
+                      ? record.address
+                      : [
+                          visibleCoreField('city', hidden) ? record.city : '',
+                          visibleCoreField('state', hidden) ? record.state : '',
+                        ].filter(Boolean).join(', ') || 'Land Sale Record'}
+                  </h1>
                   {[
                     [
                       visibleCoreField('city', hidden) ? record.city : '',
@@ -517,8 +524,19 @@ function RecordDetailsForm({
                     ].filter(Boolean).join(', '),
                     visibleCoreField('county', hidden) && record.county ? `${record.county} County` : '',
                     visibleCoreField('msa', hidden) ? record.msa : '',
-                  ].filter(Boolean).join(' · ')}
-                </p>
+                  ].filter(Boolean).length > 0 && (
+                    <p className="sub">
+                      {[
+                        [
+                          visibleCoreField('city', hidden) ? record.city : '',
+                          visibleCoreField('state', hidden) ? record.state : '',
+                        ].filter(Boolean).join(', '),
+                        visibleCoreField('county', hidden) && record.county ? `${record.county} County` : '',
+                        visibleCoreField('msa', hidden) ? record.msa : '',
+                      ].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                </>
               )}
             </div>
 
