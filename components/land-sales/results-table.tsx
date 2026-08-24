@@ -36,12 +36,28 @@ const rowActionButtonStyle = {
   cursor: 'pointer',
 } as const;
 
+const HEADER_GUTTER_PX = 92;
+
+/** Keep a header to at most two lines: size to the longer of the longest
+ * token and half the full label, plus sort icon and cell padding. */
+function headerMinWidth(label: string): number {
+  const pxPerChar = 7.2;
+  const extra = 36;
+  const tokens = label.split(/[\s/()-]+/).filter(Boolean);
+  const longest = tokens.reduce((max, token) => Math.max(max, token.length), 1);
+  const twoLineChars = Math.ceil(label.length / 2);
+  return Math.max(96, Math.ceil(Math.max(longest, twoLineChars) * pxPerChar + extra));
+}
+
 function SortableHeader({ column, sort, onSort }: { column: ResultColumn; sort: Sort | null; onSort: (column: ResultColumn) => void }) {
   const active = sort ? sameColumn(sort.column, column) : false;
   return (
-    <th style={{ ...stickyHeaderCellStyle, cursor: 'pointer', userSelect: 'none' }} onClick={() => onSort(column)}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        {column.label}
+    <th
+      style={{ ...stickyHeaderCellStyle, minWidth: headerMinWidth(column.label), cursor: 'pointer', userSelect: 'none' }}
+      onClick={() => onSort(column)}
+    >
+      <span className="col-header">
+        <span className="col-header-label">{column.label}</span>
         {active && sort ? (
           sort.dir === 'asc' ? <ChevronUp size={14} strokeWidth={2} /> : <ChevronDown size={14} strokeWidth={2} />
         ) : (
@@ -142,6 +158,11 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
     });
   }, [records, sort]);
 
+  const tableMinWidth = useMemo(
+    () => HEADER_GUTTER_PX + columns.reduce((sum, column) => sum + headerMinWidth(column.label), 0),
+    [columns],
+  );
+
   function toggleRow(id: string) {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -212,18 +233,21 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
               )}
             </div>
             {canEdit && (
+              <Link href="/land-sales/import" className="btn btn-ghost">Import CSV</Link>
+            )}
+            {canEdit && (
               <Link href="/land-sales/new" className="btn btn-ghost">+ Add Record</Link>
             )}
           </div>
         </div>
       </div>
 
-      <div className="results-shell" style={{ flex: 1, display: 'flex', gap: 'var(--space-6)', padding: '0 var(--space-6) calc(var(--space-2) * 3)', boxSizing: 'border-box', background: 'var(--color-accent-2-200)' }}>
-        <FiltersSidebar filters={filters} />
+      <FiltersSidebar filters={filters} />
+      <div className="results-shell" style={{ flex: 1, display: 'flex', gap: 'var(--space-6)', boxSizing: 'border-box', background: 'var(--color-accent-2-200)' }}>
         <main style={{ flex: 1, minWidth: 0, paddingTop: 0, boxSizing: 'border-box' }}>
           <div style={{ width: '100%' }}>
             <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 250px)', background: 'var(--color-accent-2-100)' }}>
-              <table className="table" style={{ width: '100%', minWidth: Math.max(1150, 220 + columns.length * 120) }}>
+              <table className="table results-table" style={{ width: '100%', minWidth: tableMinWidth }}>
                 <thead>
                   <tr>
                     <th style={{ ...stickyHeaderCellStyle, width: 40 }}>

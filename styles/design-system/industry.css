@@ -329,6 +329,28 @@ textarea.input { min-height: 90px; resize: vertical; }
   border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
 }
 .table tbody tr:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+.results-table.table th {
+  text-transform: none;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  font-weight: 600;
+  vertical-align: bottom;
+}
+.results-table .col-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+.results-table .col-header-label {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
 
 /* — dialog — */
 .dialog-backdrop {
@@ -356,34 +378,73 @@ textarea.input { min-height: 90px; resize: vertical; }
 .btn-primary { border-color: var(--color-accent); }
 .btn-ghost { border-color: transparent; }
 
-/* — land sales results: responsive filter sidebar — desktop is a sticky
-   side column (positioning below lives here, not inline, so the mobile
-   media query can override it without fighting inline-style specificity);
-   below the breakpoint it becomes a full-width collapsible block stacked
-   above the table. */
-.results-shell { align-items: flex-start; }
-.results-sidebar {
-  position: sticky; top: 88px; align-self: flex-start; flex-shrink: 0;
-  min-width: 275px; max-width: 325px; width: 25%; max-height: calc(100vh - 112px);
-  overflow-y: auto; box-sizing: border-box; padding: 10px; background: var(--color-neutral-100);
+/* — land sales results: search filters as a left slide-out modal. The
+   table uses the full results-shell width; a floating badge at the
+   bottom-left of the viewport opens the drawer. */
+.results-shell {
+  --results-side-gutter: calc(var(--space-6) + 7.5rem);
+  align-items: stretch;
+  /* Side gutters clear the fixed Filters badge and keep the table centered. */
+  padding: 0 var(--results-side-gutter) calc(var(--space-2) * 3);
 }
-.results-sidebar-toggle { display: none; }
-@media (max-width: 768px) {
-  /* `align-items: flex-start` sizes a row's children to their own content
-     width, which is exactly what's wanted on desktop (the sidebar shouldn't
-     stretch to match the table's height). Once the shell switches to a
-     column, that same "size to content" rule applies to *width* instead —
-     so `<main>` (and the wide table inside it) would size to its own
-     content and push the page wider than the viewport, instead of being
-     capped at 100% and scrolling its own overflow internally. `stretch`
-     forces every child back to the container's full width on mobile. */
-  .results-shell { flex-direction: column; align-items: stretch; }
-  .results-sidebar {
-    position: static; align-self: stretch;
-    width: 100%; max-width: none; min-width: 0; max-height: none;
-  }
-  .results-sidebar-toggle { display: flex; }
-  .results-sidebar-content.is-collapsed { display: none; }
+.results-sidebar-badge {
+  position: fixed;
+  bottom: var(--space-6);
+  left: var(--space-6);
+  z-index: 42;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-neutral-100);
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 14px;
+  color: var(--color-text);
+  border: 1px solid var(--color-divider);
+}
+.results-sidebar-badge:hover { background: var(--color-neutral-200); }
+.results-sidebar-badge[hidden] { display: none; }
+.results-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.results-sidebar-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.results-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 41;
+  width: min(325px, calc(100vw - var(--space-6)));
+  box-sizing: border-box;
+  padding: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--color-neutral-100);
+  transform: translateX(-100%);
+  transition: transform 0.2s ease;
+  pointer-events: none;
+  visibility: hidden;
+}
+.results-sidebar.is-open {
+  transform: translateX(0);
+  pointer-events: auto;
+  visibility: visible;
+  box-shadow: var(--shadow-lg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .results-sidebar,
+  .results-sidebar-backdrop { transition: none; }
 }
 
 /* — land sales record detail: the "Sales Record Blueprint" drafting sheets.

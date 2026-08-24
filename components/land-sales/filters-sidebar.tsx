@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronDown } from 'lucide-react';
+import { Filter, X } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
 import { Button } from '@/components/ui/button';
 import { Tag } from '@/components/ui/tag';
@@ -111,12 +111,15 @@ export function FiltersSidebar({ filters }: { filters: LandSaleFilters }) {
   const filtersKey = encodeFilters(filters).toString();
   const [local, setLocal] = useState<LocalState>(() => fromFilters(filters));
   const [syncedKey, setSyncedKey] = useState(filtersKey);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const [addedKeys, setAddedKeys] = useState<Set<FilterKey>>(new Set());
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [addMenuStyle, setAddMenuStyle] = useState<CSSProperties | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
+  const badgeRef = useRef<HTMLButtonElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -186,6 +189,39 @@ export function FiltersSidebar({ filters }: { filters: LandSaleFilters }) {
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      setAddMenuOpen(false);
+      setOpen(false);
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      wasOpenRef.current = true;
+      closeBtnRef.current?.focus();
+      return;
+    }
+    if (wasOpenRef.current) {
+      wasOpenRef.current = false;
+      badgeRef.current?.focus();
+    }
+  }, [open]);
+
   function commit(next: LocalState, opts: { immediate?: boolean } = {}) {
     setLocal(next);
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -205,30 +241,60 @@ export function FiltersSidebar({ filters }: { filters: LandSaleFilters }) {
   }
 
   return (
-    <aside className="blueprint elev-sm results-sidebar">
-      <div style={{ paddingBottom: 'var(--space-4)', borderBottom: '1px solid var(--color-neutral-300)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, color: 'var(--color-text)' }}>
-          Search Filters
-          {activeCount > 0 && (
-            <span className="tag tag-accent" style={{ marginLeft: 'var(--space-2)', verticalAlign: 'middle' }}>{activeCount} active</span>
-          )}
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexShrink: 0 }}>
-          <Link href="/search/sales/land" style={{ fontSize: 13, fontWeight: 600 }}>Modify Search</Link>
-          <button
-            type="button"
-            className="results-sidebar-toggle"
-            onClick={() => setMobileOpen(o => !o)}
-            aria-expanded={mobileOpen}
-            aria-label={mobileOpen ? 'Collapse filters' : 'Expand filters'}
-            style={{ alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-          >
-            <ChevronDown size={18} strokeWidth={1.5} color="var(--color-accent-700)" style={{ transition: 'transform 0.15s ease', transform: mobileOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-          </button>
-        </div>
-      </div>
+    <>
+      <button
+        ref={badgeRef}
+        type="button"
+        className="blueprint elev-md results-sidebar-badge"
+        onClick={() => setOpen(true)}
+        aria-expanded={open}
+        aria-controls="results-sidebar"
+        hidden={open}
+      >
+        <Filter size={16} strokeWidth={1.75} aria-hidden />
+        Filters
+        {activeCount > 0 ? (
+          <span className="tag tag-accent">{activeCount}</span>
+        ) : null}
+      </button>
 
-      <div className={`results-sidebar-content${mobileOpen ? '' : ' is-collapsed'}`} style={{ paddingTop: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <div
+        className={`results-sidebar-backdrop${open ? ' is-open' : ''}`}
+        onClick={() => setOpen(false)}
+        aria-hidden={!open}
+      />
+
+      <aside
+        id="results-sidebar"
+        className={`blueprint elev-sm results-sidebar${open ? ' is-open' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="results-sidebar-title"
+        aria-hidden={!open}
+        inert={!open}
+      >
+        <div style={{ paddingBottom: 'var(--space-4)', borderBottom: '1px solid var(--color-neutral-300)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+          <span id="results-sidebar-title" style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, color: 'var(--color-text)' }}>
+            Search Filters
+            {activeCount > 0 && (
+              <span className="tag tag-accent" style={{ marginLeft: 'var(--space-2)', verticalAlign: 'middle' }}>{activeCount} active</span>
+            )}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexShrink: 0 }}>
+            <Link href="/search/sales/land" style={{ fontSize: 13, fontWeight: 600 }}>Modify Search</Link>
+            <button
+              ref={closeBtnRef}
+              type="button"
+              className="btn btn-icon"
+              onClick={() => setOpen(false)}
+              aria-label="Close filters"
+            >
+              <X size={18} strokeWidth={1.5} />
+            </button>
+          </div>
+        </div>
+
+        <div className="results-sidebar-content" style={{ paddingTop: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
         {!anyShown && (
           <p style={{ fontSize: 13, color: 'var(--color-neutral-600)', margin: 0 }}>
@@ -383,5 +449,6 @@ export function FiltersSidebar({ filters }: { filters: LandSaleFilters }) {
 
       </div>
     </aside>
+    </>
   );
 }
