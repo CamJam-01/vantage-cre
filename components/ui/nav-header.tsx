@@ -1,9 +1,8 @@
 import Link from 'next/link';
 import { Building2 } from 'lucide-react';
-import { signOutAction } from '@/app/(app)/land-sales/actions';
 import type { UserProfile } from '@/lib/users/roles';
-import { ProfileAvatar } from '@/components/ui/profile-avatar';
 import { SearchNavMenu } from '@/components/ui/search-nav-menu';
+import { ProfileNavMenu } from '@/components/ui/profile-nav-menu';
 
 export function NavHeader({ profile }: { profile: UserProfile | null }) {
   return (
@@ -27,18 +26,7 @@ export function NavHeader({ profile }: { profile: UserProfile | null }) {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)', alignSelf: 'stretch' }}>
         <SearchNavMenu />
-        <form action={signOutAction}>
-          <button type="submit" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 500, color: 'var(--color-accent-200)', fontFamily: 'inherit' }}>
-            Logout
-          </button>
-        </form>
-        <Link href="/profile" aria-label="Profile" style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
-          overflow: 'hidden',
-        }}>
-          <ProfileAvatar src={profile?.avatar_url} size={40} iconSize={18} />
-        </Link>
+        <ProfileNavMenu avatarUrl={profile?.avatar_url} />
       </div>
     </header>
   );
