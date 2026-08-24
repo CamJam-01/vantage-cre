@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { ChevronDown, ChevronUp, ChevronsUpDown, Eye, Pencil, TriangleAlert } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
-import { Button } from '@/components/ui/button';
 import { FiltersSidebar } from '@/components/land-sales/filters-sidebar';
+import { ResultsAddMenu } from '@/components/land-sales/results-add-menu';
+import { ResultsExportMenu } from '@/components/land-sales/results-export-menu';
 import type { LandSale } from '@/lib/land-sales/schema';
 import { encodeFilters, type LandSaleFilters } from '@/lib/land-sales/search-params';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/land-sales/format';
@@ -36,12 +36,28 @@ const rowActionButtonStyle = {
   cursor: 'pointer',
 } as const;
 
+const HEADER_GUTTER_PX = 92;
+
+/** Keep a header to at most two lines: size to the longer of the longest
+ * token and half the full label, plus sort icon and cell padding. */
+function headerMinWidth(label: string): number {
+  const pxPerChar = 7.2;
+  const extra = 36;
+  const tokens = label.split(/[\s/()-]+/).filter(Boolean);
+  const longest = tokens.reduce((max, token) => Math.max(max, token.length), 1);
+  const twoLineChars = Math.ceil(label.length / 2);
+  return Math.max(96, Math.ceil(Math.max(longest, twoLineChars) * pxPerChar + extra));
+}
+
 function SortableHeader({ column, sort, onSort }: { column: ResultColumn; sort: Sort | null; onSort: (column: ResultColumn) => void }) {
   const active = sort ? sameColumn(sort.column, column) : false;
   return (
-    <th style={{ ...stickyHeaderCellStyle, cursor: 'pointer', userSelect: 'none' }} onClick={() => onSort(column)}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        {column.label}
+    <th
+      style={{ ...stickyHeaderCellStyle, minWidth: headerMinWidth(column.label), cursor: 'pointer', userSelect: 'none' }}
+      onClick={() => onSort(column)}
+    >
+      <span className="col-header">
+        <span className="col-header-label">{column.label}</span>
         {active && sort ? (
           sort.dir === 'asc' ? <ChevronUp size={14} strokeWidth={2} /> : <ChevronDown size={14} strokeWidth={2} />
         ) : (
@@ -112,16 +128,6 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<Sort | null>(null);
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
-  const exportRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportMenuOpen(false);
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   function handleSort(column: ResultColumn) {
     setSort(prev => (prev && sameColumn(prev.column, column) ? { column, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { column, dir: 'asc' }));
@@ -141,6 +147,11 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
       return String(av).localeCompare(String(bv)) * factor;
     });
   }, [records, sort]);
+
+  const tableMinWidth = useMemo(
+    () => HEADER_GUTTER_PX + columns.reduce((sum, column) => sum + headerMinWidth(column.label), 0),
+    [columns],
+  );
 
   function toggleRow(id: string) {
     setSelectedIds(prev => {
@@ -170,15 +181,9 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
     router.push(`/land-sales/${id}?${params.toString()}`);
   }
 
-  function toggleExportMenu() {
-    if (!selectedCount) return;
-    setExportMenuOpen(o => !o);
-  }
-
   function exportCsv() {
     const selected = records.filter(r => selectedIds.has(r.id));
     if (!selected.length) return;
-    setExportMenuOpen(false);
     downloadCsv('land-sales-export.csv', makeCsv(selected));
   }
 
@@ -189,41 +194,29 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
   return (
     <>
       <div style={{ width: '100%', boxSizing: 'border-box', padding: 'var(--space-6) var(--space-6) var(--space-4)', background: 'var(--color-accent-2-200)', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div>
-          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: '0 0 var(--space-1)' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: 0 }}>
             Land Sales Results
           </h1>
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
             {records.length} record{records.length === 1 ? '' : 's'} matching your search criteria
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 14, color: 'var(--color-neutral-700)' }}>{selectionLabel}</span>
-            <div ref={exportRef} style={{ position: 'relative' }}>
-              <Button variant="secondary" onClick={toggleExportMenu} disabled={selectedCount < 1}>Export</Button>
-              {exportMenuOpen && (
-                <Blueprint elevation="md" style={{ position: 'absolute', top: 'calc(100% + var(--space-2))', right: 0, width: 180, background: '#FFFFFF', zIndex: 6 }}>
-                  <button type="button" onClick={exportCsv} style={{ display: 'block', width: '100%', textAlign: 'left', padding: 'var(--space-3) var(--space-4)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--color-text)' }}>
-                    Export CSV
-                  </button>
-                  <button type="button" disabled style={{ display: 'block', width: '100%', textAlign: 'left', padding: 'var(--space-3) var(--space-4)', border: 'none', borderTop: '1px solid var(--color-neutral-300)', background: 'none', cursor: 'not-allowed', opacity: 0.45, fontSize: 14, color: 'var(--color-text)' }} title="Coming in a later phase">
-                    Merge to DOCX
-                  </button>
-                </Blueprint>
-              )}
-            </div>
-            {canEdit && (
-              <Link href="/land-sales/new" className="btn btn-ghost">+ Add Record</Link>
-            )}
-          </div>
+          <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
+            {selectionLabel}
+          </p>
         </div>
       </div>
 
-      <div className="results-shell" style={{ flex: 1, display: 'flex', gap: 'var(--space-6)', padding: '0 var(--space-6) calc(var(--space-2) * 3)', boxSizing: 'border-box', background: 'var(--color-accent-2-200)' }}>
+      <div className="results-fab-dock">
+        {canEdit && <ResultsAddMenu />}
         <FiltersSidebar filters={filters} />
+        <ResultsExportMenu disabled={selectedCount < 1} onExportCsv={exportCsv} />
+      </div>
+      <div className="results-shell" style={{ flex: 1, display: 'flex', gap: 'var(--space-6)', boxSizing: 'border-box', background: 'var(--color-accent-2-200)' }}>
         <main style={{ flex: 1, minWidth: 0, paddingTop: 0, boxSizing: 'border-box' }}>
           <div style={{ width: '100%' }}>
             <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 250px)', background: 'var(--color-accent-2-100)' }}>
-              <table className="table" style={{ width: '100%', minWidth: Math.max(1150, 220 + columns.length * 120) }}>
+              <table className="table results-table" style={{ width: '100%', minWidth: tableMinWidth }}>
                 <thead>
                   <tr>
                     <th style={{ ...stickyHeaderCellStyle, width: 40 }}>
@@ -277,7 +270,9 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
                         </td>
                         {columns.map(col => (
                           <td key={fieldVisibilityId(col)}>
-                            <ResultCell record={r} column={col} />
+                            <div className="results-cell">
+                              <ResultCell record={r} column={col} />
+                            </div>
                           </td>
                         ))}
                       </tr>

@@ -45,6 +45,14 @@ export function FieldVisibilityForm({
   });
   const message = disabledReason
     ?? (state?.status === 'error' ? state.message : state?.status === 'success' ? state.message : undefined);
+  const cellLabelStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    boxSizing: 'border-box',
+    height: '100%',
+    padding: 'var(--space-2)',
+    cursor: disabledReason ? 'not-allowed' : 'pointer',
+  } as const;
 
   return (
     <form action={formAction}>
@@ -55,37 +63,43 @@ export function FieldVisibilityForm({
           <thead>
             <tr>
               <th>Field</th>
-              <th>Category</th>
-              <th style={{ width: 120 }}>Visible</th>
+              <th style={{ width: 120 }}>Display</th>
             </tr>
           </thead>
           <tbody>
             {columns.map(column => {
               const id = fieldVisibilityId(column);
               const visible = isVisible(column);
+              const inputId = `display-${id}`;
+              const disabled = Boolean(disabledReason) || pending;
               return (
-                <tr key={id}>
-                  <td>{column.label}</td>
-                  <td>
-                    <span className={`tag ${column.kind === 'core' ? 'tag-accent' : 'tag-neutral'}`}>
-                      {column.kind === 'core' ? 'Core' : 'CoStar'}
-                    </span>
+                <tr
+                  key={id}
+                  style={visible ? undefined : {
+                    background: 'var(--color-neutral-200)',
+                    color: 'var(--color-neutral-600)',
+                    opacity: 0.55,
+                  }}
+                >
+                  <td style={{ padding: 0, height: 1 }}>
+                    <label htmlFor={inputId} style={cellLabelStyle}>
+                      {column.label}
+                    </label>
                   </td>
-                  <td>
-                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: disabledReason ? 'not-allowed' : 'pointer' }}>
+                  <td style={{ padding: 0, height: 1 }}>
+                    <label htmlFor={inputId} style={cellLabelStyle}>
                       <input
+                        id={inputId}
                         type="checkbox"
                         name="visible_field_id"
                         value={id}
                         checked={visible}
-                        disabled={Boolean(disabledReason) || pending}
+                        disabled={disabled}
                         onChange={event => {
                           const checked = event.currentTarget.checked;
                           setOverrides(current => ({ ...current, [id]: checked }));
                         }}
-                        aria-label={`Show ${column.label}`}
                       />
-                      <span>{visible ? 'Shown' : 'Hidden'}</span>
                     </label>
                   </td>
                 </tr>

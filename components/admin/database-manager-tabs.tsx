@@ -112,14 +112,9 @@ export function DatabaseManagerTabs({
                   </div>
                 </div>
                 {db.available && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)' }}>
-                    {db.key === 'sales' && (
-                      <Link href="/land-sales/import" className="btn btn-ghost">Import CSV</Link>
-                    )}
-                    <Link href={`/admin/database-manager/schema?db=${db.key}`} className="btn btn-ghost">
-                      Edit Fields
-                    </Link>
-                  </div>
+                  <Link href={`/admin/database-manager/schema?db=${db.key}`} className="btn btn-ghost">
+                    Edit Fields
+                  </Link>
                 )}
               </Blueprint>
             );

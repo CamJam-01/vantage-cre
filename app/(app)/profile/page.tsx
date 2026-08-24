@@ -31,10 +31,10 @@ export default async function ProfilePage() {
 
         {profile.role === 'Admin' && (
           <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', background: 'var(--color-bg)', padding: 'var(--space-6)' }}>
-            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)', marginBottom: 'var(--space-4)' }}>
-              Admin Settings
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-4)' }}>
+              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)' }}>
+                Admin Settings
+              </div>
               <Link href="/admin/database-manager" className="btn btn-primary">Open</Link>
             </div>
           </Blueprint>

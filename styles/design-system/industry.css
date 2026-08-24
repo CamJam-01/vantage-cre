@@ -260,8 +260,10 @@ textarea.input { min-height: 90px; resize: vertical; }
   display: none;
   position: absolute;
   top: 100%;
-  left: 0;
+  left: auto;
+  right: 0;
   min-width: 148px;
+  max-width: calc(100vw - var(--space-6) * 2);
   flex-direction: column;
   background: var(--color-bg);
   border: 1px solid var(--color-divider);
@@ -280,8 +282,39 @@ textarea.input { min-height: 90px; resize: vertical; }
   text-decoration: none;
 }
 .nav-dropdown-menu a:hover,
-.nav-dropdown-menu a:focus-visible {
+.nav-dropdown-menu a:focus-visible,
+.nav-dropdown-menu button:hover,
+.nav-dropdown-menu button:focus-visible {
   background: color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+.nav-dropdown-menu button {
+  display: block;
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+.nav-dropdown-menu-end {
+  left: auto;
+  right: 0;
+}
+.nav-dropdown-avatar-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
 }
 
 /* — tables — */
@@ -296,6 +329,45 @@ textarea.input { min-height: 90px; resize: vertical; }
   border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
 }
 .table tbody tr:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+.results-table.table th {
+  text-transform: none;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  font-weight: 600;
+  vertical-align: bottom;
+}
+.results-table .col-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+.results-table .col-header-label {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.results-table.table {
+  font-size: 11px;
+}
+.results-table.table tbody td {
+  font-size: 11px;
+  line-height: 1.15;
+  vertical-align: top;
+}
+.results-table .results-cell {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+  height: calc(1.15em * 4);
+  line-height: 1.15;
+}
 
 /* — dialog — */
 .dialog-backdrop {
@@ -323,34 +395,142 @@ textarea.input { min-height: 90px; resize: vertical; }
 .btn-primary { border-color: var(--color-accent); }
 .btn-ghost { border-color: transparent; }
 
-/* — land sales results: responsive filter sidebar — desktop is a sticky
-   side column (positioning below lives here, not inline, so the mobile
-   media query can override it without fighting inline-style specificity);
-   below the breakpoint it becomes a full-width collapsible block stacked
-   above the table. */
-.results-shell { align-items: flex-start; }
-.results-sidebar {
-  position: sticky; top: 88px; align-self: flex-start; flex-shrink: 0;
-  min-width: 275px; max-width: 325px; width: 25%; max-height: calc(100vh - 112px);
-  overflow-y: auto; box-sizing: border-box; padding: 10px; background: var(--color-neutral-100);
+/* — land sales results: search filters as a left slide-out modal. The
+   table uses the full results-shell width; a floating dock at the
+   bottom-left of the viewport holds Add, Export, and Filters. */
+.results-shell {
+  align-items: stretch;
+  padding: 0 var(--space-6) calc(var(--space-2) * 3);
 }
-.results-sidebar-toggle { display: none; }
-@media (max-width: 768px) {
-  /* `align-items: flex-start` sizes a row's children to their own content
-     width, which is exactly what's wanted on desktop (the sidebar shouldn't
-     stretch to match the table's height). Once the shell switches to a
-     column, that same "size to content" rule applies to *width* instead —
-     so `<main>` (and the wide table inside it) would size to its own
-     content and push the page wider than the viewport, instead of being
-     capped at 100% and scrolling its own overflow internally. `stretch`
-     forces every child back to the container's full width on mobile. */
-  .results-shell { flex-direction: column; align-items: stretch; }
-  .results-sidebar {
-    position: static; align-self: stretch;
-    width: 100%; max-width: none; min-width: 0; max-height: none;
-  }
-  .results-sidebar-toggle { display: flex; }
-  .results-sidebar-content.is-collapsed { display: none; }
+.results-fab-dock {
+  position: fixed;
+  left: var(--space-6);
+  bottom: var(--space-6);
+  z-index: 42;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.results-sidebar-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  box-sizing: border-box;
+  height: 40px;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-neutral-100);
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 14px;
+  color: var(--color-text);
+  border: 1px solid var(--color-divider);
+}
+.results-sidebar-badge:hover { background: var(--color-neutral-200); }
+.results-sidebar-badge[hidden] { display: none; }
+.results-sidebar-badge:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.results-sidebar-badge:disabled:hover { background: var(--color-neutral-100); }
+.results-add-menu,
+.results-export-menu {
+  position: relative;
+}
+.results-add-badge {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: var(--color-accent);
+  color: #FFFFFF;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+.results-add-badge:hover { background: var(--color-accent-600); }
+.results-add-badge:active { background: var(--color-accent-700); }
+.results-add-dropdown {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: 0;
+  min-width: 148px;
+  flex-direction: column;
+  background: var(--color-bg);
+  border: 1px solid var(--color-divider);
+  box-shadow: var(--shadow-md);
+  z-index: 43;
+}
+.results-add-menu.is-open .results-add-dropdown,
+.results-export-menu.is-open .results-add-dropdown {
+  display: flex;
+}
+.results-add-dropdown a,
+.results-add-dropdown button {
+  display: block;
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.results-add-dropdown a:hover,
+.results-add-dropdown a:focus-visible,
+.results-add-dropdown button:hover:not(:disabled),
+.results-add-dropdown button:focus-visible:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+.results-add-dropdown button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.results-sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.results-sidebar-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.results-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 41;
+  width: min(325px, calc(100vw - var(--space-6)));
+  box-sizing: border-box;
+  padding: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--color-neutral-100);
+  transform: translateX(-100%);
+  transition: transform 0.2s ease;
+  pointer-events: none;
+  visibility: hidden;
+}
+.results-sidebar.is-open {
+  transform: translateX(0);
+  pointer-events: auto;
+  visibility: visible;
+  box-shadow: var(--shadow-lg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .results-sidebar,
+  .results-sidebar-backdrop { transition: none; }
 }
 
 /* — land sales record detail: the "Sales Record Blueprint" drafting sheets.
