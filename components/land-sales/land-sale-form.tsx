@@ -6,14 +6,10 @@ import { ArrowLeft } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
 import { Field } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
-import { PROPERTY_TYPES, US_STATES } from '@/lib/land-sales/constants';
 import { createLandSale, type CreateFormState } from '@/app/(app)/land-sales/actions';
 import { extraInputName } from '@/lib/land-sales/schema';
 import type { ResultColumn } from '@/lib/land-sales/result-columns';
-import {
-  filterVisibleColumns,
-  visibleCoreField,
-} from '@/lib/land-sales/field-visibility';
+import { filterVisibleColumns } from '@/lib/land-sales/field-visibility';
 
 const initialState: CreateFormState = null;
 
@@ -28,7 +24,8 @@ export function LandSaleForm({
   const errors = state?.errors ?? {};
   const backHref = '/land-sales';
   const hidden = new Set(hiddenFieldIds);
-  const extraColumns = filterVisibleColumns(columns, hidden)
+  const visibleColumns = filterVisibleColumns(columns, hidden);
+  const extraColumns = visibleColumns
     .filter((column): column is Extract<ResultColumn, { kind: 'extra' }> => column.kind === 'extra');
 
   return (
@@ -47,64 +44,6 @@ export function LandSaleForm({
 
         <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: '#FFFFFF' }}>
           <form action={formAction} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
-            {visibleCoreField('parcel_id', hidden) && (
-              <Field id="parcel_id" name="parcel_id" label="Parcel ID" type="text" placeholder="LND-10432" error={errors.parcel_id} />
-            )}
-            {visibleCoreField('address', hidden) && (
-              <Field id="address" name="address" label="Address" type="text" placeholder="4820 County Road 12" error={errors.address} />
-            )}
-            {visibleCoreField('city', hidden) && (
-              <Field id="city" name="city" label="City" type="text" error={errors.city} />
-            )}
-            {visibleCoreField('county', hidden) && (
-              <Field id="county" name="county" label="County" type="text" error={errors.county} />
-            )}
-
-            {visibleCoreField('state', hidden) && (
-              <div className="field">
-                <label htmlFor="state">State</label>
-                <select id="state" name="state" className="input" defaultValue="">
-                  <option value="">Select a state</option>
-                  {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
-                </select>
-                {errors.state && <div style={{ fontSize: 12, color: '#b3261e', marginTop: 4 }}>{errors.state}</div>}
-              </div>
-            )}
-            {visibleCoreField('msa', hidden) && (
-              <Field id="msa" name="msa" label="MSA" type="text" placeholder="Dallas-Fort Worth" error={errors.msa} />
-            )}
-
-            {visibleCoreField('property_type', hidden) && (
-              <div className="field">
-                <label htmlFor="property_type">Property Type</label>
-                <select id="property_type" name="property_type" className="input" defaultValue="">
-                  <option value="">Select a type</option>
-                  {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                {errors.property_type && <div style={{ fontSize: 12, color: '#b3261e', marginTop: 4 }}>{errors.property_type}</div>}
-              </div>
-            )}
-            {visibleCoreField('square_feet', hidden) && (
-              <Field id="square_feet" name="square_feet" label="Square Feet" type="number" min={0} step="any" error={errors.square_feet} />
-            )}
-
-            {visibleCoreField('acreage', hidden) && (
-              <Field id="acreage" name="acreage" label="Acreage" type="number" min={0} step="any" error={errors.acreage} />
-            )}
-            {visibleCoreField('sale_date', hidden) && (
-              <Field id="sale_date" name="sale_date" label="Sale Date" type="date" error={errors.sale_date} />
-            )}
-
-            {visibleCoreField('sale_price', hidden) && (
-              <Field id="sale_price" name="sale_price" label="Sale Price" type="number" min={0} step="any" error={errors.sale_price} />
-            )}
-            {visibleCoreField('price_per_acre', hidden) && (
-              <Field id="price_per_acre" label="Price / Acre" type="text" value="Calculated after save" readOnly tabIndex={-1} />
-            )}
-            {visibleCoreField('buyer', hidden) && (
-              <Field id="buyer" name="buyer" label="Buyer" type="text" error={errors.buyer} />
-            )}
-
             {extraColumns.map(column => (
               <Field
                 key={column.key}

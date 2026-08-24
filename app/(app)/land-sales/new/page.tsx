@@ -11,13 +11,8 @@ export default async function NewLandSalePage() {
   const profile = await getCurrentUserProfile(supabase);
   if (!profile || !canEdit(profile.role)) redirect('/land-sales');
 
-  const [customFields, hiddenFieldIds] = await Promise.all([
-    supabase.from('land_sales_custom_fields').select('label').order('label'),
-    loadHiddenFieldIds(supabase, SALES_DATABASE_KEY),
-  ]);
-  if (customFields.error) throw new Error(customFields.error.message);
-
-  const catalogLabels = (customFields.data ?? []).map(row => row.label as string);
+  const hiddenFieldIds = await loadHiddenFieldIds(supabase, SALES_DATABASE_KEY);
+  const catalogLabels: string[] = [];
   const columns = resultColumns({ catalogLabels });
 
   return <LandSaleForm columns={columns} hiddenFieldIds={[...hiddenFieldIds]} />;

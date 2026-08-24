@@ -36,10 +36,14 @@ export function filterVisibleColumns(
 export function filterVisibleDetailSheets(
   sheets: DetailSheet[],
   hidden: HiddenFieldIds,
+  availableCoreKeys?: ReadonlySet<CoreResultField>,
 ): DetailSheet[] {
   return sheets.flatMap(sheet => {
     const sections = sheet.sections.flatMap(section => {
-      const fields = section.fields.filter(field => visibleCoreField(field.key, hidden));
+      const fields = section.fields.filter(field => {
+        if (availableCoreKeys && !availableCoreKeys.has(field.key)) return false;
+        return visibleCoreField(field.key, hidden);
+      });
       return fields.length ? [{ ...section, fields }] : [];
     });
     return sections.length ? [{ ...sheet, sections }] : [];
@@ -51,7 +55,10 @@ export function buildRecordDisplaySheets(
   columns: ResultColumn[],
   hidden: HiddenFieldIds,
 ): RecordDisplaySheet[] {
-  const coreSheets = filterVisibleDetailSheets(sheets, hidden)
+  const availableCoreKeys = new Set(
+    columns.flatMap(column => column.kind === 'core' ? [column.key] : []),
+  );
+  const coreSheets = filterVisibleDetailSheets(sheets, hidden, availableCoreKeys)
     .map(sheet => ({ ...sheet, extraColumns: [] as ExtraResultColumn[] }));
   const extraColumns = filterVisibleColumns(columns, hidden)
     .filter((column): column is ExtraResultColumn => column.kind === 'extra');

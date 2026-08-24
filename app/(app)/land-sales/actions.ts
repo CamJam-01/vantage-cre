@@ -32,8 +32,7 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { message: denied };
 
-  const [customFields, settings] = await Promise.all([
-    supabase.from('land_sales_custom_fields').select('label').order('label'),
+  const [settings] = await Promise.all([
     loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
       .then(hidden => ({ hidden, error: null }))
       .catch((error: unknown) => ({
@@ -41,10 +40,9 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
         error: error instanceof Error ? error.message : 'Could not load field visibility.',
       })),
   ]);
-  if (customFields.error) return { message: `Could not load the field catalog: ${customFields.error.message}` };
   if (settings.error) return { message: settings.error };
 
-  const catalogLabels = (customFields.data ?? []).map(row => row.label as string);
+  const catalogLabels: string[] = [];
   const extras = extrasFromFormData(formData);
   const raw = Object.fromEntries(formData.entries());
   const parsed = landSaleInputSchema.safeParse({ ...raw, extras });
@@ -53,22 +51,21 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
     for (const issue of parsed.error.issues) errors[String(issue.path[0])] = issue.message;
     return { errors };
   }
+  const availableExtraLabels = resultColumns({ catalogLabels })
+    .flatMap(column => column.kind === 'extra' ? [column.key] : []);
   const sanitized = sanitizeVisibleCreate(
     parsed.data,
-    catalogLabels,
+    availableExtraLabels,
     settings.hidden,
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('land_sales')
-    .insert({ ...landSaleToRow(sanitized), created_by: user?.id ?? null })
-    .select('id')
-    .single();
+    .insert(landSaleToRow(sanitized));
 
   if (error) return { message: error.message };
-  await logAudit(supabase, 'Created Record', `${sanitized.parcel_id || sanitized.address || data.id} added`);
-  redirect(`/land-sales/${data.id}`);
+  await logAudit(supabase, 'Created Record', `${sanitized.parcel_id || sanitized.address || 'record'} added`);
+  redirect('/land-sales');
 }
 
 /** Bound to the record id via `updateLandSale.bind(null, id)` when wired into
@@ -79,9 +76,8 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { message: denied };
 
-  const [existingResult, customFields, settings] = await Promise.all([
-    supabase.from('land_sales').select('*').eq('id', id).maybeSingle(),
-    supabase.from('land_sales_custom_fields').select('label').order('label'),
+  const [existingResult, settings] = await Promise.all([
+    supabase.from('land_sales').select('*').eq('Comp ID', id).maybeSingle(),
     loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
       .then(hidden => ({ hidden, error: null }))
       .catch((error: unknown) => ({
@@ -91,11 +87,10 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
   ]);
   if (existingResult.error) return { message: existingResult.error.message };
   if (!existingResult.data) return { message: 'This record no longer exists.' };
-  if (customFields.error) return { message: `Could not load the field catalog: ${customFields.error.message}` };
   if (settings.error) return { message: settings.error };
 
   const existing = landSaleFromRow(existingResult.data as Record<string, unknown>);
-  const catalogLabels = (customFields.data ?? []).map(row => row.label as string);
+  const catalogLabels: string[] = [];
   const availableExtraLabels = resultColumns({ catalogLabels, records: [existing] })
     .flatMap(column => column.kind === 'extra' ? [column.key] : []);
 
@@ -124,7 +119,7 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
   const { error } = await supabase
     .from('land_sales')
     .update(landSaleToRow(merged))
-    .eq('id', id);
+    .eq('Comp ID', id);
 
   if (error) return { message: error.message };
   await logAudit(supabase, 'Updated Record', `${merged.parcel_id || merged.address || id} updated`);
@@ -172,8 +167,6 @@ export async function importLandSales(csvText: string): Promise<ImportOutcome> {
   if (!toInsert.length) return { rowErrors: ['No valid rows to import.'] };
   const warnings = results.flatMap(r => (r.ok ? r.warnings ?? [] : []));
 
-  const { data: { user } } = await supabase.auth.getUser();
-
   const { data: existing } = await supabase.from('land_sales').select('*');
   const existingKeys = new Set((existing ?? []).map(r => recordKey(landSaleFromRow(r as Record<string, unknown>))));
 
@@ -188,7 +181,7 @@ export async function importLandSales(csvText: string): Promise<ImportOutcome> {
   let inserted = 0;
   const chunkSize = 500;
   for (let i = 0; i < fresh.length; i += chunkSize) {
-    const chunk = fresh.slice(i, i + chunkSize).map(row => ({ ...row, created_by: user?.id ?? null }));
+    const chunk = fresh.slice(i, i + chunkSize);
     const { error, count } = await supabase.from('land_sales').insert(chunk, { count: 'exact' });
     if (error) return { rowErrors: [error.message], duplicates, inserted };
     inserted += count ?? chunk.length;

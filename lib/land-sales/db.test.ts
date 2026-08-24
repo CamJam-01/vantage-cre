@@ -6,7 +6,7 @@ import { landSaleInputSchema } from './schema.ts';
 describe('landSaleFromRow', () => {
   it('reads exact CoStar column names onto the app record shape', () => {
     const record = landSaleFromRow({
-      id: 'abc',
+      'Comp ID': 7781732,
       'Property Address': '123 Main St',
       'Property City': 'Wendell',
       'Property State': 'NC',
@@ -33,6 +33,10 @@ describe('landSaleFromRow', () => {
     assert.equal(record.price_per_acre, 323333.33);
     assert.equal(record.buyer, 'Acme LLC');
     assert.equal(record.parcel_id, 'PIN-1');
+    assert.equal(record.id, '7781732');
+    assert.equal(record.extras['Property Address'], '123 Main St');
+    assert.equal(record.extras['Buyer (True) Company'], 'Acme LLC');
+    assert.equal('parcel_id' in record.extras, false);
   });
 });
 
@@ -50,5 +54,19 @@ describe('landSaleToRow', () => {
     assert.equal(row['Sale Price'], 1000);
     assert.equal('parcel_id' in row, false);
     assert.equal('address' in row, false);
+  });
+
+  it('writes CoStar extras onto matching column names', () => {
+    const row = landSaleToRow(landSaleInputSchema.parse({
+      extras: {
+        'Property Address': '9 Pine St',
+        Zoning: 'RA',
+        'Has Lab Space': 'Yes',
+      },
+    }));
+    assert.equal(row['Property Address'], '9 Pine St');
+    assert.equal(row.Zoning, 'RA');
+    assert.equal(row['Has Lab Space'], true);
+    assert.equal(row['Property City'], null);
   });
 });

@@ -134,12 +134,16 @@ function headerForCore(field: (typeof COSTAR_CORE_HEADER_MAP)[keyof typeof COSTA
 /** Merge validated core fields with CoStar columns for a land_sales insert.
  * Parsed numeric/date values overlay the CSV text so typed columns accept the row. */
 export function importLandSaleRow(row: Extract<ImportRowResult, { ok: true }>): Record<string, unknown> {
+  const lab = row.columns['Has Lab Space'];
   return {
     ...row.columns,
     'Sale Price': row.data.sale_price ?? null,
-    'Sale Date': row.data.sale_date ?? null,
+    'Sale Date': row.data.sale_date ?? parseFlexibleDate(row.columns['Sale Date'] ?? '') ?? null,
+    'Publication Date': parseFlexibleDate(row.columns['Publication Date'] ?? '') ?? null,
+    'Recording Date': parseFlexibleDate(row.columns['Recording Date'] ?? '') ?? null,
     'Land Area AC': row.data.acreage ?? null,
     'Land Area SF': row.data.square_feet ?? null,
+    'Has Lab Space': lab == null || lab === '' ? null : /^(true|yes)$/i.test(lab),
   };
 }
 

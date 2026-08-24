@@ -68,7 +68,7 @@ export function FieldVisibilityForm({
                   <td>{column.label}</td>
                   <td>
                     <span className={`tag ${column.kind === 'core' ? 'tag-accent' : 'tag-neutral'}`}>
-                      {column.kind === 'core' ? 'Core' : 'Custom'}
+                      {column.kind === 'core' ? 'Core' : 'CoStar'}
                     </span>
                   </td>
                   <td>

@@ -17,17 +17,14 @@ export default async function LandSalesPage({ searchParams }: PageProps) {
   const filters = decodeFilters(params);
 
   const supabase = await createClient();
-  const [{ data, error }, profile, customFields, hiddenFieldIds] = await Promise.all([
+  const [{ data, error }, profile, hiddenFieldIds] = await Promise.all([
     applyLandSaleFilters(supabase, filters),
     getCurrentUserProfile(supabase),
-    supabase.from('land_sales_custom_fields').select('label').order('label'),
     loadHiddenFieldIds(supabase, SALES_DATABASE_KEY),
   ]);
   if (error) throw new Error(error.message);
   const records = (data ?? []).map(row => landSaleFromRow(row as Record<string, unknown>));
-  const catalogLabels = customFields.error
-    ? []
-    : (customFields.data ?? []).map(row => row.label as string);
+  const catalogLabels: string[] = [];
   const columns = resultColumns({ catalogLabels });
   const visibleColumns = filterVisibleColumns(columns, hiddenFieldIds);
 

@@ -11,12 +11,12 @@ function formData(entries: Array<[string, string]>): FormData {
 }
 
 describe('parseVisibilitySubmission', () => {
-  const columns = resultColumns({ catalogLabels: ['Zoning'] });
+  const columns = resultColumns();
 
   it('accepts sales and derives hidden fields from repeated visible identifiers', () => {
     const result = parseVisibilitySubmission(formData([
       ['database_key', 'sales'],
-      ['visible_field_id', 'core:city'],
+      ['visible_field_id', 'extra:Property City'],
       ['visible_field_id', 'extra:Zoning'],
     ]), columns);
 
@@ -25,7 +25,7 @@ describe('parseVisibilitySubmission', () => {
     assert.equal(result.databaseKey, 'sales');
     assert.deepEqual(
       result.hiddenFieldIds,
-      columns.map(fieldVisibilityId).filter(id => !['core:city', 'extra:Zoning'].includes(id)),
+      columns.map(fieldVisibilityId).filter(id => !['extra:Property City', 'extra:Zoning'].includes(id)),
     );
   });
 
@@ -33,7 +33,7 @@ describe('parseVisibilitySubmission', () => {
     assert.deepEqual(
       parseVisibilitySubmission(formData([
         ['database_key', 'rentals'],
-        ['visible_field_id', 'core:city'],
+        ['visible_field_id', 'extra:Property City'],
       ]), columns),
       { ok: false, message: 'This database is not available for field visibility settings.' },
     );
@@ -60,8 +60,8 @@ describe('parseVisibilitySubmission', () => {
     assert.deepEqual(
       parseVisibilitySubmission(formData([
         ['database_key', 'sales'],
-        ['visible_field_id', 'core:city'],
-        ['visible_field_id', 'core:city'],
+        ['visible_field_id', 'extra:Property City'],
+        ['visible_field_id', 'extra:Property City'],
       ]), columns),
       { ok: false, message: 'The field selection contains a duplicate field.' },
     );

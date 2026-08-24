@@ -22,15 +22,7 @@ export async function saveFieldVisibilityAction(
     return { status: 'error', message: 'Only active Admin users can change field visibility.' };
   }
 
-  const { data: customRows, error: customError } = await supabase
-    .from('land_sales_custom_fields')
-    .select('label')
-    .order('label');
-  if (customError) {
-    return { status: 'error', message: `Could not load the field catalog: ${customError.message}` };
-  }
-
-  const catalogLabels = (customRows ?? []).map(row => row.label as string);
+  const catalogLabels: string[] = [];
   const columns = resultColumns({ catalogLabels });
   const submission = parseVisibilitySubmission(formData, columns);
   if (!submission.ok) return { status: 'error', message: submission.message };
