@@ -115,12 +115,12 @@ export default function LandSalesSearchPage() {
               <label htmlFor="state">State</label>
               <select id="state" className="input" value={state} onChange={e => setState(e.target.value)} style={{ backgroundColor: '#FFFFFF', cursor: 'pointer' }}>
                 <option value="">Select state</option>
-                {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+                {US_STATES.map(([code]) => <option key={code} value={code}>{code}</option>)}
               </select>
             </div>
-            <Field id="msa" label="MSA" type="text" placeholder="e.g. Dallas-Fort Worth" value={msa} onChange={e => setMsa(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
-            <Field id="county" label="County" type="text" placeholder="e.g. Denton" value={county} onChange={e => setCounty(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
-            <Field id="city" label="City" type="text" placeholder="e.g. Denton" value={city} onChange={e => setCity(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+            <Field id="msa" label="MSA" type="text" placeholder="e.g. New York–Newark–Jersey City" value={msa} onChange={e => setMsa(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+            <Field id="county" label="County" type="text" placeholder="e.g. New York" value={county} onChange={e => setCounty(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+            <Field id="city" label="City" type="text" placeholder="e.g. New York" value={city} onChange={e => setCity(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
           </div>
         )}
 

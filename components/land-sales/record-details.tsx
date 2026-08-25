@@ -209,7 +209,7 @@ function EditableField({ record, field }: { record: LandSale; field: CoreResultF
           defaultValue={record.state}
         >
           <option value="">Select</option>
-          {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
+          {US_STATES.map(([code]) => <option key={code} value={code}>{code}</option>)}
         </select>
       );
     case 'city':
