@@ -1,4 +1,6 @@
 import { PROPERTY_TYPES, type PropertyType } from './constants';
+import { costarColumnNames } from './costar-fields';
+import { decodeFieldFilter, encodeFieldFilter, type FieldFilter } from './field-filters';
 
 export type TimeFilter =
   | { mode: 'last'; duration: number; unit: 'months' | 'years' }
@@ -15,9 +17,10 @@ export type LandSaleFilters = {
   acMin?: number;
   acMax?: number;
   time?: TimeFilter;
+  fieldFilters?: FieldFilter[];
 };
 
-export const emptyFilters: LandSaleFilters = { types: [] };
+export const emptyFilters: LandSaleFilters = { types: [], fieldFilters: [] };
 
 export function encodeFilters(filters: LandSaleFilters): URLSearchParams {
   const params = new URLSearchParams();
@@ -36,6 +39,9 @@ export function encodeFilters(filters: LandSaleFilters): URLSearchParams {
   } else if (filters.time?.mode === 'range') {
     if (filters.time.from) params.set('dateFrom', filters.time.from);
     if (filters.time.to) params.set('dateTo', filters.time.to);
+  }
+  for (const filter of filters.fieldFilters ?? []) {
+    params.append('ff', encodeFieldFilter(filter));
   }
   return params;
 }
@@ -78,6 +84,13 @@ export function decodeFilters(input: SearchParamsInput): LandSaleFilters {
     time = { mode: 'range', from: dateFrom, to: dateTo };
   }
 
+  const knownColumns = new Set(costarColumnNames());
+  const fieldByColumn = new Map<string, FieldFilter>();
+  for (const raw of params.getAll('ff')) {
+    const filter = decodeFieldFilter(raw, knownColumns);
+    if (filter) fieldByColumn.set(filter.column, filter);
+  }
+
   return {
     state: params.get('state') ?? undefined,
     msa: params.get('msa') ?? undefined,
@@ -89,6 +102,7 @@ export function decodeFilters(input: SearchParamsInput): LandSaleFilters {
     acMin: num('acMin'),
     acMax: num('acMax'),
     time,
+    fieldFilters: [...fieldByColumn.values()],
   };
 }
 
@@ -96,6 +110,19 @@ export function hasAnyFilter(filters: LandSaleFilters): boolean {
   return Boolean(
     filters.state || filters.msa || filters.county || filters.city ||
     filters.types.length || filters.sfMin != null || filters.sfMax != null ||
-    filters.acMin != null || filters.acMax != null || filters.time
+    filters.acMin != null || filters.acMax != null || filters.time ||
+    (filters.fieldFilters ?? []).length
   );
+}
+
+export function appliedFilterCount(filters: LandSaleFilters): number {
+  return [
+    !!filters.state,
+    !!filters.msa,
+    !!filters.county,
+    !!filters.city,
+    filters.types.length > 0,
+    filters.sfMin != null || filters.sfMax != null || filters.acMin != null || filters.acMax != null,
+    !!filters.time,
+  ].filter(Boolean).length + (filters.fieldFilters ?? []).length;
 }

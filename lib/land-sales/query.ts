@@ -9,6 +9,58 @@ function lastDurationToDate(duration: number, unit: 'months' | 'years'): string 
   return d.toISOString().slice(0, 10);
 }
 
+export type FilterClause =
+  | { op: 'eq'; column: string; value: string | number | boolean }
+  | { op: 'ilike'; column: string; value: string }
+  | { op: 'in'; column: string; value: string[] }
+  | { op: 'gte'; column: string; value: string | number }
+  | { op: 'lte'; column: string; value: string | number };
+
+export function landSaleFilterClauses(filters: LandSaleFilters): FilterClause[] {
+  const clauses: FilterClause[] = [];
+  if (filters.state) clauses.push({ op: 'eq', column: 'Property State', value: filters.state });
+  if (filters.county) clauses.push({ op: 'ilike', column: 'Property County', value: `%${filters.county}%` });
+  if (filters.city) clauses.push({ op: 'ilike', column: 'Property City', value: `%${filters.city}%` });
+  if (filters.msa) clauses.push({ op: 'ilike', column: 'Market', value: `%${filters.msa}%` });
+  if (filters.types.length) clauses.push({ op: 'in', column: 'Property Type', value: [...filters.types] });
+  if (filters.sfMin != null) clauses.push({ op: 'gte', column: 'Land Area SF', value: filters.sfMin });
+  if (filters.sfMax != null) clauses.push({ op: 'lte', column: 'Land Area SF', value: filters.sfMax });
+  if (filters.acMin != null) clauses.push({ op: 'gte', column: 'Land Area AC', value: filters.acMin });
+  if (filters.acMax != null) clauses.push({ op: 'lte', column: 'Land Area AC', value: filters.acMax });
+
+  if (filters.time?.mode === 'range') {
+    if (filters.time.from) clauses.push({ op: 'gte', column: 'Sale Date', value: filters.time.from });
+    if (filters.time.to) clauses.push({ op: 'lte', column: 'Sale Date', value: filters.time.to });
+  } else if (filters.time?.mode === 'last') {
+    const from = lastDurationToDate(filters.time.duration, filters.time.unit);
+    if (from) clauses.push({ op: 'gte', column: 'Sale Date', value: from });
+  }
+
+  for (const filter of filters.fieldFilters ?? []) {
+    switch (filter.kind) {
+      case 'text':
+        clauses.push({ op: 'ilike', column: filter.column, value: `%${filter.contains}%` });
+        break;
+      case 'number':
+        if (filter.min != null) clauses.push({ op: 'gte', column: filter.column, value: filter.min });
+        if (filter.max != null) clauses.push({ op: 'lte', column: filter.column, value: filter.max });
+        break;
+      case 'date':
+        if (filter.from) clauses.push({ op: 'gte', column: filter.column, value: filter.from });
+        if (filter.to) clauses.push({ op: 'lte', column: filter.column, value: filter.to });
+        break;
+      case 'boolean':
+        clauses.push({ op: 'eq', column: filter.column, value: filter.value });
+        break;
+      default: {
+        const _exhaustive: never = filter;
+        void _exhaustive;
+      }
+    }
+  }
+  return clauses;
+}
+
 /** Translates decoded URL filters into a Supabase query. Shared by the results page
  * (fetch) and the CSV-duplicate check during import (count-only). */
 export function applyLandSaleFilters(
@@ -16,24 +68,28 @@ export function applyLandSaleFilters(
   filters: LandSaleFilters
 ) {
   let query = supabase.from('land_sales').select('*').order('Sale Date', { ascending: false });
-
-  if (filters.state) query = query.eq('Property State', filters.state);
-  if (filters.county) query = query.ilike('Property County', `%${filters.county}%`);
-  if (filters.city) query = query.ilike('Property City', `%${filters.city}%`);
-  if (filters.msa) query = query.ilike('Market', `%${filters.msa}%`);
-  if (filters.types.length) query = query.in('Property Type', filters.types);
-  if (filters.sfMin != null) query = query.gte('Land Area SF', filters.sfMin);
-  if (filters.sfMax != null) query = query.lte('Land Area SF', filters.sfMax);
-  if (filters.acMin != null) query = query.gte('Land Area AC', filters.acMin);
-  if (filters.acMax != null) query = query.lte('Land Area AC', filters.acMax);
-
-  if (filters.time?.mode === 'range') {
-    if (filters.time.from) query = query.gte('Sale Date', filters.time.from);
-    if (filters.time.to) query = query.lte('Sale Date', filters.time.to);
-  } else if (filters.time?.mode === 'last') {
-    const from = lastDurationToDate(filters.time.duration, filters.time.unit);
-    if (from) query = query.gte('Sale Date', from);
+  for (const clause of landSaleFilterClauses(filters)) {
+    switch (clause.op) {
+      case 'eq':
+        query = query.eq(clause.column, clause.value);
+        break;
+      case 'ilike':
+        query = query.ilike(clause.column, clause.value);
+        break;
+      case 'in':
+        query = query.in(clause.column, clause.value);
+        break;
+      case 'gte':
+        query = query.gte(clause.column, clause.value);
+        break;
+      case 'lte':
+        query = query.lte(clause.column, clause.value);
+        break;
+      default: {
+        const _exhaustive: never = clause;
+        void _exhaustive;
+      }
+    }
   }
-
   return query;
 }
