@@ -162,6 +162,8 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
 
   function cancelDraft() {
     setDraft(appliedToDraft(filters.fieldFilters ?? []));
+    setAddMenuOpen(false);
+    setOpen(false);
   }
 
   return (
@@ -283,7 +285,7 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
           <Button variant="primary" onClick={applyFilters} disabled={!dirty} style={{ flex: 1 }}>
             Apply Filters
           </Button>
-          <Button variant="ghost" onClick={cancelDraft} disabled={!dirty} style={{ flex: 1 }}>
+          <Button variant="ghost" onClick={cancelDraft} style={{ flex: 1 }}>
             Cancel
           </Button>
         </div>
@@ -291,6 +293,33 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
       </div>
     </aside>
     </>
+  );
+}
+
+const removeFilterButtonStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 22,
+  height: 22,
+  padding: 0,
+  border: 'none',
+  background: 'transparent',
+  color: '#dc2626',
+  cursor: 'pointer',
+  flexShrink: 0,
+} as const;
+
+function RemoveFilterButton({ column, onRemove }: { column: string; onRemove: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onRemove}
+      aria-label={`Remove ${column} filter`}
+      style={removeFilterButtonStyle}
+    >
+      <X size={14} strokeWidth={2} />
+    </button>
   );
 }
 
@@ -305,13 +334,8 @@ function DraftFilterControl({
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
-        <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>{item.column}</label>
-        <button type="button" className="btn btn-icon" onClick={onRemove} aria-label={`Remove ${item.column} filter`}>
-          <X size={14} strokeWidth={1.5} />
-        </button>
-      </div>
-      <DraftFilterFields item={item} onChange={onChange} />
+      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>{item.column}</label>
+      <DraftFilterFields item={item} onChange={onChange} onRemove={onRemove} />
     </div>
   );
 }
@@ -324,78 +348,93 @@ function filterControlId(column: string, suffix?: string): string {
 function DraftFilterFields({
   item,
   onChange,
+  onRemove,
 }: {
   item: DraftFieldFilter;
   onChange: (next: DraftFieldFilter) => void;
+  onRemove: () => void;
 }) {
   switch (item.kind) {
     case 'text':
       return (
         <div className="field">
           <label htmlFor={filterControlId(item.column)}>Contains</label>
-          <input
-            id={filterControlId(item.column)}
-            className="input"
-            type="text"
-            value={item.contains}
-            onChange={e => onChange({ ...item, contains: e.target.value })}
-            style={{ backgroundColor: '#FFFFFF' }}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+            <input
+              id={filterControlId(item.column)}
+              className="input"
+              type="text"
+              value={item.contains}
+              onChange={e => onChange({ ...item, contains: e.target.value })}
+              style={{ backgroundColor: '#FFFFFF', flex: 1, minWidth: 0 }}
+            />
+            <RemoveFilterButton column={item.column} onRemove={onRemove} />
+          </div>
         </div>
       );
     case 'number':
       return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-          <div className="field">
-            <label htmlFor={filterControlId(item.column, 'min')}>Min</label>
-            <input
-              id={filterControlId(item.column, 'min')}
-              className="input"
-              type="text"
-              inputMode="decimal"
-              value={item.min}
-              onChange={e => onChange({ ...item, min: e.target.value })}
-              style={{ backgroundColor: '#FFFFFF' }}
-            />
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-1)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', flex: 1, minWidth: 0 }}>
+            <div className="field">
+              <label htmlFor={filterControlId(item.column, 'min')}>Min</label>
+              <input
+                id={filterControlId(item.column, 'min')}
+                className="input"
+                type="text"
+                inputMode="decimal"
+                value={item.min}
+                onChange={e => onChange({ ...item, min: e.target.value })}
+                style={{ backgroundColor: '#FFFFFF' }}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor={filterControlId(item.column, 'max')}>Max</label>
+              <input
+                id={filterControlId(item.column, 'max')}
+                className="input"
+                type="text"
+                inputMode="decimal"
+                value={item.max}
+                onChange={e => onChange({ ...item, max: e.target.value })}
+                style={{ backgroundColor: '#FFFFFF' }}
+              />
+            </div>
           </div>
-          <div className="field">
-            <label htmlFor={filterControlId(item.column, 'max')}>Max</label>
-            <input
-              id={filterControlId(item.column, 'max')}
-              className="input"
-              type="text"
-              inputMode="decimal"
-              value={item.max}
-              onChange={e => onChange({ ...item, max: e.target.value })}
-              style={{ backgroundColor: '#FFFFFF' }}
-            />
+          <div style={{ display: 'flex', alignItems: 'center', height: 36, flexShrink: 0 }}>
+            <RemoveFilterButton column={item.column} onRemove={onRemove} />
           </div>
         </div>
       );
     case 'date':
       return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-          <div className="field">
-            <label htmlFor={filterControlId(item.column, 'from')}>From</label>
-            <input
-              id={filterControlId(item.column, 'from')}
-              className="input"
-              type="date"
-              value={item.from}
-              onChange={e => onChange({ ...item, from: e.target.value })}
-              style={{ backgroundColor: '#FFFFFF' }}
-            />
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-1)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', flex: 1, minWidth: 0 }}>
+            <div className="field">
+              <label htmlFor={filterControlId(item.column, 'from')}>From</label>
+              <input
+                id={filterControlId(item.column, 'from')}
+                className="input"
+                type="date"
+                value={item.from}
+                onChange={e => onChange({ ...item, from: e.target.value })}
+                style={{ backgroundColor: '#FFFFFF' }}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor={filterControlId(item.column, 'to')}>To</label>
+              <input
+                id={filterControlId(item.column, 'to')}
+                className="input"
+                type="date"
+                value={item.to}
+                onChange={e => onChange({ ...item, to: e.target.value })}
+                style={{ backgroundColor: '#FFFFFF' }}
+              />
+            </div>
           </div>
-          <div className="field">
-            <label htmlFor={filterControlId(item.column, 'to')}>To</label>
-            <input
-              id={filterControlId(item.column, 'to')}
-              className="input"
-              type="date"
-              value={item.to}
-              onChange={e => onChange({ ...item, to: e.target.value })}
-              style={{ backgroundColor: '#FFFFFF' }}
-            />
+          <div style={{ display: 'flex', alignItems: 'center', height: 36, flexShrink: 0 }}>
+            <RemoveFilterButton column={item.column} onRemove={onRemove} />
           </div>
         </div>
       );
@@ -403,20 +442,23 @@ function DraftFilterFields({
       return (
         <div className="field">
           <label htmlFor={filterControlId(item.column)}>Value</label>
-          <select
-            id={filterControlId(item.column)}
-            className="input"
-            value={item.value}
-            onChange={e => {
-              const value = e.target.value;
-              if (value === '' || value === 'true' || value === 'false') onChange({ ...item, value });
-            }}
-            style={{ backgroundColor: '#FFFFFF', cursor: 'pointer' }}
-          >
-            <option value=""></option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+            <select
+              id={filterControlId(item.column)}
+              className="input"
+              value={item.value}
+              onChange={e => {
+                const value = e.target.value;
+                if (value === '' || value === 'true' || value === 'false') onChange({ ...item, value });
+              }}
+              style={{ backgroundColor: '#FFFFFF', cursor: 'pointer', flex: 1, minWidth: 0 }}
+            >
+              <option value=""></option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+            <RemoveFilterButton column={item.column} onRemove={onRemove} />
+          </div>
         </div>
       );
     default: {

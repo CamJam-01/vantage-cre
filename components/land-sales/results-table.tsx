@@ -25,18 +25,6 @@ const stickyHeaderCellStyle = {
   color: 'var(--color-bg)', background: 'var(--color-accent-2-500)', position: 'sticky' as const, top: 0, zIndex: 4,
 };
 
-const rowActionButtonStyle = {
-  width: 22,
-  height: 22,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: 0,
-  border: '1px solid var(--color-neutral-400)',
-  background: '#FFFFFF',
-  cursor: 'pointer',
-} as const;
-
 const HEADER_GUTTER_PX = 92;
 
 /** Keep a header to at most two lines: size to the longer of the longest
@@ -247,22 +235,22 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
                           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                             <button
                               type="button"
+                              className="row-action-btn"
                               onClick={() => viewDetails(r.id)}
                               title="View Details"
                               aria-label="View Details"
-                              style={rowActionButtonStyle}
                             >
-                              <Eye size={12} strokeWidth={1.75} color="var(--color-accent-700)" />
+                              <Eye size={12} strokeWidth={1.75} />
                             </button>
                             {canEdit && (
                               <button
                                 type="button"
+                                className="row-action-btn"
                                 onClick={() => editDetails(r.id)}
                                 title="Edit Details"
                                 aria-label="Edit Details"
-                                style={rowActionButtonStyle}
                               >
-                                <Pencil size={12} strokeWidth={1.75} color="var(--color-accent-700)" />
+                                <Pencil size={12} strokeWidth={1.75} />
                               </button>
                             )}
                           </div>
