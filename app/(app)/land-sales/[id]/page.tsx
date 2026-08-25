@@ -16,7 +16,7 @@ export default async function RecordDetailsPage({ params, searchParams }: PagePr
   const { from, edit } = await searchParams;
   const supabase = await createClient();
   const [{ data: record, error }, profile, hiddenFieldIds] = await Promise.all([
-    supabase.from('land_sales').select('*').eq('Comp ID', id).maybeSingle(),
+    supabase.from('land_sales').select('*').eq('id', id).maybeSingle(),
     getCurrentUserProfile(supabase),
     loadHiddenFieldIds(supabase, SALES_DATABASE_KEY),
   ]);

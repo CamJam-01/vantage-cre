@@ -77,7 +77,7 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
   if (denied) return { message: denied };
 
   const [existingResult, settings] = await Promise.all([
-    supabase.from('land_sales').select('*').eq('Comp ID', id).maybeSingle(),
+    supabase.from('land_sales').select('*').eq('id', id).maybeSingle(),
     loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
       .then(hidden => ({ hidden, error: null }))
       .catch((error: unknown) => ({
@@ -119,7 +119,7 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
   const { error } = await supabase
     .from('land_sales')
     .update(landSaleToRow(merged))
-    .eq('Comp ID', id);
+    .eq('id', id);
 
   if (error) return { message: error.message };
   await logAudit(supabase, 'Updated Record', `${merged.parcel_id || merged.address || id} updated`);

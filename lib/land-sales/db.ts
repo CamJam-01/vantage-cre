@@ -44,7 +44,7 @@ export function landSaleFromRow(row: Record<string, unknown>): LandSale {
     : null;
 
   return {
-    id: String(row['Comp ID'] ?? ''),
+    id: asString(row.id) || String(row['Comp ID'] ?? ''),
     parcel_id: asString(row['Parcel Number 1 (Min)']),
     address: asString(row['Property Address']),
     city: asString(row['Property City']),

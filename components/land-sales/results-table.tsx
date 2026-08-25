@@ -13,6 +13,7 @@ import { formatCurrency, formatDate, formatNumber } from '@/lib/land-sales/forma
 import { makeCsv, downloadCsv } from '@/lib/land-sales/csv';
 import { resultSortValue, type CoreResultField, type ResultColumn } from '@/lib/land-sales/result-columns';
 import { fieldVisibilityId } from '@/lib/land-sales/field-visibility';
+import { keyedRecords, selectedRecords, toggleSelection } from '@/lib/land-sales/row-selection';
 
 type Sort = { column: ResultColumn; dir: 'asc' | 'desc' };
 
@@ -23,18 +24,6 @@ function sameColumn(a: ResultColumn, b: ResultColumn): boolean {
 const stickyHeaderCellStyle = {
   color: 'var(--color-bg)', background: 'var(--color-accent-2-500)', position: 'sticky' as const, top: 0, zIndex: 4,
 };
-
-const rowActionButtonStyle = {
-  width: 22,
-  height: 22,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: 0,
-  border: '1px solid var(--color-neutral-400)',
-  background: '#FFFFFF',
-  cursor: 'pointer',
-} as const;
 
 const HEADER_GUTTER_PX = 92;
 
@@ -133,36 +122,34 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
     setSort(prev => (prev && sameColumn(prev.column, column) ? { column, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { column, dir: 'asc' }));
   }
 
-  const sortedRecords = useMemo(() => {
-    if (!sort) return records;
+  const keyed = useMemo(() => keyedRecords(records), [records]);
+
+  const sortedKeyed = useMemo(() => {
+    if (!sort) return keyed;
     const { column, dir } = sort;
     const factor = dir === 'asc' ? 1 : -1;
-    return [...records].sort((a, b) => {
-      const av = resultSortValue(a, column);
-      const bv = resultSortValue(b, column);
+    return [...keyed].sort((a, b) => {
+      const av = resultSortValue(a.record, column);
+      const bv = resultSortValue(b.record, column);
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
       if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * factor;
       return String(av).localeCompare(String(bv)) * factor;
     });
-  }, [records, sort]);
+  }, [keyed, sort]);
 
   const tableMinWidth = useMemo(
     () => HEADER_GUTTER_PX + columns.reduce((sum, column) => sum + headerMinWidth(column.label), 0),
     [columns],
   );
 
-  function toggleRow(id: string) {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+  function toggleRow(key: string) {
+    setSelectedIds(prev => toggleSelection(prev, key));
   }
 
   function toggleAll() {
-    setSelectedIds(prev => prev.size === records.length ? new Set() : new Set(records.map(r => r.id)));
+    setSelectedIds(prev => prev.size === keyed.length ? new Set() : new Set(keyed.map(row => row.key)));
   }
 
   const selectedCount = selectedIds.size;
@@ -182,7 +169,7 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
   }
 
   function exportCsv() {
-    const selected = records.filter(r => selectedIds.has(r.id));
+    const selected = selectedRecords(keyed, selectedIds);
     if (!selected.length) return;
     downloadCsv('land-sales-export.csv', makeCsv(selected));
   }
@@ -199,17 +186,17 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
             Land Sales Results
           </h1>
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
-            {records.length} record{records.length === 1 ? '' : 's'} matching your search criteria
+            {selectionLabel}
           </p>
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
-            {selectionLabel}
+            {records.length} record{records.length === 1 ? '' : 's'} matching your search criteria
           </p>
         </div>
       </div>
 
       <div className="results-fab-dock">
         {canEdit && <ResultsAddMenu />}
-        <FiltersSidebar filters={filters} />
+        <FiltersSidebar filters={filters} columns={columns} />
         <ResultsExportMenu disabled={selectedCount < 1} onExportCsv={exportCsv} />
       </div>
       <div className="results-shell" style={{ flex: 1, display: 'flex', gap: 'var(--space-6)', boxSizing: 'border-box', background: 'var(--color-accent-2-200)' }}>
@@ -233,37 +220,37 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
                         No records match your search criteria.
                       </td>
                     </tr>
-                  ) : sortedRecords.map(r => {
-                    const isSelected = selectedIds.has(r.id);
+                  ) : sortedKeyed.map(({ record: r, key }) => {
+                    const isSelected = selectedIds.has(key);
                     return (
                       <tr
-                        key={r.id}
-                        onClick={() => toggleRow(r.id)}
+                        key={key}
+                        onClick={() => toggleRow(key)}
                         style={{ background: isSelected ? 'var(--color-accent-100)' : undefined, cursor: 'pointer' }}
                       >
                         <td onClick={e => e.stopPropagation()}>
-                          <input type="checkbox" checked={isSelected} onChange={() => toggleRow(r.id)} aria-label={`Select ${r.parcel_id || r.address}`} />
+                          <input type="checkbox" checked={isSelected} onChange={() => toggleRow(key)} aria-label={`Select ${r.parcel_id || r.address}`} />
                         </td>
                         <td onClick={e => e.stopPropagation()} style={{ padding: 4, width: 52 }}>
                           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2 }}>
                             <button
                               type="button"
+                              className="row-action-btn"
                               onClick={() => viewDetails(r.id)}
                               title="View Details"
                               aria-label="View Details"
-                              style={rowActionButtonStyle}
                             >
-                              <Eye size={12} strokeWidth={1.75} color="var(--color-accent-700)" />
+                              <Eye size={12} strokeWidth={1.75} />
                             </button>
                             {canEdit && (
                               <button
                                 type="button"
+                                className="row-action-btn"
                                 onClick={() => editDetails(r.id)}
                                 title="Edit Details"
                                 aria-label="Edit Details"
-                                style={rowActionButtonStyle}
                               >
-                                <Pencil size={12} strokeWidth={1.75} color="var(--color-accent-700)" />
+                                <Pencil size={12} strokeWidth={1.75} />
                               </button>
                             )}
                           </div>

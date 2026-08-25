@@ -4,8 +4,22 @@ import { landSaleFromRow, landSaleToRow } from './db.ts';
 import { landSaleInputSchema } from './schema.ts';
 
 describe('landSaleFromRow', () => {
+  it('prefers the unique row id over Comp ID for routing', () => {
+    const record = landSaleFromRow({
+      id: '11111111-1111-1111-1111-111111111111',
+      'Comp ID': 0,
+      'Property Address': '1 Duplicate St',
+      'Property City': 'Raleigh',
+      'Property State': 'NC',
+      'Property County': 'Wake',
+      'Property Type': 'Land',
+    });
+    assert.equal(record.id, '11111111-1111-1111-1111-111111111111');
+  });
+
   it('reads exact CoStar column names onto the app record shape', () => {
     const record = landSaleFromRow({
+      id: '22222222-2222-2222-2222-222222222222',
       'Comp ID': 7781732,
       'Property Address': '123 Main St',
       'Property City': 'Wendell',
@@ -33,7 +47,7 @@ describe('landSaleFromRow', () => {
     assert.equal(record.price_per_acre, 323333.33);
     assert.equal(record.buyer, 'Acme LLC');
     assert.equal(record.parcel_id, 'PIN-1');
-    assert.equal(record.id, '7781732');
+    assert.equal(record.id, '22222222-2222-2222-2222-222222222222');
     assert.equal(record.extras['Property Address'], '123 Main St');
     assert.equal(record.extras['Buyer (True) Company'], 'Acme LLC');
     assert.equal('parcel_id' in record.extras, false);

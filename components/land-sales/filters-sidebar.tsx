@@ -6,67 +6,20 @@ import Link from 'next/link';
 import { Filter, X } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
 import { Button } from '@/components/ui/button';
-import { Tag } from '@/components/ui/tag';
-import { SegmentedControl } from '@/components/ui/segmented-control';
-import { PROPERTY_TYPES, US_STATES, type PropertyType } from '@/lib/land-sales/constants';
-import { encodeFilters, type LandSaleFilters, type TimeFilter } from '@/lib/land-sales/search-params';
-import { formatInputWithCommas, parseFormattedNumber } from '@/lib/land-sales/format';
-
-type SizeMode = 'sf' | 'ac';
-type TimeMode = 'last' | 'range';
-
-type FilterKey = 'state' | 'msa' | 'county' | 'city' | 'type' | 'size' | 'time';
-
-const FILTER_KEYS: FilterKey[] = ['state', 'msa', 'county', 'city', 'type', 'size', 'time'];
-const FILTER_LABELS: Record<FilterKey, string> = {
-  state: 'State', msa: 'MSA', county: 'County', city: 'City', type: 'Type', size: 'Size', time: 'Time',
-};
-
-type LocalState = {
-  state: string; msa: string; county: string; city: string; types: PropertyType[];
-  sizeMode: SizeMode; sfMin: string; sfMax: string; acMin: string; acMax: string;
-  timeMode: TimeMode; lastDuration: string; lastUnit: 'months' | 'years'; dateFrom: string; dateTo: string;
-};
-
-function fromFilters(filters: LandSaleFilters): LocalState {
-  return {
-    state: filters.state ?? '', msa: filters.msa ?? '', county: filters.county ?? '', city: filters.city ?? '',
-    types: filters.types,
-    sizeMode: filters.acMin != null || filters.acMax != null ? 'ac' : 'sf',
-    sfMin: filters.sfMin != null ? String(filters.sfMin) : '',
-    sfMax: filters.sfMax != null ? String(filters.sfMax) : '',
-    acMin: filters.acMin != null ? String(filters.acMin) : '',
-    acMax: filters.acMax != null ? String(filters.acMax) : '',
-    timeMode: filters.time?.mode === 'range' ? 'range' : 'last',
-    lastDuration: filters.time?.mode === 'last' ? String(filters.time.duration) : '',
-    lastUnit: filters.time?.mode === 'last' ? filters.time.unit : 'months',
-    dateFrom: filters.time?.mode === 'range' ? filters.time.from ?? '' : '',
-    dateTo: filters.time?.mode === 'range' ? filters.time.to ?? '' : '',
-  };
-}
-
-function toFilters(s: LocalState): LandSaleFilters {
-  let time: TimeFilter | undefined;
-  if (s.timeMode === 'last' && s.lastDuration) {
-    time = { mode: 'last', duration: Number(s.lastDuration), unit: s.lastUnit };
-  } else if (s.timeMode === 'range' && (s.dateFrom || s.dateTo)) {
-    time = { mode: 'range', from: s.dateFrom || undefined, to: s.dateTo || undefined };
-  }
-  return {
-    state: s.state || undefined,
-    msa: s.msa.trim() || undefined,
-    county: s.county.trim() || undefined,
-    city: s.city.trim() || undefined,
-    types: s.types,
-    sfMin: s.sizeMode === 'sf' ? parseFormattedNumber(s.sfMin) : undefined,
-    sfMax: s.sizeMode === 'sf' ? parseFormattedNumber(s.sfMax) : undefined,
-    acMin: s.sizeMode === 'ac' ? parseFormattedNumber(s.acMin) : undefined,
-    acMax: s.sizeMode === 'ac' ? parseFormattedNumber(s.acMax) : undefined,
-    time,
-  };
-}
-
-const DEBOUNCE_MS = 450;
+import {
+  addFilterCandidates,
+  appliedToDraft,
+  compactDraftFilters,
+  draftsDiffer,
+  emptyDraftFilter,
+  type DraftFieldFilter,
+} from '@/lib/land-sales/field-filters';
+import {
+  appliedFilterCount,
+  encodeFilters,
+  type LandSaleFilters,
+} from '@/lib/land-sales/search-params';
+import type { ResultColumn } from '@/lib/land-sales/result-columns';
 
 /** The "+ Add Filter" trigger sits inside the sidebar's own `overflow-y:auto`
  * region, so an absolutely-positioned menu gets silently clipped by that
@@ -89,37 +42,30 @@ function computeMenuStyle(triggerRect: DOMRect): CSSProperties {
     left: triggerRect.left,
     width: triggerRect.width,
     maxHeight,
-    overflowY: 'auto',
+    overflow: 'hidden',
     ...(openUpward ? { bottom: viewportHeight - triggerRect.top + gap } : { top: triggerRect.bottom + gap }),
   };
 }
 
-/** Quick-tweak filters for the results page — full parity with the search page's
- * filter set. Select/tag/mode changes apply immediately; free-text and numeric
- * fields debounce so we don't re-query on every keystroke.
- *
- * `filters` changes on every navigation, including the ones this component
- * causes via its own debounced `router.replace`. Re-deriving `local` in an
- * effect would remount-free but still fire a render after the URL updates —
- * fine on its own, except a `key`-remount would drop focus mid-typing. Instead
- * we adjust state during render (React's documented pattern for this) keyed
- * off the encoded filters string, which re-syncs on real external navigation
- * (e.g. arriving fresh from the search page) while leaving the input's focus
- * and DOM node untouched on our own commits. */
-export function FiltersSidebar({ filters }: { filters: LandSaleFilters }) {
+export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters; columns: ResultColumn[] }) {
   const router = useRouter();
   const filtersKey = encodeFilters(filters).toString();
-  const [local, setLocal] = useState<LocalState>(() => fromFilters(filters));
+  const [draft, setDraft] = useState<DraftFieldFilter[]>(() => appliedToDraft(filters.fieldFilters ?? []));
   const [syncedKey, setSyncedKey] = useState(filtersKey);
   const [open, setOpen] = useState(false);
-  const [addedKeys, setAddedKeys] = useState<Set<FilterKey>>(new Set());
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [addMenuStyle, setAddMenuStyle] = useState<CSSProperties | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [addQuery, setAddQuery] = useState('');
   const addMenuRef = useRef<HTMLDivElement>(null);
   const badgeRef = useRef<HTMLButtonElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const wasOpenRef = useRef(false);
+
+  const activeCount = appliedFilterCount(filters);
+  const dirty = draftsDiffer(draft, filters.fieldFilters ?? []);
+  const draftedColumns = draft.map(item => item.column);
+  const candidates = addFilterCandidates(columns, draftedColumns, addQuery);
+  const canAddMore = addFilterCandidates(columns, draftedColumns, '').length > 0;
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -129,65 +75,37 @@ export function FiltersSidebar({ filters }: { filters: LandSaleFilters }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // The sidebar itself scrolls (and the whole page can too), which would
-  // leave a `position: fixed` menu visually detached from its trigger.
-  // Rather than tracking scroll position to re-anchor it, just close it —
-  // scroll listeners need `capture: true` since scroll events don't bubble.
+  // Close the fixed menu when the sidebar (or page) scrolls so it doesn't
+  // float away from its trigger — but ignore scrolls *inside* the menu itself,
+  // otherwise the field list can't be navigated.
   useEffect(() => {
     if (!addMenuOpen) return;
-    function close() { setAddMenuOpen(false); }
-    document.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
+    function onScroll(e: Event) {
+      const target = e.target;
+      if (target instanceof Node && addMenuRef.current?.contains(target)) return;
+      setAddMenuOpen(false);
+    }
+    function onResize() { setAddMenuOpen(false); }
+    document.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onResize);
     return () => {
-      document.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
+      document.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onResize);
     };
   }, [addMenuOpen]);
 
   function toggleAddMenu() {
     if (!addMenuOpen && addMenuRef.current) {
       setAddMenuStyle(computeMenuStyle(addMenuRef.current.getBoundingClientRect()));
+      setAddQuery('');
     }
     setAddMenuOpen(o => !o);
   }
 
-  // "Active" reflects real values from `filters` (the committed URL state) —
-  // used for the count badge. "Shown" additionally includes fields the user
-  // revealed via "+ Add Filter" but hasn't given a value yet. `addedKeys` is
-  // plain component state (not resynced from `filters`), so it survives our
-  // own debounced commits — which would otherwise re-trigger the sync below
-  // and immediately hide a still-empty field the user just added — while
-  // still resetting naturally on a real "Modify Search" round trip, since
-  // that unmounts this component and remounts it fresh.
-  const hasState = !!filters.state;
-  const hasMsa = !!filters.msa;
-  const hasCounty = !!filters.county;
-  const hasCity = !!filters.city;
-  const hasType = filters.types.length > 0;
-  const hasSize = filters.sfMin != null || filters.sfMax != null || filters.acMin != null || filters.acMax != null;
-  const hasTime = !!filters.time;
-  const activeCount = [hasState, hasMsa, hasCounty, hasCity, hasType, hasSize, hasTime].filter(Boolean).length;
-
-  const shown: Record<FilterKey, boolean> = {
-    state: hasState || addedKeys.has('state'),
-    msa: hasMsa || addedKeys.has('msa'),
-    county: hasCounty || addedKeys.has('county'),
-    city: hasCity || addedKeys.has('city'),
-    type: hasType || addedKeys.has('type'),
-    size: hasSize || addedKeys.has('size'),
-    time: hasTime || addedKeys.has('time'),
-  };
-  const anyShown = FILTER_KEYS.some(k => shown[k]);
-  const availableToAdd = FILTER_KEYS.filter(k => !shown[k]);
-
   if (filtersKey !== syncedKey) {
     setSyncedKey(filtersKey);
-    setLocal(fromFilters(filters));
+    setDraft(appliedToDraft(filters.fieldFilters ?? []));
   }
-
-  useEffect(() => () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -222,22 +140,30 @@ export function FiltersSidebar({ filters }: { filters: LandSaleFilters }) {
     }
   }, [open]);
 
-  function commit(next: LocalState, opts: { immediate?: boolean } = {}) {
-    setLocal(next);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    const apply = () => router.replace(`/land-sales?${encodeFilters(toFilters(next)).toString()}`);
-    if (opts.immediate) apply();
-    else timerRef.current = setTimeout(apply, DEBOUNCE_MS);
-  }
-
-  function toggleType(t: PropertyType) {
-    const types = local.types.includes(t) ? local.types.filter(x => x !== t) : [...local.types, t];
-    commit({ ...local, types }, { immediate: true });
-  }
-
-  function addFilter(key: FilterKey) {
-    setAddedKeys(prev => new Set(prev).add(key));
+  function addFilter(column: string) {
+    setDraft(prev => prev.some(item => item.column === column) ? prev : [...prev, emptyDraftFilter(column)]);
     setAddMenuOpen(false);
+  }
+
+  function removeFilter(column: string) {
+    setDraft(prev => prev.filter(item => item.column !== column));
+  }
+
+  function replaceFilter(next: DraftFieldFilter) {
+    setDraft(prev => prev.map(item => item.column === next.column ? next : item));
+  }
+
+  function applyFilters() {
+    const next: LandSaleFilters = { ...filters, fieldFilters: compactDraftFilters(draft) };
+    router.replace(`/land-sales?${encodeFilters(next).toString()}`);
+    setAddMenuOpen(false);
+    setOpen(false);
+  }
+
+  function cancelDraft() {
+    setDraft(appliedToDraft(filters.fieldFilters ?? []));
+    setAddMenuOpen(false);
+    setOpen(false);
   }
 
   return (
@@ -296,159 +222,248 @@ export function FiltersSidebar({ filters }: { filters: LandSaleFilters }) {
 
         <div className="results-sidebar-content" style={{ paddingTop: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
-        {!anyShown && (
+        {draft.length === 0 && (
           <p style={{ fontSize: 13, color: 'var(--color-neutral-600)', margin: 0 }}>
-            No filters applied yet. Use &quot;+ Add Filter&quot; below or &quot;Modify Search&quot; above.
+            No filters added yet. Use &quot;+ Add Filter&quot; below or &quot;Modify Search&quot; above.
           </p>
         )}
 
-        {shown.state && (
-          <div className="field">
-            <label htmlFor="filter-state">State</label>
-            <select id="filter-state" className="input" value={local.state} onChange={e => commit({ ...local, state: e.target.value }, { immediate: true })} style={{ backgroundColor: '#FFFFFF', cursor: 'pointer' }}>
-              <option value="">Any state</option>
-              {US_STATES.map(([code, name]) => <option key={code} value={code}>{name}</option>)}
-            </select>
-          </div>
-        )}
+        {draft.map(item => (
+          <DraftFilterControl
+            key={item.column}
+            item={item}
+            onChange={replaceFilter}
+            onRemove={() => removeFilter(item.column)}
+          />
+        ))}
 
-        {shown.msa && (
-          <div className="field">
-            <label htmlFor="filter-msa">MSA</label>
-            <input id="filter-msa" className="input" type="text" value={local.msa} onChange={e => commit({ ...local, msa: e.target.value })} style={{ backgroundColor: '#FFFFFF' }} />
-          </div>
-        )}
-
-        {shown.county && (
-          <div className="field">
-            <label htmlFor="filter-county">County</label>
-            <input id="filter-county" className="input" type="text" value={local.county} onChange={e => commit({ ...local, county: e.target.value })} style={{ backgroundColor: '#FFFFFF' }} />
-          </div>
-        )}
-
-        {shown.city && (
-          <div className="field">
-            <label htmlFor="filter-city">City</label>
-            <input id="filter-city" className="input" type="text" value={local.city} onChange={e => commit({ ...local, city: e.target.value })} style={{ backgroundColor: '#FFFFFF' }} />
-          </div>
-        )}
-
-        {shown.type && (
-          <div style={{ borderTop: '1px solid var(--color-neutral-300)', paddingTop: 'var(--space-4)' }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)', marginBottom: 'var(--space-2)' }}>Type</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-              {PROPERTY_TYPES.map(t => {
-                const selected = local.types.includes(t);
-                return (
-                  <Tag
-                    key={t}
-                    onClick={() => toggleType(t)}
-                    style={{
-                      background: selected ? 'var(--color-accent-600)' : '#FFFFFF',
-                      color: selected ? '#FFFFFF' : 'var(--color-neutral-900)',
-                      border: `1px solid ${selected ? 'var(--color-accent-600)' : 'var(--color-neutral-400)'}`,
-                      cursor: 'pointer', fontSize: 12,
-                    }}
-                  >
-                    {t}
-                  </Tag>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {shown.size && (
-          <div style={{ borderTop: '1px solid var(--color-neutral-300)', paddingTop: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>
-                Size ({local.sizeMode === 'sf' ? 'Square Feet' : 'Acreage'})
-              </label>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => commit({ ...local, sizeMode: local.sizeMode === 'sf' ? 'ac' : 'sf' }, { immediate: true })}
-                style={{ cursor: 'pointer', fontSize: 11, textDecorationLine: 'underline', padding: 0 }}
-              >
-                {local.sizeMode === 'sf' ? 'Use Acreage' : 'Use Square Feet'}
-              </button>
-            </div>
-            {local.sizeMode === 'sf' ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <div className="field"><label>Min</label><input className="input" type="text" inputMode="numeric" value={local.sfMin} onChange={e => commit({ ...local, sfMin: formatInputWithCommas(e.target.value) })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-                <div className="field"><label>Max</label><input className="input" type="text" inputMode="numeric" value={local.sfMax} onChange={e => commit({ ...local, sfMax: formatInputWithCommas(e.target.value) })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <div className="field"><label>Min</label><input className="input" type="text" inputMode="decimal" value={local.acMin} onChange={e => commit({ ...local, acMin: formatInputWithCommas(e.target.value) })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-                <div className="field"><label>Max</label><input className="input" type="text" inputMode="decimal" value={local.acMax} onChange={e => commit({ ...local, acMax: formatInputWithCommas(e.target.value) })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {shown.time && (
-          <div style={{ borderTop: '1px solid var(--color-neutral-300)', paddingTop: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>
-                Time ({local.timeMode === 'last' ? 'Last' : 'Range'})
-              </label>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => commit({ ...local, timeMode: local.timeMode === 'last' ? 'range' : 'last' }, { immediate: true })}
-                style={{ cursor: 'pointer', fontSize: 11, textDecorationLine: 'underline', padding: 0 }}
-              >
-                {local.timeMode === 'last' ? 'Use Range' : 'Use Last'}
-              </button>
-            </div>
-            {local.timeMode === 'last' ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', alignItems: 'end' }}>
-                <div className="field"><label>Duration</label><input className="input" type="number" value={local.lastDuration} onChange={e => commit({ ...local, lastDuration: e.target.value })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-                <SegmentedControl
-                  name="filter-last-unit"
-                  value={local.lastUnit}
-                  onChange={v => commit({ ...local, lastUnit: v as 'months' | 'years' }, { immediate: true })}
-                  options={[{ label: 'Months', value: 'months' }, { label: 'Years', value: 'years' }]}
-                />
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
-                <div className="field"><label>From</label><input className="input" type="date" value={local.dateFrom} onChange={e => commit({ ...local, dateFrom: e.target.value }, { immediate: true })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-                <div className="field"><label>To</label><input className="input" type="date" value={local.dateTo} onChange={e => commit({ ...local, dateTo: e.target.value }, { immediate: true })} style={{ backgroundColor: '#FFFFFF' }} /></div>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div ref={addMenuRef} style={{ position: 'relative', borderTop: anyShown ? '1px solid var(--color-neutral-300)' : undefined, paddingTop: anyShown ? 'var(--space-4)' : undefined }}>
+        <div ref={addMenuRef} style={{ position: 'relative', borderTop: draft.length ? '1px solid var(--color-neutral-300)' : undefined, paddingTop: draft.length ? 'var(--space-4)' : undefined }}>
           <Button
             variant="ghost"
             block
             onClick={toggleAddMenu}
-            disabled={availableToAdd.length === 0}
-            title={availableToAdd.length === 0 ? 'All filters are already active' : undefined}
+            disabled={!canAddMore}
+            title={!canAddMore ? 'All visible fields are already added' : undefined}
           >
             + Add Filter
           </Button>
-          {addMenuOpen && availableToAdd.length > 0 && addMenuStyle && (
-            <Blueprint elevation="md" style={{ ...addMenuStyle, background: '#FFFFFF', zIndex: 50 }}>
-              {availableToAdd.map(key => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => addFilter(key)}
-                  style={{ display: 'block', width: '100%', textAlign: 'left', padding: 'var(--space-3) var(--space-4)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--color-text)' }}
-                >
-                  {FILTER_LABELS[key]}
-                </button>
-              ))}
+          {addMenuOpen && addMenuStyle && (
+            <Blueprint elevation="md" style={{ ...addMenuStyle, background: '#FFFFFF', zIndex: 50, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ flexShrink: 0, padding: 'var(--space-2) var(--space-3)', borderBottom: '1px solid var(--color-neutral-300)' }}>
+                <input
+                  className="input"
+                  type="search"
+                  value={addQuery}
+                  onChange={e => setAddQuery(e.target.value)}
+                  placeholder="Search fields"
+                  aria-label="Search fields"
+                  autoFocus
+                  style={{ backgroundColor: '#FFFFFF' }}
+                />
+              </div>
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                {candidates.length === 0 ? (
+                  <p style={{ fontSize: 13, color: 'var(--color-neutral-600)', margin: 0, padding: 'var(--space-3) var(--space-4)' }}>
+                    No matching fields
+                  </p>
+                ) : candidates.map(column => (
+                  <button
+                    key={column.key}
+                    type="button"
+                    onClick={() => addFilter(column.key)}
+                    style={{ display: 'block', width: '100%', textAlign: 'left', padding: 'var(--space-3) var(--space-4)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 14, color: 'var(--color-text)' }}
+                  >
+                    {column.label}
+                  </button>
+                ))}
+              </div>
             </Blueprint>
           )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 'var(--space-3)', borderTop: '1px solid var(--color-neutral-300)', paddingTop: 'var(--space-4)' }}>
+          <Button variant="primary" onClick={applyFilters} disabled={!dirty} style={{ flex: 1 }}>
+            Apply Filters
+          </Button>
+          <Button variant="ghost" onClick={cancelDraft} style={{ flex: 1 }}>
+            Cancel
+          </Button>
         </div>
 
       </div>
     </aside>
     </>
   );
+}
+
+const removeFilterButtonStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 22,
+  height: 22,
+  padding: 0,
+  border: 'none',
+  background: 'transparent',
+  color: '#dc2626',
+  cursor: 'pointer',
+  flexShrink: 0,
+} as const;
+
+function RemoveFilterButton({ column, onRemove }: { column: string; onRemove: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onRemove}
+      aria-label={`Remove ${column} filter`}
+      style={removeFilterButtonStyle}
+    >
+      <X size={14} strokeWidth={2} />
+    </button>
+  );
+}
+
+function DraftFilterControl({
+  item,
+  onChange,
+  onRemove,
+}: {
+  item: DraftFieldFilter;
+  onChange: (next: DraftFieldFilter) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>{item.column}</label>
+      <DraftFilterFields item={item} onChange={onChange} onRemove={onRemove} />
+    </div>
+  );
+}
+
+function filterControlId(column: string, suffix?: string): string {
+  const base = `filter-${column.replaceAll(/[^a-zA-Z0-9]+/g, '-')}`;
+  return suffix ? `${base}-${suffix}` : base;
+}
+
+function DraftFilterFields({
+  item,
+  onChange,
+  onRemove,
+}: {
+  item: DraftFieldFilter;
+  onChange: (next: DraftFieldFilter) => void;
+  onRemove: () => void;
+}) {
+  switch (item.kind) {
+    case 'text':
+      return (
+        <div className="field">
+          <label htmlFor={filterControlId(item.column)}>Contains</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+            <input
+              id={filterControlId(item.column)}
+              className="input"
+              type="text"
+              value={item.contains}
+              onChange={e => onChange({ ...item, contains: e.target.value })}
+              style={{ backgroundColor: '#FFFFFF', flex: 1, minWidth: 0 }}
+            />
+            <RemoveFilterButton column={item.column} onRemove={onRemove} />
+          </div>
+        </div>
+      );
+    case 'number':
+      return (
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-1)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', flex: 1, minWidth: 0 }}>
+            <div className="field">
+              <label htmlFor={filterControlId(item.column, 'min')}>Min</label>
+              <input
+                id={filterControlId(item.column, 'min')}
+                className="input"
+                type="text"
+                inputMode="decimal"
+                value={item.min}
+                onChange={e => onChange({ ...item, min: e.target.value })}
+                style={{ backgroundColor: '#FFFFFF' }}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor={filterControlId(item.column, 'max')}>Max</label>
+              <input
+                id={filterControlId(item.column, 'max')}
+                className="input"
+                type="text"
+                inputMode="decimal"
+                value={item.max}
+                onChange={e => onChange({ ...item, max: e.target.value })}
+                style={{ backgroundColor: '#FFFFFF' }}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', height: 36, flexShrink: 0 }}>
+            <RemoveFilterButton column={item.column} onRemove={onRemove} />
+          </div>
+        </div>
+      );
+    case 'date':
+      return (
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-1)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', flex: 1, minWidth: 0 }}>
+            <div className="field">
+              <label htmlFor={filterControlId(item.column, 'from')}>From</label>
+              <input
+                id={filterControlId(item.column, 'from')}
+                className="input"
+                type="date"
+                value={item.from}
+                onChange={e => onChange({ ...item, from: e.target.value })}
+                style={{ backgroundColor: '#FFFFFF' }}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor={filterControlId(item.column, 'to')}>To</label>
+              <input
+                id={filterControlId(item.column, 'to')}
+                className="input"
+                type="date"
+                value={item.to}
+                onChange={e => onChange({ ...item, to: e.target.value })}
+                style={{ backgroundColor: '#FFFFFF' }}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', height: 36, flexShrink: 0 }}>
+            <RemoveFilterButton column={item.column} onRemove={onRemove} />
+          </div>
+        </div>
+      );
+    case 'boolean':
+      return (
+        <div className="field">
+          <label htmlFor={filterControlId(item.column)}>Value</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+            <select
+              id={filterControlId(item.column)}
+              className="input"
+              value={item.value}
+              onChange={e => {
+                const value = e.target.value;
+                if (value === '' || value === 'true' || value === 'false') onChange({ ...item, value });
+              }}
+              style={{ backgroundColor: '#FFFFFF', cursor: 'pointer', flex: 1, minWidth: 0 }}
+            >
+              <option value=""></option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+            <RemoveFilterButton column={item.column} onRemove={onRemove} />
+          </div>
+        </div>
+      );
+    default: {
+      const _exhaustive: never = item;
+      return _exhaustive;
+    }
+  }
 }
