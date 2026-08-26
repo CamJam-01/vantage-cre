@@ -18,7 +18,9 @@ import {
   appliedFilterCount,
   encodeFilters,
   type LandSaleFilters,
+  type TimeFilter,
 } from '@/lib/land-sales/search-params';
+import { US_STATES } from '@/lib/land-sales/constants';
 import type { ResultColumn } from '@/lib/land-sales/result-columns';
 
 /** The "+ Add Filter" trigger sits inside the sidebar's own `overflow-y:auto`
@@ -47,6 +49,107 @@ function computeMenuStyle(triggerRect: DOMRect): CSSProperties {
   };
 }
 
+type SearchFilterEntry =
+  | { kind: 'number'; key: string; label: string; min: string; max: string; remove: () => void; commit: (min: string, max: string) => void }
+  | { kind: 'text'; key: string; label: string; value: string; remove: () => void; commit: (v: string) => void }
+  | { kind: 'state'; key: string; value: string; remove: () => void; commit: (v: string) => void }
+  | { kind: 'type'; key: string; value: string; remove: () => void }
+  | { kind: 'dateRange'; key: string; label: string; from: string; to: string; remove: () => void; commit: (from: string, to: string) => void }
+  | { kind: 'last'; key: string; label: string; duration: string; unit: 'months' | 'years'; remove: () => void; commit: (duration: string, unit: 'months' | 'years') => void };
+
+function buildSearchFilterEntries(
+  filters: LandSaleFilters,
+  apply: (next: LandSaleFilters) => void,
+): SearchFilterEntry[] {
+  const set = (patch: Partial<LandSaleFilters>): LandSaleFilters => ({ ...filters, ...patch });
+  const commit = (next: LandSaleFilters) => apply(next);
+
+  const entries: SearchFilterEntry[] = [];
+
+  if (filters.state !== undefined) {
+    entries.push({
+      kind: 'state', key: 'state', value: filters.state,
+      remove: () => commit(set({ state: undefined })),
+      commit: v => commit(set({ state: v || undefined })),
+    });
+  }
+  if (filters.msa !== undefined) {
+    entries.push({
+      kind: 'text', key: 'msa', label: 'MSA', value: filters.msa,
+      remove: () => commit(set({ msa: undefined })),
+      commit: v => commit(set({ msa: v.trim() || undefined })),
+    });
+  }
+  if (filters.county !== undefined) {
+    entries.push({
+      kind: 'text', key: 'county', label: 'County', value: filters.county,
+      remove: () => commit(set({ county: undefined })),
+      commit: v => commit(set({ county: v.trim() || undefined })),
+    });
+  }
+  if (filters.city !== undefined) {
+    entries.push({
+      kind: 'text', key: 'city', label: 'City', value: filters.city,
+      remove: () => commit(set({ city: undefined })),
+      commit: v => commit(set({ city: v.trim() || undefined })),
+    });
+  }
+  for (const type of filters.types) {
+    entries.push({
+      kind: 'type', key: `type:${type}`, value: type,
+      remove: () => commit(set({ types: filters.types.filter(t => t !== type) })),
+    });
+  }
+  if (filters.sfMin != null || filters.sfMax != null) {
+    entries.push({
+      kind: 'number', key: 'sf', label: 'Land Area SF',
+      min: filters.sfMin != null ? String(filters.sfMin) : '',
+      max: filters.sfMax != null ? String(filters.sfMax) : '',
+      remove: () => commit(set({ sfMin: undefined, sfMax: undefined })),
+      commit: (min, max) => commit(set({
+        sfMin: min === '' ? undefined : Number(min),
+        sfMax: max === '' ? undefined : Number(max),
+      })),
+    });
+  }
+  if (filters.acMin != null || filters.acMax != null) {
+    entries.push({
+      kind: 'number', key: 'ac', label: 'Land Area AC',
+      min: filters.acMin != null ? String(filters.acMin) : '',
+      max: filters.acMax != null ? String(filters.acMax) : '',
+      remove: () => commit(set({ acMin: undefined, acMax: undefined })),
+      commit: (min, max) => commit(set({
+        acMin: min === '' ? undefined : Number(min),
+        acMax: max === '' ? undefined : Number(max),
+      })),
+    });
+  }
+  const time = filters.time;
+  if (time?.mode === 'last' && (time as { mode: 'last'; duration: number; unit: 'months' | 'years' }).duration) {
+    const t = time as { mode: 'last'; duration: number; unit: 'months' | 'years' };
+    entries.push({
+      kind: 'last', key: 'time', label: 'Sale Date',
+      duration: String(t.duration), unit: t.unit,
+      remove: () => commit(set({ time: undefined })),
+      commit: (duration, unit) => {
+        const n = Number(duration);
+        if (!Number.isFinite(n) || n <= 0) { commit(set({ time: undefined })); return; }
+        const next: TimeFilter = { mode: 'last', duration: n, unit };
+        commit(set({ time: next }));
+      },
+    });
+  } else if (time?.mode === 'range' && (time.from || time.to)) {
+    const t = time as { mode: 'range'; from?: string; to?: string };
+    entries.push({
+      kind: 'dateRange', key: 'time', label: 'Sale Date',
+      from: t.from ?? '', to: t.to ?? '',
+      remove: () => commit(set({ time: undefined })),
+      commit: (from, to) => commit(set({ time: { mode: 'range', from: from || undefined, to: to || undefined } })),
+    });
+  }
+  return entries;
+}
+
 export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters; columns: ResultColumn[] }) {
   const router = useRouter();
   const filtersKey = encodeFilters(filters).toString();
@@ -56,12 +159,20 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [addMenuStyle, setAddMenuStyle] = useState<CSSProperties | null>(null);
   const [addQuery, setAddQuery] = useState('');
+  const [searchEdits, setSearchEdits] = useState<Record<string, Partial<{
+    min: string; max: string; value: string; state: string;
+    from: string; to: string; duration: string; unit: 'months' | 'years';
+  }>>>({});
   const addMenuRef = useRef<HTMLDivElement>(null);
   const badgeRef = useRef<HTMLButtonElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const wasOpenRef = useRef(false);
 
   const activeCount = appliedFilterCount(filters);
+  const applySearch = (next: LandSaleFilters) => {
+    router.replace(`/land-sales?${encodeFilters(next).toString()}`);
+  };
+  const searchEntries = buildSearchFilterEntries(filters, applySearch);
   const dirty = draftsDiffer(draft, filters.fieldFilters ?? []);
   const draftedColumns = draft.map(item => item.column);
   const candidates = addFilterCandidates(columns, draftedColumns, addQuery);
@@ -105,6 +216,7 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
   if (filtersKey !== syncedKey) {
     setSyncedKey(filtersKey);
     setDraft(appliedToDraft(filters.fieldFilters ?? []));
+    setSearchEdits({});
   }
 
   useEffect(() => {
@@ -207,7 +319,7 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
             )}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexShrink: 0 }}>
-            <Link href="/search/sales/land" style={{ fontSize: 13, fontWeight: 600 }}>Modify Search</Link>
+            <Link href={`/search/sales/land?${filtersKey}`} style={{ fontSize: 13, fontWeight: 600 }}>Modify Search</Link>
             <button
               ref={closeBtnRef}
               type="button"
@@ -222,7 +334,17 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
 
         <div className="results-sidebar-content" style={{ paddingTop: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
 
-        {draft.length === 0 && (
+        {searchEntries.map(entry => (
+          <SearchFilterControl
+            key={entry.key}
+            entry={entry}
+            edits={searchEdits[entry.key]}
+            onLocalChange={patch => setSearchEdits(prev => ({ ...prev, [entry.key]: { ...prev[entry.key], ...patch } }))}
+            onClearLocal={() => setSearchEdits(prev => { const { [entry.key]: _drop, ...rest } = prev; void _drop; return rest; })}
+          />
+        ))}
+
+        {draft.length === 0 && searchEntries.length === 0 && (
           <p style={{ fontSize: 13, color: 'var(--color-neutral-600)', margin: 0 }}>
             No filters added yet. Use &quot;+ Add Filter&quot; below or &quot;Modify Search&quot; above.
           </p>
@@ -463,6 +585,223 @@ function DraftFilterFields({
       );
     default: {
       const _exhaustive: never = item;
+      return _exhaustive;
+    }
+  }
+}
+
+type SearchEdit = Partial<{
+  min: string; max: string; value: string; state: string;
+  from: string; to: string; duration: string; unit: 'months' | 'years';
+}>;
+
+function searchControlId(key: string, suffix?: string): string {
+  const base = `search-${key.replaceAll(/[^a-zA-Z0-9]+/g, '-')}`;
+  return suffix ? `${base}-${suffix}` : base;
+}
+
+function SearchFilterControl({
+  entry,
+  edits,
+  onLocalChange,
+  onClearLocal,
+}: {
+  entry: SearchFilterEntry;
+  edits?: SearchEdit;
+  onLocalChange: (patch: SearchEdit) => void;
+  onClearLocal: () => void;
+}) {
+  const rowStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' };
+  const removeLabel = entry.kind === 'state' ? 'State' : entry.kind === 'type' ? 'Secondary Type' : (entry as { label?: string }).label ?? entry.key;
+  const onRemove = () => { onClearLocal(); entry.remove(); };
+
+  switch (entry.kind) {
+    case 'number': {
+      const min = edits?.min ?? entry.min;
+      const max = edits?.max ?? entry.max;
+      return (
+        <div style={rowStyle}>
+          <label htmlFor={searchControlId(entry.key, 'min')} style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>{entry.label}</label>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-1)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', flex: 1, minWidth: 0 }}>
+              <div className="field">
+                <label htmlFor={searchControlId(entry.key, 'min')}>Min</label>
+                <input
+                  id={searchControlId(entry.key, 'min')}
+                  className="input"
+                  type="text"
+                  inputMode="decimal"
+                  value={min}
+                  onChange={e => onLocalChange({ min: e.target.value })}
+                  onBlur={e => { const v = e.currentTarget.value; if (v !== entry.min) entry.commit(v, max); onClearLocal(); }}
+                  style={{ backgroundColor: '#FFFFFF' }}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor={searchControlId(entry.key, 'max')}>Max</label>
+                <input
+                  id={searchControlId(entry.key, 'max')}
+                  className="input"
+                  type="text"
+                  inputMode="decimal"
+                  value={max}
+                  onChange={e => onLocalChange({ max: e.target.value })}
+                  onBlur={e => { const v = e.currentTarget.value; if (v !== entry.max) entry.commit(min, v); onClearLocal(); }}
+                  style={{ backgroundColor: '#FFFFFF' }}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', height: 36, flexShrink: 0 }}>
+              <RemoveFilterButton column={removeLabel} onRemove={onRemove} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+    case 'text': {
+      const value = edits?.value ?? entry.value;
+      return (
+        <div style={rowStyle}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>{entry.label}</label>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-1)' }}>
+            <div className="field" style={{ flex: 1, minWidth: 0 }}>
+              <label htmlFor={searchControlId(entry.key)}>Contains</label>
+              <input
+                id={searchControlId(entry.key)}
+                className="input"
+                type="text"
+                value={value}
+                onChange={e => onLocalChange({ value: e.target.value })}
+                onBlur={e => { const v = e.currentTarget.value; if (v !== entry.value) entry.commit(v); onClearLocal(); }}
+                style={{ backgroundColor: '#FFFFFF' }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', height: 36, flexShrink: 0 }}>
+              <RemoveFilterButton column={removeLabel} onRemove={onRemove} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+    case 'state': {
+      const value = edits?.state ?? entry.value;
+      return (
+        <div style={rowStyle}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>State</label>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-1)' }}>
+            <div className="field" style={{ flex: 1, minWidth: 0 }}>
+              <label htmlFor={searchControlId(entry.key)}>State</label>
+              <select
+                id={searchControlId(entry.key)}
+                className="input"
+                value={value}
+                onChange={e => { entry.commit(e.target.value); onClearLocal(); }}
+                style={{ backgroundColor: '#FFFFFF', cursor: 'pointer', flex: 1, minWidth: 0 }}
+              >
+                <option value=""></option>
+                {US_STATES.map(([code]) => <option key={code} value={code}>{code}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', height: 36, flexShrink: 0 }}>
+              <RemoveFilterButton column={removeLabel} onRemove={onRemove} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+    case 'type': {
+      return (
+        <div style={rowStyle}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>Secondary Type</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+            <span className="tag tag-neutral" style={{ flex: 1, minWidth: 0 }}>{entry.value}</span>
+            <RemoveFilterButton column={removeLabel} onRemove={onRemove} />
+          </div>
+        </div>
+      );
+    }
+    case 'dateRange': {
+      const from = edits?.from ?? entry.from;
+      const to = edits?.to ?? entry.to;
+      return (
+        <div style={rowStyle}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>{entry.label}</label>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-1)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)', flex: 1, minWidth: 0 }}>
+              <div className="field">
+                <label htmlFor={searchControlId(entry.key, 'from')}>From</label>
+                <input
+                  id={searchControlId(entry.key, 'from')}
+                  className="input"
+                  type="date"
+                  value={from}
+                  onChange={e => onLocalChange({ from: e.target.value })}
+                  onBlur={e => { const v = e.currentTarget.value; if (v !== entry.from || (edits?.to != null && edits.to !== entry.to)) entry.commit(v, to); else if (!edits) {}; onClearLocal(); }}
+                  style={{ backgroundColor: '#FFFFFF' }}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor={searchControlId(entry.key, 'to')}>To</label>
+                <input
+                  id={searchControlId(entry.key, 'to')}
+                  className="input"
+                  type="date"
+                  value={to}
+                  onChange={e => onLocalChange({ to: e.target.value })}
+                  onBlur={e => { const v = e.currentTarget.value; if (v !== entry.to || (edits?.from != null && edits.from !== entry.from)) entry.commit(from, v); onClearLocal(); }}
+                  style={{ backgroundColor: '#FFFFFF' }}
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', height: 36, flexShrink: 0 }}>
+              <RemoveFilterButton column={removeLabel} onRemove={onRemove} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+    case 'last': {
+      const duration = edits?.duration ?? entry.duration;
+      const unit = edits?.unit ?? entry.unit;
+      return (
+        <div style={rowStyle}>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>{entry.label}</label>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-1)' }}>
+            <div className="field" style={{ flex: 1, minWidth: 0 }}>
+              <label htmlFor={searchControlId(entry.key, 'duration')}>Last</label>
+              <input
+                id={searchControlId(entry.key, 'duration')}
+                className="input"
+                type="text"
+                inputMode="numeric"
+                value={duration}
+                onChange={e => onLocalChange({ duration: e.target.value })}
+                onBlur={e => { const v = e.currentTarget.value; if (v !== entry.duration) entry.commit(v, unit); onClearLocal(); }}
+                style={{ backgroundColor: '#FFFFFF' }}
+              />
+            </div>
+            <div className="seg" style={{ flexShrink: 0 }}>
+              {(['months', 'years'] as const).map(u => (
+                <label key={u} className="seg-opt" style={{ width: 'auto' }}>
+                  <input
+                    type="radio"
+                    name={`${entry.key}-unit`}
+                    checked={unit === u}
+                    onChange={() => { onLocalChange({ unit: u }); entry.commit(duration, u); onClearLocal(); }}
+                  />
+                  <span>{u === 'months' ? 'Months' : 'Years'}</span>
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', height: 36, flexShrink: 0 }}>
+              <RemoveFilterButton column={removeLabel} onRemove={onRemove} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+    default: {
+      const _exhaustive: never = entry;
       return _exhaustive;
     }
   }
