@@ -4,6 +4,7 @@ import { useActionState, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { GripVertical, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import type { ResultColumn } from '@/lib/land-sales/result-columns';
 import {
   DEFAULT_FIELD_DIVIDER_LABELS,
@@ -30,6 +31,14 @@ type FieldVisibilityFormProps = {
 };
 
 const initialState: FieldVisibilityActionState = null;
+
+type VisibilityFilter = 'both' | 'displayed' | 'hidden';
+
+const VISIBILITY_FILTER_OPTIONS: { label: string; value: VisibilityFilter }[] = [
+  { label: 'Both', value: 'both' },
+  { label: 'Displayed', value: 'displayed' },
+  { label: 'Hidden', value: 'hidden' },
+];
 
 const DIVIDER_BUTTON_LABELS: Record<FieldDividerKind, string> = {
   page: 'New Page',
@@ -62,6 +71,7 @@ export function FieldVisibilityForm({
   const [dividersOverride, setDividersOverride] = useState<FieldDivider[] | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('both');
   const handleRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const saved = state?.status === 'success'
@@ -78,6 +88,17 @@ export function FieldVisibilityForm({
     const id = fieldVisibilityId(column);
     return overrides[id] ?? !savedHidden.has(id);
   }
+
+  function matchesVisibilityFilter(row: (typeof rows)[number]): boolean {
+    if (visibilityFilter === 'both') return true;
+    if (row.kind === 'divider') return visibilityFilter === 'displayed';
+    return visibilityFilter === 'displayed'
+      ? isVisible(row.column)
+      : !isVisible(row.column);
+  }
+
+  const filteredRows = rows.filter(matchesVisibilityFilter);
+  const shownIds = new Set(filteredRows.map(row => row.id));
 
   function moveTo(sourceId: string, targetId: string) {
     setOrderOverride(reorderIds(rowIds, sourceId, targetId));
@@ -167,6 +188,14 @@ export function FieldVisibilityForm({
         <input key={id} type="hidden" name="field_order_id" value={id} />
       ))}
       <input type="hidden" name="field_dividers" value={JSON.stringify(dividers)} />
+      {/* The Show filter can take a field that is On off screen, and only the
+          toggles still rendered submit a value. Stand in for the rest, or
+          saving under a filter would turn off everything it is not showing. */}
+      {rows.map(row => (
+        row.kind === 'column' && isVisible(row.column) && !shownIds.has(row.id) ? (
+          <input key={`on-${row.id}`} type="hidden" name="visible_field_id" value={row.id} />
+        ) : null
+      ))}
 
       <p style={{ fontSize: 13, color: 'var(--color-neutral-700)', margin: '0 0 var(--space-3)' }}>
         Drag a field by its handle to change the order, or focus a handle and press the up and down
@@ -174,6 +203,25 @@ export function FieldVisibilityForm({
         within one; without any pages, every field sits on a single untabbed screen. Results, record
         details, editing, and manual entry all follow this arrangement.
       </p>
+
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 'var(--space-3)',
+        marginBottom: 'var(--space-3)',
+        flexWrap: 'wrap',
+      }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>
+          Show
+        </span>
+        <SegmentedControl
+          name="visibility-filter"
+          value={visibilityFilter}
+          onChange={value => setVisibilityFilter(value as VisibilityFilter)}
+          options={VISIBILITY_FILTER_OPTIONS}
+        />
+      </div>
 
       <div style={{ overflowX: 'auto' }}>
         <table className="table" style={{ width: '100%' }}>
@@ -185,7 +233,16 @@ export function FieldVisibilityForm({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, index) => {
+            {filteredRows.length === 0 ? (
+              <tr>
+                <td colSpan={3} style={{ padding: 'var(--space-4)', color: 'var(--color-neutral-700)', fontSize: 13 }}>
+                  {visibilityFilter === 'displayed'
+                    ? 'No displayed fields.'
+                    : 'No hidden fields.'}
+                </td>
+              </tr>
+            ) : null}
+            {filteredRows.map((row, index) => {
               const id = row.id;
               const dragging = draggingId === id;
               const draggingIndex = draggingId ? rowIds.indexOf(draggingId) : -1;
@@ -248,7 +305,7 @@ export function FieldVisibilityForm({
                         else handleRefs.current.delete(id);
                       }}
                       type="button"
-                      aria-label={`Reorder ${label}, position ${index + 1} of ${rows.length}`}
+                      aria-label={`Reorder ${label}, position ${index + 1} of ${filteredRows.length}`}
                       disabled={disabled}
                       onKeyDown={event => {
                         const offset = event.key === 'ArrowUp' ? -1 : event.key === 'ArrowDown' ? 1 : 0;
@@ -342,7 +399,10 @@ export function FieldVisibilityForm({
                         </div>
                       </td>
                       <td style={{ padding: 0, height: 1 }}>
-                        <label htmlFor={inputId} style={cellLabelStyle}>
+                        {/* The Field cell's label already names this input, so
+                            the slider and its On/Off text stay out of the
+                            accessible name; the checked state carries it. */}
+                        <label className="field-toggle" style={cellLabelStyle}>
                           <input
                             id={inputId}
                             type="checkbox"
@@ -355,6 +415,12 @@ export function FieldVisibilityForm({
                               setOverrides(current => ({ ...current, [id]: checked }));
                             }}
                           />
+                          <span className="field-toggle-track" aria-hidden>
+                            <span className="field-toggle-knob" />
+                          </span>
+                          <span className="field-toggle-text" aria-hidden>
+                            {visible ? 'On' : 'Off'}
+                          </span>
                         </label>
                       </td>
                     </>
