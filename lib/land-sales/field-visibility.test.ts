@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildDatabaseRecordDisplaySheets,
   buildRecordDisplaySheets,
   fieldVisibilityId,
   filterVisibleColumns,
@@ -62,6 +63,38 @@ describe('field visibility filtering', () => {
     const sheets = buildRecordDisplaySheets(DETAIL_SHEETS, columns, hiddenCore);
     assert.deepEqual(sheets.map(sheet => sheet.id), ['additional']);
     assert.equal(sheets[0].extraColumns.some(column => column.key === 'Zoning'), true);
+  });
+
+  it('splits visible database fields into property and transaction detail sheets', () => {
+    const sheets = buildDatabaseRecordDisplaySheets(columns, new Set([
+      'extra:Property State',
+      'extra:Sale Price',
+    ]));
+
+    assert.deepEqual(sheets.map(sheet => sheet.title), ['Property Details', 'Transaction Details']);
+    assert.equal(sheets[0].extraColumns.some(column => column.key === 'Property Address'), true);
+    assert.equal(sheets[0].extraColumns.some(column => column.key === 'Proposed Use'), true);
+    assert.equal(sheets[0].extraColumns.some(column => column.key === 'Secondary Type'), true);
+    assert.equal(sheets[0].extraColumns.some(column => column.key === 'Assessed Year'), true);
+    assert.equal(sheets[0].extraColumns.some(column => column.key === 'Property State'), false);
+    assert.equal(sheets[1].extraColumns.some(column => column.key === 'Buyer (True) Company'), true);
+    assert.equal(sheets[1].extraColumns.some(column => column.key === 'Sale Price'), false);
+  });
+
+  it('omits a database detail sheet when all of its fields are hidden', () => {
+    const hiddenPropertyFields = new Set(
+      columns
+        .filter(column => column.kind === 'extra' && [
+          'Property Address', 'Property City', 'Property State', 'Property Type',
+          'Land Area AC', 'Land Area SF', 'Secondary Type', 'Proposed Use', 'Zoning',
+          'Market', 'Submarket Name', 'Property County', 'Property Zip Code',
+          'Assessed Improved', 'Assessed Land', 'Assessed Value', 'Assessed Year',
+        ].includes(column.key))
+        .map(fieldVisibilityId),
+    );
+    const sheets = buildDatabaseRecordDisplaySheets(columns, hiddenPropertyFields);
+
+    assert.deepEqual(sheets.map(sheet => sheet.title), ['Transaction Details']);
   });
 });
 

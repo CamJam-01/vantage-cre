@@ -22,7 +22,7 @@ export function landSaleFilterClauses(filters: LandSaleFilters): FilterClause[] 
   if (filters.county) clauses.push({ op: 'ilike', column: 'Property County', value: `%${filters.county}%` });
   if (filters.city) clauses.push({ op: 'ilike', column: 'Property City', value: `%${filters.city}%` });
   if (filters.msa) clauses.push({ op: 'ilike', column: 'Market', value: `%${filters.msa}%` });
-  if (filters.types.length) clauses.push({ op: 'in', column: 'Property Type', value: [...filters.types] });
+  if (filters.types.length) clauses.push({ op: 'in', column: 'Secondary Type', value: [...filters.types] });
   if (filters.sfMin != null) clauses.push({ op: 'gte', column: 'Land Area SF', value: filters.sfMin });
   if (filters.sfMax != null) clauses.push({ op: 'lte', column: 'Land Area SF', value: filters.sfMax });
   if (filters.acMin != null) clauses.push({ op: 'gte', column: 'Land Area AC', value: filters.acMin });
@@ -62,8 +62,7 @@ export function landSaleFilterClauses(filters: LandSaleFilters): FilterClause[] 
 }
 
 /** Translates decoded URL filters into a Supabase query. Shared by the results page
- * (fetch) and the CSV-duplicate check during import (count-only). */
-export function applyLandSaleFilters(
+ * (fetch) and the CSV-duplicate check during import (count-only). */export function applyLandSaleFilters(
   supabase: SupabaseClient,
   filters: LandSaleFilters
 ) {
@@ -92,4 +91,15 @@ export function applyLandSaleFilters(
     }
   }
   return query;
+}
+
+/** Unique non-empty "Secondary Type" values, used to populate the search page's type filters. */
+export async function getDistinctSecondaryTypes(supabase: SupabaseClient): Promise<string[]> {
+  const { data } = await supabase.from('land_sales').select('"Secondary Type"');
+  const values = new Set<string>();
+  for (const row of (data ?? []) as Record<string, unknown>[]) {
+    const value = row['Secondary Type'];
+    if (typeof value === 'string' && value.trim()) values.add(value.trim());
+  }
+  return [...values].sort((a, b) => a.localeCompare(b));
 }

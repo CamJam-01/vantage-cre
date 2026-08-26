@@ -14,6 +14,28 @@ export type RecordDisplaySheet = DetailSheet & {
   extraColumns: ExtraResultColumn[];
 };
 
+/** Physical Supabase columns that describe the property rather than the sale.
+ * All remaining database columns belong to Transaction Details. */
+export const PROPERTY_DETAIL_FIELD_KEYS = new Set([
+  'Property Address',
+  'Property City',
+  'Property State',
+  'Property Type',
+  'Land Area AC',
+  'Land Area SF',
+  'Secondary Type',
+  'Proposed Use',
+  'Zoning',
+  'Market',
+  'Submarket Name',
+  'Property County',
+  'Property Zip Code',
+  'Assessed Improved',
+  'Assessed Land',
+  'Assessed Value',
+  'Assessed Year',
+]);
+
 export function fieldVisibilityId(column: ResultColumn): string {
   return `${column.kind}:${column.key}`;
 }
@@ -78,6 +100,37 @@ export function buildRecordDisplaySheets(
   return coreSheets.map((sheet, index) => (
     index === lastIndex ? { ...sheet, extraColumns } : sheet
   ));
+}
+
+/** Split visible physical database fields into the record page's two sheets.
+ * Hidden fields are removed before grouping, so neither sheet can reveal a
+ * field disabled in Database Manager. Empty sheets are omitted. */
+export function buildDatabaseRecordDisplaySheets(
+  columns: ResultColumn[],
+  hidden: HiddenFieldIds,
+): RecordDisplaySheet[] {
+  const visibleColumns = filterVisibleColumns(columns, hidden)
+    .filter((column): column is ExtraResultColumn => column.kind === 'extra');
+
+  const propertyColumns = visibleColumns.filter(column => PROPERTY_DETAIL_FIELD_KEYS.has(column.key));
+  const transactionColumns = visibleColumns.filter(column => !PROPERTY_DETAIL_FIELD_KEYS.has(column.key));
+
+  return [
+    {
+      id: 'property-details',
+      tab: 'Property Details',
+      title: 'Property Details',
+      sections: [],
+      extraColumns: propertyColumns,
+    },
+    {
+      id: 'transaction-details',
+      tab: 'Transaction Details',
+      title: 'Transaction Details',
+      sections: [],
+      extraColumns: transactionColumns,
+    },
+  ].filter(sheet => sheet.extraColumns.length > 0);
 }
 
 export type VisibleFieldValidation =

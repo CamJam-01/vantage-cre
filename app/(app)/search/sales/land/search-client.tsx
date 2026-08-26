@@ -1,21 +1,19 @@
-import { createClient } from '@/lib/supabase/server';
-import { getDistinctSecondaryTypes } from '@/lib/land-sales/query';
-import { decodeFilters } from '@/lib/land-sales/search-params';
-import { LandSalesSearchClient } from './search-client';
+'use client';
 
-type PageProps = {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
+import { useState, type CSSProperties } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { Blueprint } from '@/components/ui/blueprint';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Field } from '@/components/ui/field';
+import { Tag } from '@/components/ui/tag';
+import { US_STATES } from '@/lib/land-sales/constants';
+import { encodeFilters, type LandSaleFilters, type TimeFilter } from '@/lib/land-sales/search-params';
+import { parseFormattedNumber } from '@/lib/land-sales/format';
 
-export default async function LandSalesSearchPage({ searchParams }: PageProps) {
-  const params = await searchParams;
-  const filters = decodeFilters(params);
+type Tab = 'location' | 'type' | 'size' | 'time';
 
-<<<<<<< HEAD
-  const supabase = await createClient();
-  const secondaryTypes = await getDistinctSecondaryTypes(supabase);
-  return <LandSalesSearchClient secondaryTypes={secondaryTypes} initial={filters} />;
-=======
 const TABS: { key: Tab; label: string }[] = [
   { key: 'location', label: 'Location' },
   { key: 'type', label: 'Type' },
@@ -27,29 +25,33 @@ const sectionStyle: CSSProperties = { padding: 'var(--space-6)', background: 'va
 const modeRowStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'flex-start', flexDirection: 'row', gap: 20 };
 const twoColStyle: CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' };
 
-export default function LandSalesSearchPage() {
+export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTypes: string[]; initial: LandSaleFilters }) {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<Tab>('location');
-  const [sizeMode, setSizeMode] = useState<'sf' | 'ac'>('sf');
-  const [timeMode, setTimeMode] = useState<'last' | 'range'>('last');
+  const [sizeMode, setSizeMode] = useState<'sf' | 'ac'>(initial.acMin != null || initial.acMax != null ? 'ac' : 'sf');
+  const [timeMode, setTimeMode] = useState<'last' | 'range'>(initial.time?.mode === 'range' ? 'range' : 'last');
 
-  const [state, setState] = useState('');
-  const [msa, setMsa] = useState('');
-  const [county, setCounty] = useState('');
-  const [city, setCity] = useState('');
-  const [types, setTypes] = useState<PropertyType[]>([]);
-  const [sfMin, setSfMin] = useState('');
-  const [sfMax, setSfMax] = useState('');
-  const [acMin, setAcMin] = useState('');
-  const [acMax, setAcMax] = useState('');
+  const [state, setState] = useState(initial.state ?? '');
+  const [msa, setMsa] = useState(initial.msa ?? '');
+  const [county, setCounty] = useState(initial.county ?? '');
+  const [city, setCity] = useState(initial.city ?? '');
+  const [types, setTypes] = useState<string[]>([...initial.types]);
+  const [sfMin, setSfMin] = useState(initial.sfMin != null ? String(initial.sfMin) : '');
+  const [sfMax, setSfMax] = useState(initial.sfMax != null ? String(initial.sfMax) : '');
+  const [acMin, setAcMin] = useState(initial.acMin != null ? String(initial.acMin) : '');
+  const [acMax, setAcMax] = useState(initial.acMax != null ? String(initial.acMax) : '');
 
-  const [lastDuration, setLastDuration] = useState('');
-  const [lastUnit, setLastUnit] = useState<'months' | 'years'>('months');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [lastDuration, setLastDuration] = useState(
+    initial.time?.mode === 'last' ? String(initial.time.duration) : ''
+  );
+  const [lastUnit, setLastUnit] = useState<'months' | 'years'>(
+    initial.time?.mode === 'last' ? initial.time.unit : 'months'
+  );
+  const [dateFrom, setDateFrom] = useState(initial.time?.mode === 'range' ? (initial.time.from ?? '') : '');
+  const [dateTo, setDateTo] = useState(initial.time?.mode === 'range' ? (initial.time.to ?? '') : '');
 
-  function toggleType(t: PropertyType) {
+  function toggleType(t: string) {
     setTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
   }
 
@@ -128,7 +130,7 @@ export default function LandSalesSearchPage() {
 
         {activeTab === 'type' && (
           <div style={{ ...sectionStyle, display: 'grid', flexWrap: 'wrap', gap: 15, gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
-            {PROPERTY_TYPES.map(t => {
+            {secondaryTypes.map(t => {
               const selected = types.includes(t);
               return (
                 <Tag
@@ -145,6 +147,9 @@ export default function LandSalesSearchPage() {
                 </Tag>
               );
             })}
+            {secondaryTypes.length === 0 && (
+              <p style={{ gridColumn: '1 / -1', margin: 0, color: 'var(--color-neutral-700)' }}>No secondary types available.</p>
+            )}
           </div>
         )}
 
@@ -152,26 +157,36 @@ export default function LandSalesSearchPage() {
           <div style={{ ...sectionStyle, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div style={modeRowStyle}>
               <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>
-                {sizeMode === 'sf' ? 'Square Feet (SF)' : 'Acreage (AC)'}
+                Land Area
               </span>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => setSizeMode(m => m === 'sf' ? 'ac' : 'sf')}
-                style={{ cursor: 'pointer', textAlign: 'left', alignSelf: 'auto', fontSize: 12, fontStyle: 'normal', textDecorationLine: 'underline' }}
-              >
-                {sizeMode === 'sf' ? 'Use Acreage' : 'Use Square Feet'}
-              </button>
+              <SegmentedControl
+                name="size-mode"
+                value={sizeMode}
+                onChange={v => {
+                  const next = v as 'sf' | 'ac';
+                  if (next === sizeMode) return;
+                  setSizeMode(next);
+                  if (next === 'sf') { setAcMin(''); setAcMax(''); }
+                  else { setSfMin(''); setSfMax(''); }
+                }}
+                options={[{ label: 'SF', value: 'sf' }, { label: 'AC', value: 'ac' }]}
+              />
             </div>
             {sizeMode === 'sf' ? (
-              <div style={twoColStyle}>
-                <Field id="sfMin" label="Min" type="text" inputMode="numeric" placeholder="0" value={sfMin} onChange={e => setSfMin(formatInputWithCommas(e.target.value))} style={{ backgroundColor: '#FFFFFF' }} />
-                <Field id="sfMax" label="Max" type="text" inputMode="numeric" placeholder="0" value={sfMax} onChange={e => setSfMax(formatInputWithCommas(e.target.value))} style={{ backgroundColor: '#FFFFFF' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                <label htmlFor="sfMin" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>Land Area SF</label>
+                <div style={twoColStyle}>
+                  <Field id="sfMin" label="Min" type="text" inputMode="decimal" placeholder="" value={sfMin} onChange={e => setSfMin(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+                  <Field id="sfMax" label="Max" type="text" inputMode="decimal" placeholder="" value={sfMax} onChange={e => setSfMax(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+                </div>
               </div>
             ) : (
-              <div style={twoColStyle}>
-                <Field id="acMin" label="Min" type="text" inputMode="decimal" placeholder="0.00" value={acMin} onChange={e => setAcMin(formatInputWithCommas(e.target.value))} style={{ backgroundColor: '#FFFFFF' }} />
-                <Field id="acMax" label="Max" type="text" inputMode="decimal" placeholder="0.00" value={acMax} onChange={e => setAcMax(formatInputWithCommas(e.target.value))} style={{ backgroundColor: '#FFFFFF' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                <label htmlFor="acMin" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>Land Area AC</label>
+                <div style={twoColStyle}>
+                  <Field id="acMin" label="Min" type="text" inputMode="decimal" placeholder="" value={acMin} onChange={e => setAcMin(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+                  <Field id="acMax" label="Max" type="text" inputMode="decimal" placeholder="" value={acMax} onChange={e => setAcMax(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+                </div>
               </div>
             )}
           </div>
@@ -238,5 +253,4 @@ export default function LandSalesSearchPage() {
       </div>
     </main>
   );
->>>>>>> 0c18f7c (add redirect for root domain for non-logged in users + changed placeholder text in sales search)
 }

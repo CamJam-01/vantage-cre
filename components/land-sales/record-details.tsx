@@ -4,24 +4,14 @@ import { useActionState, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, TriangleAlert } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { PROPERTY_TYPES, US_STATES } from '@/lib/land-sales/constants';
-import { formatCurrency, formatDate, formatNumber } from '@/lib/land-sales/format';
 import { updateLandSale, type CreateFormState } from '@/app/(app)/land-sales/actions';
 import { extraInputName, type LandSale } from '@/lib/land-sales/schema';
+import { resultColumns } from '@/lib/land-sales/result-columns';
 import {
-  CORE_RESULT_COLUMNS,
-  DETAIL_COMPUTED_FIELDS,
-  DETAIL_SHEETS,
-  detailSheetFields,
-  resultColumns,
-  type CoreResultField,
-  type DetailField,
-} from '@/lib/land-sales/result-columns';
-import {
-  buildRecordDisplaySheets,
-  visibleCoreField,
+  buildDatabaseRecordDisplaySheets,
+  visibleExtraField,
 } from '@/lib/land-sales/field-visibility';
 import {
   CURRENT_ACTION_STATE,
@@ -30,21 +20,11 @@ import {
 
 const initialState: CreateFormState = null;
 
-/** Fields whose value is a record number or a figure — set in the mono face so
- * they line up column-wise down the sheet, as on a drafting title block. */
-const MONO_FIELDS: CoreResultField[] = ['parcel_id', 'sale_date'];
-const NUMERIC_FIELDS: CoreResultField[] = ['acreage', 'square_feet', 'sale_price', 'price_per_acre'];
-
 function detailsHref(id: string, from?: string) {
   const params = new URLSearchParams();
   if (from) params.set('from', from);
   const qs = params.toString();
   return qs ? `/land-sales/${id}?${qs}` : `/land-sales/${id}`;
-}
-
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
-  return <div className="record-error">{message}</div>;
 }
 
 /** The Save/Cancel controls live in the sticky action bar, outside the form, so
@@ -62,6 +42,7 @@ function OptionalForm({
   return <form id={FORM_ID} action={action}>{children}</form>;
 }
 
+<<<<<<< Updated upstream
 function saleDateWarning(record: LandSale): string | undefined {
   return !record.sale_date && record.sale_date_raw
     ? `Unrecognized date from import: "${record.sale_date_raw}". Flagged for review.`
@@ -300,6 +281,8 @@ function SheetField({
   );
 }
 
+=======
+>>>>>>> Stashed changes
 export function RecordDetails({
   record,
   from,
@@ -422,31 +405,31 @@ export function RecordDetailsForm({
   hiddenFieldIds?: string[];
 }) {
   const hidden = new Set(hiddenFieldIds);
-  const columns = [...CORE_RESULT_COLUMNS, ...resultColumns({ catalogLabels })];
-  const visibleSheets = buildRecordDisplaySheets(DETAIL_SHEETS, columns, hidden);
+  // `resultColumns` is the catalog of physical CoStar columns in Supabase.
+  // Do not prepend the former app-only core aliases: those are deprecated and
+  // are not configurable in Database Manager.
+  const columns = resultColumns({ catalogLabels });
+  const visibleSheets = buildDatabaseRecordDisplaySheets(columns, hidden);
   const [editing, setEditing] = useState(canEdit && (startEditing || createMode));
-  const [activeSheet, setActiveSheet] = useState(visibleSheets[0]?.id ?? 'additional');
+  const [activeSheet, setActiveSheet] = useState(visibleSheets[0]?.id ?? 'property-details');
   const [actionBaseline, setActionBaseline] = useState<CreateFormState | typeof CURRENT_ACTION_STATE>(
     startEditing ? CURRENT_ACTION_STATE : state,
   );
   const displayState = visibleActionState(state, actionBaseline);
-  const errors = displayState?.errors ?? {};
   const backToSearchHref = from ? `/land-sales?${from}` : '/land-sales';
-  const activeIndex = Math.max(0, visibleSheets.findIndex(sheet => sheet.id === activeSheet));
 
-  // Server-side validation can reject a field on whichever sheet isn't showing;
-  // surface that sheet so the message under the field is actually visible. This
-  // is the render-phase state adjustment React prescribes for reacting to new
-  // props — `shownErrorSheet` remembers which rejection has already been acted
-  // on, so the user stays free to tab away while the error is still standing.
-  const errorSheetId = Object.keys(errors).length
-    ? visibleSheets.find(sheet => detailSheetFields(sheet).some(field => field.key in errors))?.id ?? null
-    : null;
-  const [shownErrorSheet, setShownErrorSheet] = useState<string | null>(null);
-  if (errorSheetId !== shownErrorSheet) {
-    setShownErrorSheet(errorSheetId);
-    if (errorSheetId) setActiveSheet(errorSheetId);
-  }
+  const visibleValue = (label: string) => (
+    visibleExtraField(label, hidden) ? record.extras?.[label]?.trim() ?? '' : ''
+  );
+  const address = visibleValue('Property Address');
+  const city = visibleValue('Property City');
+  const stateName = visibleValue('Property State');
+  const county = visibleValue('Property County');
+  const market = visibleValue('Market');
+  const location = [city, stateName].filter(Boolean).join(', ');
+  const subtitle = [location, county ? `${county} County` : '', market]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <>
@@ -502,40 +485,15 @@ export function RecordDetailsForm({
               ) : (
                 <>
                   <div className="tags">
-                    {visibleCoreField('parcel_id', hidden) && record.parcel_id && (
-                      <span className="tag tag-on-ground mono">{record.parcel_id}</span>
+                    {visibleValue('Parcel Number 1 (Min)') && (
+                      <span className="tag tag-on-ground mono">{visibleValue('Parcel Number 1 (Min)')}</span>
                     )}
-                    {visibleCoreField('property_type', hidden) && record.property_type && (
-                      <span className="tag tag-accent">{record.property_type}</span>
+                    {visibleValue('Property Type') && (
+                      <span className="tag tag-accent">{visibleValue('Property Type')}</span>
                     )}
                   </div>
-                  <h1>
-                    {visibleCoreField('address', hidden) && record.address
-                      ? record.address
-                      : [
-                          visibleCoreField('city', hidden) ? record.city : '',
-                          visibleCoreField('state', hidden) ? record.state : '',
-                        ].filter(Boolean).join(', ') || 'Land Sale Record'}
-                  </h1>
-                  {[
-                    [
-                      visibleCoreField('city', hidden) ? record.city : '',
-                      visibleCoreField('state', hidden) ? record.state : '',
-                    ].filter(Boolean).join(', '),
-                    visibleCoreField('county', hidden) && record.county ? `${record.county} County` : '',
-                    visibleCoreField('msa', hidden) ? record.msa : '',
-                  ].filter(Boolean).length > 0 && (
-                    <p className="sub">
-                      {[
-                        [
-                          visibleCoreField('city', hidden) ? record.city : '',
-                          visibleCoreField('state', hidden) ? record.state : '',
-                        ].filter(Boolean).join(', '),
-                        visibleCoreField('county', hidden) && record.county ? `${record.county} County` : '',
-                        visibleCoreField('msa', hidden) ? record.msa : '',
-                      ].filter(Boolean).join(' · ')}
-                    </p>
-                  )}
+                  <h1>{address || location || 'Land Sale Record'}</h1>
+                  {subtitle && <p className="sub">{subtitle}</p>}
                 </>
               )}
             </div>
@@ -582,24 +540,10 @@ export function RecordDetailsForm({
                 </div>
 
                 <div className="record-grid">
-                  {sheet.sections.map((section, sectionIndex) => (
-                    <SheetSection key={section.label ?? sectionIndex} first={sectionIndex === 0} label={section.label}>
-                      {section.fields.map(field => (
-                        <SheetField
-                          key={field.key}
-                          record={record}
-                          field={field}
-                          editing={editing}
-                          error={errors[field.key]}
-                        />
-                      ))}
-                    </SheetSection>
-                  ))}
-
-                  {/* Imported columns have no home in the drafting sheets, so
-                      they land as a final band on the last one. */}
+                  {/* Every field here corresponds to a physical Supabase
+                      column and has already passed the Admin visibility filter. */}
                   {sheet.extraColumns.length > 0 && (
-                    <SheetSection first={false} label="Additional Fields">
+                    <SheetSection first>
                       {sheet.extraColumns.map(column => (
                         <div key={column.key} className="record-field record-span-4">
                           <label htmlFor={editing ? extraInputName(column.key) : undefined}>{column.label}</label>
@@ -631,28 +575,6 @@ export function RecordDetailsForm({
               </section>
             ))}
 
-            <div className="record-titleblock">
-              <div>
-                <span className="tb-label">Record</span>
-                <span className="tb-value">{record.parcel_id || '—'}</span>
-              </div>
-              <div>
-                <span className="tb-label">Type</span>
-                <span className="tb-value">{record.property_type || '—'}</span>
-              </div>
-              <div>
-                <span className="tb-label">Created</span>
-                <span className="tb-value">{formatDate(record.created_at?.slice(0, 10))}</span>
-              </div>
-              <div>
-                <span className="tb-label">Last Updated</span>
-                <span className="tb-value">{formatDate(record.updated_at?.slice(0, 10))}</span>
-              </div>
-              <div>
-                <span className="tb-label">Sheet</span>
-                <span className="tb-value">{activeIndex + 1}/{visibleSheets.length}</span>
-              </div>
-            </div>
           </OptionalForm>
         </div>
       </main>

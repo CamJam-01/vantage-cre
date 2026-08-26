@@ -10,6 +10,6 @@ export default async function Home() {
   if (user) {
     redirect('/search');
   }
-
+  
   redirect('/login');
 }
