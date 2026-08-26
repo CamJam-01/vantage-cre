@@ -10,8 +10,10 @@ import { updateLandSale, type CreateFormState } from '@/app/(app)/land-sales/act
 import { extraInputName, type LandSale } from '@/lib/land-sales/schema';
 import { resultColumns } from '@/lib/land-sales/result-columns';
 import {
-  buildDatabaseRecordDisplaySheets,
+  buildRecordDisplayPages,
+  fieldDisplayRows,
   visibleExtraField,
+  type FieldDivider,
 } from '@/lib/land-sales/field-visibility';
 import {
   CURRENT_ACTION_STATE,
@@ -49,6 +51,8 @@ export function RecordDetails({
   startEditing = false,
   catalogLabels = [],
   hiddenFieldIds = [],
+  fieldOrder = [],
+  fieldDividers = [],
 }: {
   record: LandSale;
   from?: string;
@@ -56,9 +60,11 @@ export function RecordDetails({
   startEditing?: boolean;
   catalogLabels?: string[];
   hiddenFieldIds?: string[];
+  fieldOrder?: string[];
+  fieldDividers?: FieldDivider[];
 }) {
   if (!canEdit) {
-    return <RecordDetailsForm record={record} from={from} canEdit={false} catalogLabels={catalogLabels} hiddenFieldIds={hiddenFieldIds} />;
+    return <RecordDetailsForm record={record} from={from} canEdit={false} catalogLabels={catalogLabels} hiddenFieldIds={hiddenFieldIds} fieldOrder={fieldOrder} fieldDividers={fieldDividers} />;
   }
   return (
     <RecordDetailsEditor
@@ -68,6 +74,8 @@ export function RecordDetails({
       startEditing={startEditing}
       catalogLabels={catalogLabels}
       hiddenFieldIds={hiddenFieldIds}
+      fieldOrder={fieldOrder}
+      fieldDividers={fieldDividers}
     />
   );
 }
@@ -78,12 +86,16 @@ function RecordDetailsEditor({
   startEditing = false,
   catalogLabels,
   hiddenFieldIds,
+  fieldOrder,
+  fieldDividers,
 }: {
   record: LandSale;
   from?: string;
   startEditing?: boolean;
   catalogLabels: string[];
   hiddenFieldIds: string[];
+  fieldOrder: string[];
+  fieldDividers: FieldDivider[];
 }) {
   const router = useRouter();
   const [resetKey, setResetKey] = useState(0);
@@ -102,6 +114,8 @@ function RecordDetailsEditor({
       onCancel={handleCancel}
       catalogLabels={catalogLabels}
       hiddenFieldIds={hiddenFieldIds}
+      fieldOrder={fieldOrder}
+      fieldDividers={fieldDividers}
     />
   );
 }
@@ -113,6 +127,8 @@ function BoundRecordDetailsForm({
   onCancel,
   catalogLabels,
   hiddenFieldIds,
+  fieldOrder,
+  fieldDividers,
 }: {
   record: LandSale;
   from?: string;
@@ -120,6 +136,8 @@ function BoundRecordDetailsForm({
   onCancel: () => void;
   catalogLabels: string[];
   hiddenFieldIds: string[];
+  fieldOrder: string[];
+  fieldDividers: FieldDivider[];
 }) {
   const [state, formAction, pending] = useActionState(updateLandSale.bind(null, record.id), initialState);
   return (
@@ -134,6 +152,8 @@ function BoundRecordDetailsForm({
       onCancel={onCancel}
       catalogLabels={catalogLabels}
       hiddenFieldIds={hiddenFieldIds}
+      fieldOrder={fieldOrder}
+      fieldDividers={fieldDividers}
     />
   );
 }
@@ -150,6 +170,8 @@ export function RecordDetailsForm({
   onCancel,
   catalogLabels = [],
   hiddenFieldIds = [],
+  fieldOrder = [],
+  fieldDividers = [],
 }: {
   record: LandSale;
   from?: string;
@@ -162,15 +184,20 @@ export function RecordDetailsForm({
   onCancel?: () => void;
   catalogLabels?: string[];
   hiddenFieldIds?: string[];
+  fieldOrder?: string[];
+  fieldDividers?: FieldDivider[];
 }) {
   const hidden = new Set(hiddenFieldIds);
   // `resultColumns` is the catalog of physical CoStar columns in Supabase.
   // Do not prepend the former app-only core aliases: those are deprecated and
   // are not configurable in Database Manager.
-  const columns = resultColumns({ catalogLabels });
-  const visibleSheets = buildDatabaseRecordDisplaySheets(columns, hidden);
+  // Fields, group headings, and page breaks follow the arrangement an Admin
+  // saved in Database Manager, so view, edit, and create all agree with it.
+  const rows = fieldDisplayRows(resultColumns({ catalogLabels }), fieldOrder, fieldDividers);
+  const pages = buildRecordDisplayPages(rows, hidden);
+  const tabbedPages = pages.filter(page => page.title !== null);
   const [editing, setEditing] = useState(canEdit && (startEditing || createMode));
-  const [activeSheet, setActiveSheet] = useState(visibleSheets[0]?.id ?? 'property-details');
+  const [activePage, setActivePage] = useState(tabbedPages[0]?.id ?? '');
   const [actionBaseline, setActionBaseline] = useState<CreateFormState | typeof CURRENT_ACTION_STATE>(
     startEditing ? CURRENT_ACTION_STATE : state,
   );
@@ -248,102 +275,100 @@ export function RecordDetailsForm({
               )}
             </div>
 
-            <div className="record-tabs" role="tablist" aria-label="Record sheets">
-              {visibleSheets.map(sheet => (
-                <button
-                  key={sheet.id}
-                  type="button"
-                  role="tab"
-                  id={`record-tab-${sheet.id}`}
-                  aria-selected={sheet.id === activeSheet}
-                  aria-controls={`record-sheet-${sheet.id}`}
-                  className="record-tab"
-                  onClick={() => setActiveSheet(sheet.id)}
-                >
-                  {sheet.tab}
-                </button>
-              ))}
-            </div>
+            {/* No pages arranged in Database Manager means no tab strip: the
+                lead page holds every field on one screen. */}
+            {tabbedPages.length > 0 && (
+              <div className="record-tabs" role="tablist" aria-label="Record pages">
+                {tabbedPages.map(page => (
+                  <button
+                    key={page.id}
+                    type="button"
+                    role="tab"
+                    id={`record-tab-${page.id}`}
+                    aria-selected={page.id === activePage}
+                    aria-controls={`record-sheet-${page.id}`}
+                    className="record-tab"
+                    onClick={() => setActivePage(page.id)}
+                  >
+                    {page.title}
+                  </button>
+                ))}
+              </div>
+            )}
 
-            {visibleSheets.map(sheet => (
+            {pages.map(page => (
               <section
-                key={sheet.id}
-                id={`record-sheet-${sheet.id}`}
-                role="tabpanel"
-                aria-labelledby={`record-tab-${sheet.id}`}
+                key={page.id}
+                id={`record-sheet-${page.id}`}
+                role={page.title === null ? undefined : 'tabpanel'}
+                aria-labelledby={page.title === null ? undefined : `record-tab-${page.id}`}
                 className="record-panel"
                 /* Hidden rather than unmounted: a save submits every field on
-                   every sheet, including whatever the user typed before
+                   every page, including whatever the user typed before
                    switching tabs. The flip side is that a `required` field can
                    fail native validation while off-screen — which the browser
-                   reports by silently refusing to submit — so bring its sheet
-                   forward synchronously before the browser tries to focus it. */
-                hidden={sheet.id !== activeSheet}
+                   reports by silently refusing to submit — so bring its page
+                   forward synchronously before the browser tries to focus it.
+                   The lead page has no tab and always stays open. */
+                hidden={page.title !== null && page.id !== activePage}
                 onInvalidCapture={() => {
-                  if (sheet.id !== activeSheet) flushSync(() => setActiveSheet(sheet.id));
+                  if (page.title !== null && page.id !== activePage) {
+                    flushSync(() => setActivePage(page.id));
+                  }
                 }}
               >
-                <div className="record-panel-title">
-                  <h2>{sheet.title}</h2>
-                </div>
+                {page.title !== null && (
+                  <div className="record-panel-title">
+                    <h2>{page.title}</h2>
+                  </div>
+                )}
 
                 <div className="record-grid">
-                  {/* Every field here corresponds to a physical Supabase
-                      column and has already passed the Admin visibility filter. */}
-                  {sheet.extraColumns.length > 0 && (
-                    <SheetSection first>
-                      {sheet.extraColumns.map(column => (
-                        <div key={column.key} className="record-field record-span-4">
-                          <label htmlFor={editing ? extraInputName(column.key) : undefined}>{column.label}</label>
-                          {editing ? (
-                            <input
-                              id={extraInputName(column.key)}
-                              name={extraInputName(column.key)}
-                              type="text"
-                              className="input"
-                              defaultValue={record.extras?.[column.key] ?? ''}
-                            />
-                          ) : (
-                            <input
-                              className="input"
-                              readOnly
-                              tabIndex={-1}
-                              value={record.extras?.[column.key] || '—'}
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </SheetSection>
-                  )}
+                  {/* Every field here corresponds to a physical Supabase column
+                      and has already passed the Admin visibility filter; the
+                      group headings between them are the section breaks an
+                      Admin arranged in Database Manager. */}
+                  {page.items.map(item => (
+                    item.kind === 'group' ? (
+                      <div key={`group-${item.id}`} className="record-field record-field-group record-span-12">
+                        {item.label}
+                      </div>
+                    ) : (
+                      <div key={item.column.key} className="record-field record-span-4">
+                        <label htmlFor={editing ? extraInputName(item.column.key) : undefined}>{item.column.label}</label>
+                        {editing ? (
+                          <input
+                            id={extraInputName(item.column.key)}
+                            name={extraInputName(item.column.key)}
+                            type="text"
+                            className="input"
+                            defaultValue={record.extras?.[item.column.key] ?? ''}
+                          />
+                        ) : (
+                          <input
+                            className="input"
+                            readOnly
+                            tabIndex={-1}
+                            value={record.extras?.[item.column.key] || '—'}
+                          />
+                        )}
+                      </div>
+                    )
+                  ))}
                 </div>
 
-                {editing && displayState?.message && (
-                  <div className="record-error" style={{ marginTop: 'var(--space-4)' }}>{displayState.message}</div>
-                )}
               </section>
             ))}
+
+            {/* One notice for the whole form: the lead page and the open tab
+                are both on screen, so a per-page copy would show twice. */}
+            {editing && displayState?.message && (
+              <div className="record-error" style={{ marginBottom: 'var(--space-4)' }}>{displayState.message}</div>
+            )}
 
           </OptionalForm>
         </div>
       </main>
-    </>
-  );
-}
-
-function SheetSection({
-  first,
-  label,
-  children,
-}: {
-  first: boolean;
-  label?: string;
-  children: ReactNode;
-}) {
-  return (
-    <>
-      {!first && <div className="record-divider" />}
-      {label && <div className="record-section-label">{label}</div>}
-      {children}
     </>
   );
 }

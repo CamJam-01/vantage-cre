@@ -4,6 +4,7 @@ import { useActionState } from 'react';
 import { createLandSale, type CreateFormState } from '@/app/(app)/land-sales/actions';
 import { RecordDetailsForm } from '@/components/land-sales/record-details';
 import type { ResultColumn } from '@/lib/land-sales/result-columns';
+import type { FieldDivider } from '@/lib/land-sales/field-visibility';
 import type { LandSale } from '@/lib/land-sales/schema';
 
 const initialState: CreateFormState = null;
@@ -27,9 +28,13 @@ const BLANK_RECORD: LandSale = {
 
 export function LandSaleForm({
   hiddenFieldIds,
+  fieldOrder,
+  fieldDividers,
 }: {
   columns: ResultColumn[];
   hiddenFieldIds: string[];
+  fieldOrder: string[];
+  fieldDividers: FieldDivider[];
 }) {
   const [state, formAction, pending] = useActionState(createLandSale, initialState);
 
@@ -43,6 +48,8 @@ export function LandSaleForm({
       formAction={formAction}
       pending={pending}
       hiddenFieldIds={hiddenFieldIds}
+      fieldOrder={fieldOrder}
+      fieldDividers={fieldDividers}
     />
   );
 }
