@@ -1,4 +1,3 @@
-import { PROPERTY_TYPES, type PropertyType } from './constants';
 import { costarColumnNames } from './costar-fields';
 import { decodeFieldFilter, encodeFieldFilter, type FieldFilter } from './field-filters';
 
@@ -11,7 +10,7 @@ export type LandSaleFilters = {
   msa?: string;
   county?: string;
   city?: string;
-  types: PropertyType[];
+  types: string[];
   sfMin?: number;
   sfMax?: number;
   acMin?: number;
@@ -62,9 +61,11 @@ function toURLSearchParams(input: SearchParamsInput): URLSearchParams {
 export function decodeFilters(input: SearchParamsInput): LandSaleFilters {
   const params = toURLSearchParams(input);
 
-  const types = params.getAll('type').filter((t): t is PropertyType =>
-    (PROPERTY_TYPES as readonly string[]).includes(t)
-  );
+  const types = [...new Set(
+    params.getAll('type')
+      .map(t => t.trim())
+      .filter(Boolean)
+  )];
 
   const num = (key: string): number | undefined => {
     const v = params.get(key);
