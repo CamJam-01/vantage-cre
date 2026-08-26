@@ -184,9 +184,8 @@ export function RecordDetailsForm({
   const city = visibleValue('Property City');
   const stateName = visibleValue('Property State');
   const county = visibleValue('Property County');
-  const market = visibleValue('Market');
   const location = [city, stateName].filter(Boolean).join(', ');
-  const subtitle = [location, county ? `${county} County` : '', market]
+  const subtitle = [county ? `${county} County` : '', location]
     .filter(Boolean)
     .join(' · ');
 
@@ -243,14 +242,6 @@ export function RecordDetailsForm({
                 </>
               ) : (
                 <>
-                  <div className="tags">
-                    {visibleValue('Parcel Number 1 (Min)') && (
-                      <span className="tag tag-on-ground mono">{visibleValue('Parcel Number 1 (Min)')}</span>
-                    )}
-                    {visibleValue('Property Type') && (
-                      <span className="tag tag-accent">{visibleValue('Property Type')}</span>
-                    )}
-                  </div>
                   <h1>{address || location || 'Land Sale Record'}</h1>
                   {subtitle && <p className="sub">{subtitle}</p>}
                 </>
@@ -258,7 +249,7 @@ export function RecordDetailsForm({
             </div>
 
             <div className="record-tabs" role="tablist" aria-label="Record sheets">
-              {visibleSheets.map((sheet, index) => (
+              {visibleSheets.map(sheet => (
                 <button
                   key={sheet.id}
                   type="button"
@@ -269,13 +260,12 @@ export function RecordDetailsForm({
                   className="record-tab"
                   onClick={() => setActiveSheet(sheet.id)}
                 >
-                  <span className="sheet-no">{index + 1}</span>
                   {sheet.tab}
                 </button>
               ))}
             </div>
 
-            {visibleSheets.map((sheet, index) => (
+            {visibleSheets.map(sheet => (
               <section
                 key={sheet.id}
                 id={`record-sheet-${sheet.id}`}
@@ -295,7 +285,6 @@ export function RecordDetailsForm({
               >
                 <div className="record-panel-title">
                   <h2>{sheet.title}</h2>
-                  <span className="hint">Sheet {index + 1} of {visibleSheets.length}</span>
                 </div>
 
                 <div className="record-grid">
