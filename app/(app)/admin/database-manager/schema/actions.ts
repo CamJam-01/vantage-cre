@@ -5,10 +5,17 @@ import { createClient } from '@/lib/supabase/server';
 import { getCurrentUserProfile } from '@/lib/users/roles';
 import { logAudit } from '@/lib/audit/log';
 import { resultColumns } from '@/lib/land-sales/result-columns';
+import type { FieldDivider } from '@/lib/land-sales/field-visibility';
 import { parseVisibilitySubmission } from '@/lib/admin/field-visibility-action';
 
 export type FieldVisibilityActionState =
-  | { status: 'success'; message: string; hiddenFieldIds: string[] }
+  | {
+      status: 'success';
+      message: string;
+      hiddenFieldIds: string[];
+      fieldOrder: string[];
+      fieldDividers: FieldDivider[];
+    }
   | { status: 'error'; message: string }
   | null;
 
@@ -32,6 +39,8 @@ export async function saveFieldVisibilityAction(
     .upsert({
       database_key: submission.databaseKey,
       hidden_field_keys: submission.hiddenFieldIds,
+      field_order: submission.fieldOrder,
+      field_dividers: submission.fieldDividers,
       updated_at: new Date().toISOString(),
       updated_by: profile.id,
     }, { onConflict: 'database_key' });
@@ -41,16 +50,19 @@ export async function saveFieldVisibilityAction(
   await logAudit(
     supabase,
     'Updated Field Visibility',
-    `Sales: ${visibleCount} of ${columns.length} fields visible`,
+    `Sales: ${visibleCount} of ${columns.length} fields visible, ${submission.fieldDividers.length} pages and field groups`,
   );
 
   revalidatePath('/admin/database-manager/schema');
   revalidatePath('/land-sales');
+  revalidatePath('/land-sales/new');
   revalidatePath('/land-sales/[id]', 'page');
 
   return {
     status: 'success',
-    message: 'Field visibility saved for all users.',
+    message: 'Field display settings saved for all users.',
     hiddenFieldIds: submission.hiddenFieldIds,
+    fieldOrder: submission.fieldOrder,
+    fieldDividers: submission.fieldDividers,
   };
 }

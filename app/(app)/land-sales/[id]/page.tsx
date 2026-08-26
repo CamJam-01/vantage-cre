@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { RecordDetails } from '@/components/land-sales/record-details';
 import { landSaleFromRow } from '@/lib/land-sales/db';
 import { canEdit, getCurrentUserProfile } from '@/lib/users/roles';
-import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
+import { loadDisplaySettings } from '@/lib/land-sales/display-settings';
 import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
 
 type PageProps = {
@@ -15,10 +15,10 @@ export default async function RecordDetailsPage({ params, searchParams }: PagePr
   const { id } = await params;
   const { from, edit } = await searchParams;
   const supabase = await createClient();
-  const [{ data: record, error }, profile, hiddenFieldIds] = await Promise.all([
+  const [{ data: record, error }, profile, display] = await Promise.all([
     supabase.from('land_sales').select('*').eq('id', id).maybeSingle(),
     getCurrentUserProfile(supabase),
-    loadHiddenFieldIds(supabase, SALES_DATABASE_KEY),
+    loadDisplaySettings(supabase, SALES_DATABASE_KEY),
   ]);
   if (error) throw new Error(error.message);
   if (!record) notFound();
@@ -33,7 +33,9 @@ export default async function RecordDetailsPage({ params, searchParams }: PagePr
       canEdit={editable}
       startEditing={edit === '1' && editable}
       catalogLabels={catalogLabels}
-      hiddenFieldIds={[...hiddenFieldIds]}
+      hiddenFieldIds={[...display.hidden]}
+      fieldOrder={display.fieldOrder}
+      fieldDividers={display.fieldDividers}
     />
   );
 }

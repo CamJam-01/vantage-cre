@@ -5,8 +5,8 @@ import { Blueprint } from '@/components/ui/blueprint';
 import { FieldVisibilityForm } from '@/components/admin/field-visibility-form';
 import { DATABASE_CATEGORIES } from '@/lib/admin/database-descriptor';
 import { resultColumns } from '@/lib/land-sales/result-columns';
-import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
-import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
+import { loadDisplaySettings } from '@/lib/land-sales/display-settings';
+import { SALES_DATABASE_KEY, type FieldDivider } from '@/lib/land-sales/field-visibility';
 
 type PageProps = { searchParams: Promise<{ db?: string }> };
 
@@ -20,10 +20,12 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
   const category = DATABASE_CATEGORIES.find(c => c.key === db);
   if (!category || !category.available) redirect('/admin/database-manager');
 
-  const settings = await loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
-    .then(hidden => ({ hidden, error: null as string | null }))
+  const settings = await loadDisplaySettings(supabase, SALES_DATABASE_KEY)
+    .then(loaded => ({ ...loaded, error: null as string | null }))
     .catch((error: unknown) => ({
       hidden: new Set<string>(),
+      fieldOrder: [] as string[],
+      fieldDividers: [] as FieldDivider[],
       error: error instanceof Error ? error.message : 'Could not load field visibility.',
     }));
   const catalogLabels: string[] = [];
@@ -43,7 +45,8 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
             {category.name}
           </h1>
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 'var(--space-2) 0 0' }}>
-            Choose the fields shown to every user in results, record details, editing, and manual entry.
+            Choose which fields every user sees — and the order they appear in — across results,
+            record details, editing, and manual entry.
             Stored data and CSV imports and exports are not changed.
           </p>
         </div>
@@ -59,6 +62,8 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
             databaseKey={SALES_DATABASE_KEY}
             columns={columns}
             initialHiddenFieldIds={[...settings.hidden]}
+            initialFieldOrder={settings.fieldOrder}
+            initialFieldDividers={settings.fieldDividers}
             disabledReason={disabledReason}
           />
         </Blueprint>
