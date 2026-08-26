@@ -1,8 +1,4 @@
 import { redirect } from 'next/navigation';
-<<<<<<< HEAD
-
-export default function HomePage() {
-=======
 import { createClient } from '@/lib/supabase/server';
 
 export default async function Home() {
@@ -14,7 +10,6 @@ export default async function Home() {
   if (user) {
     redirect('/search');
   }
-
->>>>>>> 0c18f7c (add redirect for root domain for non-logged in users + changed placeholder text in sales search)
+  
   redirect('/login');
 }
