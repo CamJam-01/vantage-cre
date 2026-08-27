@@ -403,8 +403,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 .dialog-body { font-size: 14px; opacity: 0.85; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
 
-/* — blueprint frame: components are wireframe objects (see .blueprint
-     and .corner above) — square, transparent, hairline-bordered — */
+/* — blueprint frame: components are wireframe objects (see .blueprint above) — square, transparent, hairline-bordered — */
 .card, .btn, .input, .tag, .seg, .dialog { border-radius: 0; }
 .card, .dialog { background: transparent; border: 1px solid var(--color-divider); }
 .btn { border: 1px solid var(--color-divider); }

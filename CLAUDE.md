@@ -9,8 +9,8 @@ The import above carries the engineering guide. This file covers how to *operate
 1. **[`README.md`](README.md)** — what the product is and is for. It is the source of truth for intent and scope, and its §8 table maps most requests to the kind of change they actually are. Start here even for small tasks; the most expensive mistakes in this codebase are scope misreadings, not syntax errors.
 2. **`AGENTS.md`** — architecture, data rules, conventions.
 3. **`node_modules/next/dist/docs/`** — before writing framework code. Next 16 renamed middleware to Proxy, made `params`/`searchParams` async, and ships Cache Components off by default. Your training data is likely wrong about all three. Read the guide, don't recall it.
-4. **`claude_design/_ds/industry-*/readme.md`** — before writing anything visual.
-5. **`docs/superpowers/`** — check for an existing spec or plan covering the work.
+4. **`AGENTS.md` §6 and `styles/main.css`** — before writing anything visual. The design system's original prose guide is no longer checked in, so §6 is the only written record of its rules and the stylesheet is the system itself.
+5. **`docs/specs/` and `docs/plans/`** — check for an existing spec or plan covering the work.
 
 ## Orient before editing
 

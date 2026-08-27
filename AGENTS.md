@@ -121,21 +121,37 @@ The technical expression of README §6. Everything here is testable, and everyth
 
 ### 3.1 The catalog and the schema are the same thing
 
-`COSTAR_HEADER_ROW` in `lib/land-sales/costar-fields.ts` is the source of truth: **278 headers, 277 unique columns** (`Sprinklers` appears twice; Postgres cannot, so both headers share one column).
+**README Appendix A is the contract.** `COSTAR_HEADER_ROW` in `lib/land-sales/costar-fields.ts` is its executable copy and must stay byte-identical to it: **278 header positions, 277 distinct names** (`Sprinklers` at positions 259 and 260; Postgres cannot hold two columns of one name, so both positions share one column).
 
-`land_sales` column names are the provider's header strings **verbatim**, spaces, parentheses and all. Consequences:
+One header set is the catalog, the `land_sales` columns, the import template, and the export format — see README §3A. There is no mapping layer, no alias, no app-specific field identifier, and no subset with its own names or types. A field *is* a header string.
+
+`land_sales` column names are those header strings **verbatim**, spaces, parentheses and all. Consequences:
 
 - Always quote identifiers in queries: `.select('"Secondary Type"')`, `.eq('Property State', v)`.
-- The count `278` is asserted in the migration. If it changes, that assertion must change with it, deliberately.
-- **Adding a field means changing the schema**: migration *and* catalog constant, in one change, or import and export immediately disagree.
+- Derive every field list from `COSTAR_HEADER_ROW`. Never hand-maintain a second list of field names anywhere.
+- The count `278` is asserted in the migration. If it changes, that assertion changes with it, deliberately.
+- **The catalog is closed.** Adding, removing, renaming, or reordering a header is a contract change requiring a §5 decision, then a migration + constant + Appendix A update together.
 
-`price_per_acre` is derived in application code from price and acreage. It is read-only on every surface, including edit forms.
+**Two carve-outs, and only these two** — neither is a catalog field, and neither may reach the catalog, the template, the export, or the UI:
+
+| | What | Why |
+| --- | --- | --- |
+| `id` | `uuid` primary key | Row identity; `Comp ID` is not unique. |
+| `Sprinklers` | one column serving two header positions | Postgres name collision. |
+
+Any new non-catalog storage column joins that table in README §3A, or it is not added.
+
+**Display never affects storage.** Field visibility and ordering are admin presentation configuration. Hiding a field never drops a column; reordering never reorders the CSV. Export always emits all 278 positions in canonical order, whatever the arrangement says.
+
+**Required drift guard.** A test must assert that README Appendix A, `COSTAR_HEADER_ROW`, and the live `land_sales` columns (277 catalog names in order, plus `id`) agree, and that `costar-column-types.ts` matches the live Postgres types. Without it, "single source of truth" is aspirational.
 
 ### 3.2 Validation
 
-`landSaleInputSchema` (`lib/land-sales/schema.ts`) is the single definition of a record's shape, consumed by the manual form, the CSV validator, and insert typing. Extend it there — never re-validate ad hoc at a call site.
+Validation is **per column, driven by the column's type** — `costarColumnType` in `lib/land-sales/costar-column-types.ts` classifies every catalog header as text, number, date, or boolean. There is one validation path, and it addresses columns by header name. Never re-validate ad hoc at a call site, and never hand-write rules for a favoured subset of fields.
 
-It is **deliberately forgiving** (README §6.2). Numeric coercion strips currency symbols and separators and yields `undefined` rather than an error; unrecognized dates yield `undefined` with the original text preserved in `sale_date_raw` and surfaced as a *warning*. Essentially nothing is required; an empty record is valid. A present `state` must still be a 2-letter code.
+It is **deliberately forgiving** (README §6.2). Numeric coercion strips currency symbols and separators and yields nothing rather than an error; an unrecognized date yields nothing, with the original text preserved and surfaced as a *warning*. Essentially nothing is required; an empty record is valid.
+
+> ⚠️ `landSaleInputSchema` in `lib/land-sales/schema.ts` still encodes the deprecated prototype model — a renamed subset of headers with bespoke identifiers and per-field rules (e.g. a 2-letter check on `state`). It is scheduled for removal, not extension. Do not add fields to it, and do not treat its identifiers as field names.
 
 **Do not "tighten" this schema into rejecting rows.** Rejection is the failure mode it exists to prevent.
 
@@ -213,13 +229,21 @@ Match that standard. When you encode a non-obvious decision, say why in one sent
 
 ## 6. UI conventions
 
-The interface is built against the **Industry** design system (`claude_design/_ds/industry-*/readme.md`, ported to `styles/design-system/industry.css` and imported once from `app/layout.tsx`). **Read that readme before styling anything.** Its rules are requirements, not suggestions (README §6.5).
+The interface is built against the **Industry** design system, which lives entirely in `styles/main.css` — the token sheet plus the component layer, imported once from `app/layout.tsx`. Its rules are requirements, not suggestions (README §6.5).
+
+> The system's original prose guide is no longer checked in. **This section is now the only written record of its rules** — read `styles/main.css` for the tokens and classes, and keep the two in step. If you retune the sheet, update this section in the same change.
+
+**The look:** a wireframe — steel-blue on a light technical ground, Barlow Condensed headings over Barlow body, a modular grid, and cards, figures and buttons framed as blueprint objects. Cards and figures stay transparent line drawings; the primary button is the one solid object on the board, an accent fill that keeps the square corners and the marks.
 
 - Take every color, font, spacing, and radius from its CSS variables. **Never** hard-code a hex, font name, or pixel value the tokens already carry.
 - Build from its component classes (`.btn`, `.card`, `.table`, `.field`, `.tag`, `.seg`, `.dialog`) rather than parallel ones.
-- Cards, figures, and primary buttons are blueprint objects: the `.blueprint` class plus four `<i class="corner …">` registration marks. Square corners; no fills on cards.
-- Icons are `lucide-react` at `strokeWidth={1.5}`.
+- Cards, figures, and primary buttons are blueprint objects: the `.blueprint` class. Square corners; no fills on cards.
+- Icons are `lucide-react` at `strokeWidth={1.5}`. Never thicker.
+- **Tonal ramps**: every role carries `100`–`900` steps on one shared perceptual lightness scale. Use `100`–`300` for tinted fills, hovers and subtle borders, `500` as the role's base, and `700`–`900` for text on tinted fills and pressed states. Prefer a ramp step over an ad-hoc `color-mix()`. Elevation comes from `--shadow-sm/md/lg`, never a hand-rolled `box-shadow`.
+- **Contrast caveat**: the accent-to-ground pair is tuned to ~3:1 — enough for icons, large text and chrome, *not* for body copy. For paragraph-size text in the accent use a deep step (`--color-accent-700`).
+- The palette is mono: `--color-accent-2-*` is a machine-derived stand-in that resolves to the same role as the accent. Treat them as one; do not build a two-accent design on it.
 - Hover, pressed, `:focus-visible`, and disabled states are built into the system. Do not restyle them per screen.
+- **Don't**: round cards, figures, or buttons; give cards or figures a surface fill (they are line drawings — the solid accent primary button is the one deliberate exception); drop the registration marks from a framed element; or add decorative color beyond the steel accent.
 - **Inline `style={{}}` objects referencing `var(--token)` are the established pattern.** It is fine. Do not introduce Tailwind, CSS-in-JS, or a component library — that would be a stack change, not a refactor.
 - Deferred features render **visible, disabled, and titled `"Coming in a later phase"`** (README §5). Do not hide them and do not enable them.
 
@@ -276,7 +300,8 @@ For anything touching rendering or interaction, verify at runtime against `next 
 Specific, earned, and each one has cost time here before:
 
 - **`Comp ID` is not unique.** Many imported rows share `0` or null. Row identity is the separate `id` uuid primary key. Never key, route, or deduplicate on `Comp ID`.
-- **Two representations of one record.** A row carries provider-named columns; the app's `LandSale` projects a core subset out and keeps the rest in `extras`. `landSaleFromRow` / `landSaleToRow` are the only sanctioned crossing points — go through them.
+- **A deprecated second field model is still wired in.** Parts of `lib/land-sales/` (`schema.ts`, `db.ts`, `result-columns.ts`, `visible-record-input.ts`) and `lib/admin/database-descriptor.ts` still project a renamed subset of headers into bespoke identifiers, with an `extras` bag for the remainder. **This is prototype wreckage, not architecture.** It is inconsistently applied — the record UI already ignores its layout sheets, and the admin arrangement never saves its identifiers. Do not extend it, imitate it, or restore it; a field is a header string (§3.1). Removing it is planned work.
+- **`Sprinklers` round-trips lossily.** Two header positions share one column, so an import keeps only the second position's value and export writes that value into both. If the two ever differ in a source file, data is lost. Known and unresolved — do not "fix" it by adding a column without a §5 decision.
 - **Write repository text files as UTF-8.** `README.md` was previously UTF-16 and rendered as garbage in most tooling.
 - **`lib/supabase/server.ts` has a stale comment** referring to "Middleware refreshes sessions." It means `proxy.ts`. Harmless, but do not take it as evidence that a middleware file exists.
 - **Field visibility is global, not per-user** (README §2). A request phrased as "let me hide that column" is an admin configuration change, not a user preference — and if it truly means per-user, it is a scope change to raise, not build.
@@ -285,4 +310,4 @@ Specific, earned, and each one has cost time here before:
 
 ## 11. Working docs
 
-`docs/superpowers/` holds written specs and task-by-task plans for past and in-flight work (`specs/` = intent and verification, `plans/` = checkboxed tasks, both dated `YYYY-MM-DD-slug`). Check for a relevant plan before starting substantial work, and follow it if one exists. Adding a spec and plan for non-trivial work is the established practice here.
+`docs/` holds written specs and task-by-task plans for past and in-flight work (`specs/` = intent and verification, `plans/` = checkboxed tasks, both dated `YYYY-MM-DD-slug`). Check for a relevant plan before starting substantial work, and follow it if one exists. Adding a spec and plan for non-trivial work is the established practice here.

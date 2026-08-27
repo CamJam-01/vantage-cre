@@ -86,23 +86,12 @@ These terms have precise meanings here. Use them; do not invent synonyms.
   path added later.
 
 **Field**
-: One named attribute of a record. The field catalog is *large* — several
-  hundred fields — because it is inherited wholesale from the external
-  provider's export format rather than designed here. Most fields are empty on
-  most records. This is expected and must not be "cleaned up."
-
-**Core fields**
-: A small, hand-picked subset of the catalog (roughly a dozen: parcel
-  identifier, address, city, county, state, market, property type, sale date,
-  land area, sale price, price per acre, buyer). These are the fields the
-  product understands *semantically* — they get real types, dedicated
-  validation, the primary search filters, and a structured position on the
-  record screen. Every other field is carried faithfully but treated as opaque.
-
-**Derived field**
-: A value computed from other fields rather than stored or imported — price per
-  acre is the current example. Derived fields are read-only everywhere,
-  including on edit screens.
+: One named attribute of a record. **A field *is* a CoStar header string** —
+  there is no other kind of field, and no field has a second name. The catalog
+  is *large* (278 header positions, 277 distinct names) because it is inherited
+  wholesale from the provider's export format rather than designed here. Most
+  fields are empty on most records. That is expected and must not be
+  "cleaned up." The catalog is **closed**: see §3A.
 
 **Field configuration (the *arrangement*)**
 : The Admin-owned, global answer to three questions: which fields are
@@ -116,10 +105,57 @@ These terms have precise meanings here. Use them; do not invent synonyms.
   section within a page.
 
 **The provider format**
-: The external market-data provider's CSV export — a fixed, ordered header row.
-  It is simultaneously the field catalog, the import contract, and the export
-  contract. See §6.1; this is the single most load-bearing fact about the
-  system.
+: The CoStar CSV export — a fixed, ordered header row. It is simultaneously the
+  field catalog, the database columns, the import contract, and the export
+  contract. See §3A and §6.1; this is the single most load-bearing fact about
+  the system.
+
+---
+
+## 3A. The field catalog — closed and canonical
+
+**One header set governs everything.** The CoStar header row in Appendix A is
+the field catalog, the `land_sales` column set, the CSV import template, and
+the CSV export format — **all four are the same list, in the same order, with
+the same spelling**. There is no mapping layer, no alias, no renamed subset, no
+app-specific field identifier.
+
+**The catalog is closed.** No header may be added, removed, renamed, reordered,
+aliased, or given a display synonym — not in the database, not in the template,
+not in the export, not in code, not in the UI. A change to this list is a change
+to the product's contract with CoStar, and is out of scope for ordinary work
+(§5 "Changing this scope").
+
+**Display never touches storage.** What appears in the results table and on the
+record create/view/edit screens is the result of an Admin toggling visibility
+and reordering fields in settings (§3 *arrangement*). That configuration is
+presentation only. **It has no bearing whatsoever on the database columns, the
+import template, or the export file.** Hiding a field does not drop a column.
+Reordering fields does not reorder the CSV. Every export emits all 278 header
+positions in canonical order regardless of what any user can see.
+
+### The two carve-outs
+
+Exactly two things in the physical table are not catalog fields. Both are
+required, both are documented here, and **neither may ever appear in the
+catalog, the import template, the export file, or the UI as a field**:
+
+| | What | Why |
+| --- | --- | --- |
+| `id` | `uuid`, primary key | Row identity. CoStar's `Comp ID` is not unique — many rows share `0` or null — so it cannot serve as a key. |
+| `Sprinklers` | one column, two header positions | The header row lists `Sprinklers` twice (positions 259 and 260 of 278). Postgres cannot hold two columns of one name, so 278 header positions map to 277 columns. |
+
+Any future non-catalog storage column joins this table or it does not exist.
+
+### Verified state
+
+As of this writing the four representations agree exactly: the canonical list in
+Appendix A, the `COSTAR_HEADER_ROW` constant in `lib/land-sales/costar-fields.ts`,
+the header list in the creating migration, and the live `land_sales` columns
+(277 catalog columns in canonical order, plus `id`). **Appendix A is the
+contract; the code constant is its executable copy.** A test must assert they
+remain byte-identical — that test is what makes the single-source claim real
+rather than aspirational.
 
 ---
 
@@ -135,12 +171,14 @@ Seven capabilities. A change either extends one of these or is out of scope.
    then a property-type path, then build filters. The picker steps exist to make
    the *shape of the full product* legible even while most branches are unbuilt.
 
-3. **Filter.** Two tiers, both of which must agree with each other:
-   - **Primary filters** over core fields — location (state, county, city,
-     market), property type, land area range, sale-date window (an absolute
-     range or a trailing period).
-   - **Field filters** over any visible field, typed by that field's nature:
-     text *contains*, numeric *min/max*, date *from/to*, boolean *is*.
+3. **Filter.** Two tiers, both of which must agree with each other, and both
+   addressing catalog headers by their exact names:
+   - **Primary filters** over the headers an appraiser reaches for first —
+     `Property State`, `Property County`, `Property City`, `Market`,
+     `Secondary Type`, `Land Area AC` / `Land Area SF` range, and a `Sale Date`
+     window (an absolute range or a trailing period).
+   - **Field filters** over any visible field, typed by that column's Postgres
+     type: text *contains*, numeric *min/max*, date *from/to*, boolean *is*.
 
    A filter set is fully expressible in the page address, so a search is a
    shareable, bookmarkable, reloadable thing. Do not introduce filter state that
@@ -151,20 +189,24 @@ Seven capabilities. A change either extends one of these or is out of scope.
    individually or all at once. Records whose imported data was flagged during
    ingest are marked here for review.
 
-5. **Inspect and correct one record.** A detail screen laid out according to the
-   arrangement — core fields in their designed structure, remaining fields
-   distributed across the Admin's pages and groups. An Editor edits in place.
-   Every editable field on the record submits together, so a field must appear
-   exactly once across the whole layout.
+5. **Inspect and correct one record.** A detail screen laid out entirely by the
+   arrangement — the visible catalog fields, in the Admin's order, distributed
+   across the Admin's pages and groups. An Editor edits in place. Every editable
+   field submits together, so a field must appear exactly once across the whole
+   layout. The layout is presentation; the record's columns are unaffected by it
+   (§3A).
 
-6. **Get the comps out.** Export the *selected* rows in the provider format,
-   header-for-header. Export is a Viewer-level capability: reading and taking
-   away what you read are the same permission.
+6. **Get the comps out.** Export the *selected* rows in the provider format:
+   **all 278 header positions, in canonical order, every time** — never only the
+   visible fields, never in the Admin's display order. Export is a Viewer-level
+   capability: reading and taking away what you read are the same permission.
 
 7. **Get records in.** Two paths, both Editor-level:
-   - **Bulk import** of a provider-format CSV.
+   - **Bulk import** of a provider-format CSV, whose header row must match the
+     template exactly (§6.1).
    - **Manual entry** of a single record through a form driven by the same
-     arrangement as the detail screen.
+     arrangement as the detail screen. Fields the Admin has hidden are simply
+     not offered; their columns still exist and stay untouched.
 
 Alongside the spine, **administration**: field configuration, user and role
 management, and an **audit log** of who changed what and when. Every mutation is
@@ -249,21 +291,31 @@ and leave this document alone.
 
 These are the invariants. Breaking one is a defect even if every test passes.
 
-### 6.1 The provider's export format is the schema
+### 6.1 The CoStar header row *is* the schema
 
-The provider's CSV header row *is* the field catalog, in its exact order,
-including its quirks (duplicate header names, inconsistent naming, hundreds of
-columns irrelevant to land). The stored record mirrors those names verbatim.
-Import accepts that header row and no other — a renamed, reordered, added, or
-missing column is a rejected file, never a guessed mapping. Export reproduces
-that header row exactly.
+The header row in Appendix A is the field catalog, in its exact order, including
+its quirks (a duplicated name, inconsistent conventions, hundreds of columns
+irrelevant to land). The stored record mirrors those names verbatim, quirks
+included. Import accepts that header row and no other — a renamed, reordered,
+added, or missing column is a rejected file, never a guessed mapping. Export
+reproduces that header row exactly, in full, every time.
 
 The point is **lossless round-tripping**: a file exported from here must be
 re-importable here, and a record must survive the trip unchanged. When adding a
 capability, ask what it does to the round trip before asking anything else.
 
-Adding a field to the catalog therefore means changing what the schema *is* —
-a migration plus a catalog update, not a UI change.
+**There is no second field model.** No subset of the catalog gets its own names,
+types, labels, layout, or identifiers; no header is aliased, abbreviated, or
+retitled for display; no value is computed and then presented as though it were
+a field. If a question has an answer in the catalog, that column *is* the
+answer. Earlier versions of this project carried a hand-picked "core field"
+layer of renamed headers — it is a deprecated prototype relic, not a design, and
+any surviving trace of it is a defect to remove rather than a pattern to follow.
+
+Changing the catalog is therefore not ordinary work: it changes the product's
+contract with CoStar and with every previously exported file. It requires an
+explicit decision under §5, and then a migration, a constant update, and an
+Appendix A update together.
 
 ### 6.2 Never lose the user's data
 
@@ -309,10 +361,16 @@ point of execution. Client-side gating is presentation only.
 
 The interface is built against a checked-in design system ("Industry" — a
 blueprint/wireframe aesthetic: square corners, hairline borders, corner
-registration marks, a single steel accent). Its rules are non-negotiable in the
+registration marks, a single steel accent), which lives in `styles/main.css`
+and is imported once from `app/layout.tsx`. Its rules are non-negotiable in the
 same way the data rules are: take every color, font, spacing, and radius from
 its tokens, and build from its component classes rather than parallel ones. A
 visually inconsistent screen is an unfinished screen.
+
+`styles/main.css` is now the whole system — the token sheet and the component
+layer, and the only stylesheet. The system's original prose guide is no longer
+checked in, so its governing rules are recorded in `AGENTS.md` §6; read that
+before styling, and keep it in step with the sheet.
 
 ### 6.6 Prefer the boring shape
 
@@ -344,9 +402,8 @@ Enough to orient; the details belong in `AGENTS.md`.
 | Feature components, grouped by area | `components/` |
 | Shared primitives built on the design system | `components/ui/` |
 | Database schema history | `supabase/migrations/` |
-| The design system — read its own readme before styling | `claude_design/_ds/`, `styles/design-system/` |
-| Design mockups for built screens | `claude_design/*.dc.html` |
-| Written plans and specs for past and in-flight work | `docs/superpowers/` |
+| The design system — tokens and component classes, the only stylesheet | `styles/main.css` |
+| Written specs and plans for past and in-flight work | `docs/specs/`, `docs/plans/` |
 
 Unit tests sit beside the modules they cover in `lib/`, as `*.test.ts`.
 
@@ -372,8 +429,10 @@ Match the request to its shape before writing anything.
 | The request | What it actually is |
 | --- | --- |
 | "Show field X on the record screen" / "reorder fields" / "group these together" | **Configuration.** Do it through the admin arrangement. No code. |
-| "Add field X to the database" | **A schema change.** Migration + catalog entry, keeping import/export round-tripping intact (§6.1). |
-| "Make field X filterable" | Confirm the field's type is classified correctly; the filter tier follows from the type. Only promote it to a *core* field if it deserves semantic handling. |
+| "Add field X to the database" / "rename this column" / "drop the fields we don't use" | **A change to a closed catalog (§3A).** Not ordinary work. Confirm under §5 first; if approved, migration + `COSTAR_HEADER_ROW` + Appendix A move together. |
+| "Field X should show as *Y* on screen" | **No.** A field's name is its header (§3A). Rename the *header* via the process above, or leave it. |
+| "Make field X filterable" | Confirm the column's Postgres type is classified correctly; the filter tier follows from that type. Nothing else is required — every catalog field is equally a field. |
+| "Only export the columns we're actually using" | **No.** Export is always all 278 positions in canonical order (§4.6, §3A). |
 | "Add a Rentals/Improved/… database" | **A new spine branch.** Substantial. Follow `Sales → Land` structurally; expect a new catalog, a new table, and a new arrangement, not a parameterized generalization of the existing one. |
 | "Change what import accepts" | Almost always wrong — re-read §6.1 and confirm the round trip survives before proceeding. |
 | "Let users customize their own view" | **Out of scope** as stated (§2, §5). Raise it rather than building it. |
@@ -404,3 +463,44 @@ callback path for whichever origin you are running against.
 See `AGENTS.md` for framework conventions, code style, and verification steps —
 and read it before writing code, as the framework in use here diverges from what
 you may expect.
+
+---
+
+## Appendix A. The canonical CoStar header row
+
+**This is the contract.** 278 header positions, 277 distinct names
+(`Sprinklers` appears at positions 259 and 260). It defines, identically and
+simultaneously:
+
+- the `public.land_sales` columns (these 277 names, plus the `id` carve-out);
+- the CSV **import** template header row;
+- the CSV **export** header row;
+- every field the application knows about.
+
+Nothing may be added, removed, renamed, reordered, or aliased. See §3A for the
+carve-outs and §6.1 for the governing rule. The executable copy is
+`COSTAR_HEADER_ROW` in `lib/land-sales/costar-fields.ts`, which must stay
+byte-identical to the line below; a test enforces this.
+
+```text
+Property Address,Property City,Property State,Property Type,Land Area AC,Land Area SF,Star Rating,Sale Price,Sale Date,Sale Status,Asking Price,Price Per AC Land,Price Per SF Land,Sale Type,Property Name,Buyer (True) Company,Buyer (True) Type,Buyer (True) Secondary Type,Buyer (True) Origin,Acquisition Fund Name,Buyers Broker Company,Seller (True) Company,Seller (True) Type,Seller (True) Secondary Type,Seller (True) Origin,Listing Broker Company,Hold Period,Secondary Type,Proposed Use,Zoning,Market,Disposition Fund Name,Submarket Name,Location Type,Property County,Country,Subcontinent,Continent,Property Zip Code,Corner,Map Code,Actual Cap Rate,Affordable Type,Age,All-Inclusive,All-Suites,Amenities,Anchor Tenants,Assessed Improved,Assessed Land,Assessed Value,Assessed Year,Average Rental Rate Per kW,Avg Unit SF,Brand,Building Class,Building Condition,Building Materials,Building Operating Expenses,Building Park,Building SF,Building Tax Expenses,Buyer (Contact) Address,Buyer (Contact) City,Buyer (Contact) Company,Buyer (Contact) Contact Name,Buyer (Contact) Phone,Buyer (Contact) State,Buyer (Contact) Zip Code,Buyer (Recorded) Address,Buyer (Recorded) City,Buyer (Recorded) Company,Buyer (Recorded) Contact Name,Buyer (Recorded) Phone,Buyer (Recorded) State,Buyer (Recorded) Street Name,Buyer (Recorded) Street Number,Buyer (Recorded) Street Post-Direction,Buyer (Recorded) Street Pre-Direction,Buyer (Recorded) Zip Code,Buyer (True) Address,Buyer (True) City,Buyer (True) Contact Name,Buyer (True) Phone,Buyer (True) Post-Direction,Buyer (True) Pre-Direction,Buyer (True) State,Buyer (True) Street Name,Buyer (True) Street Number,Buyer (True) Zip Code,Buyers Broker Address,Buyers Broker Agent First Name,Buyers Broker Agent Last Name,Buyers Broker City,Buyers Broker Phone,Buyers Broker State,Buyers Broker Street Name,Buyers Broker Street Number,Buyers Broker Street Post-Direction,Buyers Broker Street Pre-Direction,Buyers Broker Zip Code,Capacity - Available kW,Capacity - Critical IT kW,Capacity - Total Utility kW,Ceiling Height,Column Spacing,Comp ID,Comps Number,Construction Begin,Construction Material,Cooling Redundancy,Coverage,Cross Street,Data Center Tier,Data Center Type,Data Hall Area SF,Data Hall Count,Density kW/rack,Density kW/SF,Description Text,Document Number,Down Payment,Drive Ins,Electric Utility,Fips Code,Fire Sprinkler,First Trust Deed Balance,First Trust Deed Lender,First Trust Deed Payment,First Trust Deed Terms,Flood Risk,Flood Zone,Floor Area Ratio,Frontage,GIM,GRM,Gross Income,Has Lab Space,Heating,Hotel Class,Hotel Location Type,Hotel Operator,Improvement Ratio,Lab Space (SF),Lab Space Percent Composition,Land Improvements,Land SF Gross,Land SF Net,Latitude,Legal Description,Listing Broker Address,Listing Broker Agent First Name,Listing Broker Agent Last Name,Listing Broker City,Listing Broker Phone,Listing Broker State,Listing Broker Street Name,Listing Broker Street Number,Listing Broker Street Post-Direction,Listing Broker Street Pre-Direction,Listing Broker Zip Code,Loading Docks,Longitude,Lot Dimensions,Map Page,Map X,Map Y,Market Time,Multi-Sale Name,Net Income,Non-Arms Length Reasons,Number of 1 Bedroom Units,Number of 2 Bedroom Units,Number of 3 Bedroom Units,Number of Beds,Number of Cranes,Number of Floors,Number of Other Bedroom Units,Number of Parking Spaces,Number of Rooms,Number of Studio Units,Number of Tenants,Number of Units,Office Space,One Bedroom Mix,Other Mix,Parcel Number 1 (Min),Parcel Number 2 (Max),Parent Company,Parking Ratio,Percent Leased,Percent Office,Portfolio City,Portfolio County,Portfolio Name,Portfolio State,Portfolio Zip,Power,Power Redundancy,Power Usage Effectiveness,Pre-Leasing,Price Per AC Land Net,Price Per Room,Price Per SF,Price Per SF (Net),Price Per SF Land Net,Price Per Total kW,Price Per Unit,Pro Forma Cap Rate,Property Street Name,Property Street Number,Property Street Post-Direction,Property Street Pre-Direction,PropertyID,Publication Date,Rail Served,Recording Date,Region,Research Status,Roof Type,Sale Category,Sale Condition,Sale Price Comment,Scale,Second Trust Deed Balance,Second Trust Deed Lender,Second Trust Deed Payment,Second Trust Deed Terms,Seller (Contact) Address,Seller (Contact) City,Seller (Contact) Company,Seller (Contact) Contact Name,Seller (Contact) Phone,Seller (Contact) State,Seller (Contact) Zip Code,Seller (Recorded) Address,Seller (Recorded) City,Seller (Recorded) Company,Seller (Recorded) Contact Name,Seller (Recorded) Phone,Seller (Recorded) State,Seller (Recorded) Street Name,Seller (Recorded) Street Number,Seller (Recorded) Street Post-Direction,Seller (Recorded) Street Pre-Direction,Seller (Recorded) Zip Code,Seller (True) Address,Seller (True) City,Seller (True) Contact Name,Seller (True) Phone,Seller (True) Post-Direction,Seller (True) Pre-Direction,Seller (True) State,Seller (True) Street Name,Seller (True) Street Number,Seller (True) Zip Code,Sewer,Size,Sprinklers,Sprinklers,Stamp,Studio Mix,Submarket Cluster,Submarket Code,Tenancy,Three Bedroom Mix,Title Company,Total Expense Amount,Transaction Notes,Transfer Tax,Two Bedroom Mix,Typical Floor (SF),Units Per Acre,University,Vacancy,Water,Year Built,Year Renovated
+```
+
+### Typed columns
+
+Every column is `text` except these, which are typed in Postgres and must be
+coerced accordingly on read and write:
+
+- **numeric** (22) — Actual Cap Rate, Asking Price, Assessed Improved, Assessed
+  Land, Assessed Value, Down Payment, First Trust Deed Balance, Improvement
+  Ratio, Land Area AC, Land Area SF, Land SF Gross, Land SF Net, Latitude,
+  Longitude, Percent Leased, Price Per AC Land, Price Per AC Land Net, Price Per
+  SF Land, Price Per SF Land Net, Sale Price, Second Trust Deed Balance,
+  Transfer Tax
+- **bigint** (6) — Assessed Year, Comp ID, Market Time, Number of Floors, Number
+  of Tenants, PropertyID
+- **timestamp** (3) — Publication Date, Recording Date, Sale Date
+- **boolean** (1) — Has Lab Space
+
+This is the same classification `lib/land-sales/costar-column-types.ts` holds;
+the two must not diverge.
