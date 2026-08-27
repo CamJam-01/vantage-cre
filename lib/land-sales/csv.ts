@@ -1,14 +1,9 @@
-import { COSTAR_CORE_HEADER_MAP, COSTAR_HEADERS } from './costar-fields';
-import { costarTextValues } from './db';
+import { COSTAR_CORE_HEADER_MAP, COSTAR_HEADER_ROW, COSTAR_HEADERS } from './costar-fields';
+import { costarTextValues, landSaleToRow } from './db';
 import { parseFlexibleDate } from './dates';
 import { landSaleInputSchema, type LandSale, type LandSaleInput } from './schema';
 
 export const csvHeaders = COSTAR_HEADERS;
-
-const exportHeaders = [
-  'Parcel ID', 'Address', 'City', 'County', 'State', 'MSA', 'Type',
-  'Square Feet', 'Acreage', 'Sale Date', 'Sale Price', 'Buyer',
-] as const;
 
 export const csvFields = [
   'parcel_id', 'address', 'city', 'county', 'state', 'msa', 'property_type',
@@ -17,36 +12,33 @@ export const csvFields = [
 
 export type CsvField = (typeof csvFields)[number];
 
-export const fieldToHeader: Record<CsvField, string> = {
-  parcel_id: 'Parcel ID', address: 'Address', city: 'City', county: 'County', state: 'State',
-  msa: 'MSA', property_type: 'Type', square_feet: 'Square Feet', acreage: 'Acreage',
-  sale_date: 'Sale Date', sale_price: 'Sale Price', buyer: 'Buyer',
-};
+/** CoStar template headers for import-validation error messages. */
+export const fieldToHeader = Object.fromEntries(
+  Object.entries(COSTAR_CORE_HEADER_MAP).map(([header, field]) => [field, header]),
+) as Record<CsvField, string>;
 
 export function csvCell(value: string | number | null | undefined): string {
   const text = String(value ?? '');
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
-export function extraKeys(rows: Array<{ extras?: Record<string, string> }>): string[] {
-  const keys = new Set<string>();
-  for (const row of rows) {
-    for (const key of Object.keys(row.extras ?? {})) keys.add(key);
-  }
-  return [...keys].sort((a, b) => a.localeCompare(b));
+function exportCellValue(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  return String(value);
 }
 
 /** Export-side CSV builder — used client-side by the results table's "Export CSV"
- * button (selected rows only) and to generate the import-template download. */
+ * button (selected rows only). Headers match the CoStar import template exactly. */
 export function makeCsv(rows: LandSale[]): string {
-  const extras = extraKeys(rows);
-  const header = [...exportHeaders, 'Price / Acre', ...extras].join(',');
-  const body = rows.map(row => [
-    ...csvFields.map(field => csvCell(row[field] as string | number | null)),
-    csvCell(row.price_per_acre),
-    ...extras.map(key => csvCell((row.extras ?? {})[key])),
-  ].join(','));
-  return [header, ...body].join('\r\n');
+  const body = rows.map(row => {
+    const columns = landSaleToRow(row);
+    if (!row.sale_date && row.sale_date_raw) {
+      columns['Sale Date'] = row.sale_date_raw;
+    }
+    return COSTAR_HEADERS.map(name => csvCell(exportCellValue(columns[name]))).join(',');
+  });
+  return [COSTAR_HEADER_ROW, ...body].join('\r\n');
 }
 
 export function downloadCsv(filename: string, content: string) {
@@ -62,7 +54,7 @@ export function downloadCsv(filename: string, content: string) {
 /** Import template: header row plus one blank data row so an unmodified
  * template uploads as a single empty record. */
 export function makeCsvTemplate(): string {
-  return [csvHeaders.join(','), csvHeaders.map(() => '').join(',')].join('\r\n');
+  return [COSTAR_HEADER_ROW, COSTAR_HEADERS.map(() => '').join(',')].join('\r\n');
 }
 
 /** RFC4180-ish CSV tokenizer: handles quoted fields with embedded commas,
