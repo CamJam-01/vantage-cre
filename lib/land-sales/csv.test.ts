@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { COSTAR_HEADERS } from './costar-fields.ts';
-import { csvHeaderError, csvHeaders, importLandSaleRow, makeCsv, makeCsvTemplate, validateDataRows } from './csv.ts';
+import { COSTAR_HEADER_ROW, COSTAR_HEADERS } from './costar-fields.ts';
+import { csvHeaderError, csvHeaders, importLandSaleRow, makeCsv, makeCsvTemplate, parseCsv, validateDataRows } from './csv.ts';
 
 function blankCostarRow(): string[] {
   return COSTAR_HEADERS.map(() => '');
@@ -44,6 +44,7 @@ describe('csvHeaderError', () => {
 describe('makeCsvTemplate', () => {
   it('includes a blank data row so the template itself can import', () => {
     const rows = makeCsvTemplate().split('\r\n');
+    assert.equal(rows[0], COSTAR_HEADER_ROW);
     assert.equal(rows[0], csvHeaders.join(','));
     assert.equal(rows[0], COSTAR_HEADERS.join(','));
     assert.equal(rows[1], COSTAR_HEADERS.map(() => '').join(','));
@@ -125,10 +126,16 @@ describe('validateDataRows', () => {
 });
 
 describe('makeCsv', () => {
-  it('appends custom extra columns after Price / Acre', () => {
+  it('writes the exact CoStar template header row', () => {
+    const header = makeCsv([]).split('\r\n')[0];
+    assert.equal(header, COSTAR_HEADER_ROW);
+    assert.equal(csvHeaderError(header.split(',')), undefined);
+  });
+
+  it('uses the CoStar template headers in the same order as import', () => {
     const row = {
       id: '1',
-      parcel_id: '',
+      parcel_id: 'PIN-1',
       address: '1012 Poinsettia Ln',
       city: 'Wendell',
       county: 'Wake',
@@ -145,8 +152,19 @@ describe('makeCsv', () => {
       updated_at: '',
     };
     const csv = makeCsv([row]);
-    const header = csv.split('\r\n')[0];
-    assert.equal(header.endsWith('Price / Acre,Market,Zoning'), true);
-    assert.equal(csv.includes('"Raleigh, NC"'), true);
+    const [headerRow, dataRow] = parseCsv(csv);
+    assert.equal(headerRow.join(','), COSTAR_HEADER_ROW);
+    assert.equal(headerRow.join(','), COSTAR_HEADERS.join(','));
+    const values = Object.fromEntries(headerRow.map((name, index) => [name, dataRow[index] ?? '']));
+    assert.equal(values['Property Address'], '1012 Poinsettia Ln');
+    assert.equal(values['Property City'], 'Wendell');
+    assert.equal(values['Property State'], 'NC');
+    assert.equal(values['Property Type'], 'Land');
+    assert.equal(values['Land Area AC'], '1.5');
+    assert.equal(values['Sale Price'], '485000');
+    assert.equal(values['Sale Date'], '2026-07-31');
+    assert.equal(values.Zoning, 'RA');
+    assert.equal(values.Market, 'Raleigh, NC');
+    assert.equal(values['Parcel Number 1 (Min)'], 'PIN-1');
   });
 });

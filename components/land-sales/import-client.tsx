@@ -2,7 +2,6 @@
 
 import { useState, type ChangeEvent } from 'react';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
 import { Button } from '@/components/ui/button';
 import {
@@ -169,15 +168,6 @@ export function ImportLandSalesClient() {
           )}
         </Blueprint>
       </div>
-
-      <Link href="/admin/database-manager" className="blueprint" style={{
-        position: 'fixed', bottom: 'var(--space-6)', left: 'var(--space-6)', display: 'flex',
-        alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4) var(--space-6)',
-        background: 'var(--color-bg)', color: 'var(--color-text)', boxShadow: 'var(--shadow-md)', textDecoration: 'none',
-      }}>
-        <ArrowLeft size={18} strokeWidth={2} />
-        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.03em' }}>BACK</span>
-      </Link>
     </main>
   );
 }
