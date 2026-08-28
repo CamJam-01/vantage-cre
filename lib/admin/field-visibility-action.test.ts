@@ -16,8 +16,8 @@ describe('parseVisibilitySubmission', () => {
   it('accepts sales and derives hidden fields from repeated visible identifiers', () => {
     const result = parseVisibilitySubmission(formData([
       ['database_key', 'sales'],
-      ['visible_field_id', 'extra:Property City'],
-      ['visible_field_id', 'extra:Zoning'],
+      ['visible_field_id', 'Property City'],
+      ['visible_field_id', 'Zoning'],
     ]), columns);
 
     assert.equal(result.ok, true);
@@ -25,7 +25,7 @@ describe('parseVisibilitySubmission', () => {
     assert.equal(result.databaseKey, 'sales');
     assert.deepEqual(
       result.hiddenFieldIds,
-      columns.map(fieldVisibilityId).filter(id => !['extra:Property City', 'extra:Zoning'].includes(id)),
+      columns.map(fieldVisibilityId).filter(id => !['Property City', 'Zoning'].includes(id)),
     );
   });
 
@@ -33,7 +33,7 @@ describe('parseVisibilitySubmission', () => {
     assert.deepEqual(
       parseVisibilitySubmission(formData([
         ['database_key', 'rentals'],
-        ['visible_field_id', 'extra:Property City'],
+        ['visible_field_id', 'Property City'],
       ]), columns),
       { ok: false, message: 'This database is not available for field visibility settings.' },
     );
@@ -60,8 +60,8 @@ describe('parseVisibilitySubmission', () => {
     assert.deepEqual(
       parseVisibilitySubmission(formData([
         ['database_key', 'sales'],
-        ['visible_field_id', 'extra:Property City'],
-        ['visible_field_id', 'extra:Property City'],
+        ['visible_field_id', 'Property City'],
+        ['visible_field_id', 'Property City'],
       ]), columns),
       { ok: false, message: 'The field selection contains a duplicate field.' },
     );
@@ -70,17 +70,17 @@ describe('parseVisibilitySubmission', () => {
   it('keeps the submitted arrangement, hidden fields included', () => {
     const result = parseVisibilitySubmission(formData([
       ['database_key', 'sales'],
-      ['visible_field_id', 'extra:Zoning'],
-      ['field_order_id', 'extra:Zoning'],
-      ['field_order_id', 'extra:Property City'],
-      ['field_order_id', 'extra:Property Address'],
+      ['visible_field_id', 'Zoning'],
+      ['field_order_id', 'Zoning'],
+      ['field_order_id', 'Property City'],
+      ['field_order_id', 'Property Address'],
     ]), columns);
 
     assert.equal(result.ok, true);
     if (!result.ok) return;
     assert.deepEqual(
       result.fieldOrder.slice(0, 3),
-      ['extra:Zoning', 'extra:Property City', 'extra:Property Address'],
+      ['Zoning', 'Property City', 'Property Address'],
     );
     assert.equal(result.fieldOrder.length, columns.length);
   });
@@ -88,7 +88,7 @@ describe('parseVisibilitySubmission', () => {
   it('falls back to the catalog order when no arrangement is submitted', () => {
     const result = parseVisibilitySubmission(formData([
       ['database_key', 'sales'],
-      ['visible_field_id', 'extra:Zoning'],
+      ['visible_field_id', 'Zoning'],
     ]), columns);
 
     assert.equal(result.ok, true);
@@ -100,9 +100,9 @@ describe('parseVisibilitySubmission', () => {
     assert.deepEqual(
       parseVisibilitySubmission(formData([
         ['database_key', 'sales'],
-        ['visible_field_id', 'extra:Zoning'],
-        ['field_order_id', 'extra:Zoning'],
-        ['field_order_id', 'extra:Zoning'],
+        ['visible_field_id', 'Zoning'],
+        ['field_order_id', 'Zoning'],
+        ['field_order_id', 'Zoning'],
       ]), columns),
       { ok: false, message: 'The field order contains a duplicate field.' },
     );
@@ -112,7 +112,7 @@ describe('parseVisibilitySubmission', () => {
     assert.deepEqual(
       parseVisibilitySubmission(formData([
         ['database_key', 'sales'],
-        ['visible_field_id', 'extra:Zoning'],
+        ['visible_field_id', 'Zoning'],
         ['field_order_id', 'core:city'],
       ]), columns),
       { ok: false, message: 'The field order contains an unknown field.' },
@@ -126,25 +126,25 @@ describe('parseVisibilitySubmission dividers', () => {
   it('keeps dividers the arrangement places, in the order submitted', () => {
     const result = parseVisibilitySubmission(formData([
       ['database_key', 'sales'],
-      ['visible_field_id', 'extra:Zoning'],
+      ['visible_field_id', 'Zoning'],
       ['field_dividers', JSON.stringify([{ id: 'site', kind: 'group', label: 'Site' }])],
       ['field_order_id', 'group:site'],
-      ['field_order_id', 'extra:Zoning'],
+      ['field_order_id', 'Zoning'],
     ]), columns);
 
     assert.equal(result.ok, true);
     if (!result.ok) return;
     assert.deepEqual(result.fieldDividers, [{ id: 'site', kind: 'group', label: 'Site' }]);
-    assert.deepEqual(result.fieldOrder.slice(0, 2), ['group:site', 'extra:Zoning']);
+    assert.deepEqual(result.fieldOrder.slice(0, 2), ['group:site', 'Zoning']);
   });
 
   it('names a divider left blank so it still titles a section', () => {
     const result = parseVisibilitySubmission(formData([
       ['database_key', 'sales'],
-      ['visible_field_id', 'extra:Zoning'],
+      ['visible_field_id', 'Zoning'],
       ['field_dividers', JSON.stringify([{ id: 'site', kind: 'group', label: '   ' }])],
       ['field_order_id', 'group:site'],
-      ['field_order_id', 'extra:Zoning'],
+      ['field_order_id', 'Zoning'],
     ]), columns);
 
     assert.equal(result.ok, true);
@@ -155,9 +155,9 @@ describe('parseVisibilitySubmission dividers', () => {
   it('discards a divider the arrangement never places', () => {
     const result = parseVisibilitySubmission(formData([
       ['database_key', 'sales'],
-      ['visible_field_id', 'extra:Zoning'],
+      ['visible_field_id', 'Zoning'],
       ['field_dividers', JSON.stringify([{ id: 'orphan', kind: 'group', label: 'Orphan' }])],
-      ['field_order_id', 'extra:Zoning'],
+      ['field_order_id', 'Zoning'],
     ]), columns);
 
     assert.equal(result.ok, true);
@@ -169,9 +169,9 @@ describe('parseVisibilitySubmission dividers', () => {
     assert.deepEqual(
       parseVisibilitySubmission(formData([
         ['database_key', 'sales'],
-        ['visible_field_id', 'extra:Zoning'],
+        ['visible_field_id', 'Zoning'],
         ['field_order_id', 'group:site'],
-        ['field_order_id', 'extra:Zoning'],
+        ['field_order_id', 'Zoning'],
       ]), columns),
       { ok: false, message: 'The field order contains an unknown page or field group.' },
     );
@@ -181,7 +181,7 @@ describe('parseVisibilitySubmission dividers', () => {
     assert.deepEqual(
       parseVisibilitySubmission(formData([
         ['database_key', 'sales'],
-        ['visible_field_id', 'extra:Zoning'],
+        ['visible_field_id', 'Zoning'],
         ['field_dividers', '{oops'],
       ]), columns),
       { ok: false, message: 'The pages and field groups could not be read.' },
@@ -192,7 +192,7 @@ describe('parseVisibilitySubmission dividers', () => {
     assert.deepEqual(
       parseVisibilitySubmission(formData([
         ['database_key', 'sales'],
-        ['visible_field_id', 'extra:Zoning'],
+        ['visible_field_id', 'Zoning'],
         ['field_dividers', JSON.stringify([{ id: 'site', kind: 'group', label: 'Site' }, { id: 'site', kind: 'group', label: 'Site' }])],
       ]), columns),
       { ok: false, message: 'A page or field group is listed twice.' },

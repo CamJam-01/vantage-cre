@@ -1,25 +1,26 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronUp, ChevronsUpDown, Eye, Pencil, TriangleAlert } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
+import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 import { FiltersSidebar } from '@/components/land-sales/filters-sidebar';
 import { ResultsAddMenu } from '@/components/land-sales/results-add-menu';
 import { ResultsExportMenu } from '@/components/land-sales/results-export-menu';
-import type { LandSale } from '@/lib/land-sales/schema';
+import { useActivateResultsSelection, useResultsSelection } from '@/components/land-sales/results-selection';
+import { deleteLandSales } from '@/app/(app)/land-sales/actions';
+import { flaggedSaleDateRaw, type LandSale } from '@/lib/land-sales/schema';
 import { encodeFilters, type LandSaleFilters } from '@/lib/land-sales/search-params';
-import { formatCurrency, formatDate, formatNumber } from '@/lib/land-sales/format';
-import { makeCsv, downloadCsv } from '@/lib/land-sales/csv';
-import { resultSortValue, type CoreResultField, type ResultColumn } from '@/lib/land-sales/result-columns';
+import { PAGE_SIZE, landSalesPageHref, landSalesReturnQuery, resultsRangeLabel } from '@/lib/land-sales/pagination';
+import { formatCatalogValue, formatDate } from '@/lib/land-sales/format';
+import { downloadCsv } from '@/lib/land-sales/csv';
+import type { ResultColumn } from '@/lib/land-sales/result-columns';
 import { fieldVisibilityId } from '@/lib/land-sales/field-visibility';
-import { keyedRecords, selectedRecords, toggleSelection } from '@/lib/land-sales/row-selection';
-
-type Sort = { column: ResultColumn; dir: 'asc' | 'desc' };
-
-function sameColumn(a: ResultColumn, b: ResultColumn): boolean {
-  return a.kind === b.kind && a.key === b.key;
-}
+import { keyedRecords, pageSelectionState } from '@/lib/land-sales/row-selection';
+import { toggleResultsSort, type ResultsSort } from '@/lib/land-sales/results-sort';
 
 const stickyHeaderCellStyle = {
   color: 'var(--color-bg)', background: 'var(--color-accent-2-500)', position: 'sticky' as const, top: 0, zIndex: 4,
@@ -38,145 +39,126 @@ function headerMinWidth(label: string): number {
   return Math.max(96, Math.ceil(Math.max(longest, twoLineChars) * pxPerChar + extra));
 }
 
-function SortableHeader({ column, sort, onSort }: { column: ResultColumn; sort: Sort | null; onSort: (column: ResultColumn) => void }) {
-  const active = sort ? sameColumn(sort.column, column) : false;
+function SortableHeader({
+  column,
+  sort,
+  href,
+}: {
+  column: ResultColumn;
+  sort: ResultsSort;
+  href: string;
+}) {
+  const active = sort.column === column.key;
   return (
     <th
-      style={{ ...stickyHeaderCellStyle, minWidth: headerMinWidth(column.label), cursor: 'pointer', userSelect: 'none' }}
-      onClick={() => onSort(column)}
+      style={{ ...stickyHeaderCellStyle, minWidth: headerMinWidth(column.label), padding: 0 }}
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
-      <span className="col-header">
+      <Link href={href} className="col-header">
         <span className="col-header-label">{column.label}</span>
-        {active && sort ? (
-          sort.dir === 'asc' ? <ChevronUp size={14} strokeWidth={2} /> : <ChevronDown size={14} strokeWidth={2} />
+        {active ? (
+          sort.dir === 'asc' ? <ChevronUp size={14} strokeWidth={1.5} /> : <ChevronDown size={14} strokeWidth={1.5} />
         ) : (
-          <ChevronsUpDown size={12} strokeWidth={2} style={{ opacity: 0.35 }} />
+          <ChevronsUpDown size={12} strokeWidth={1.5} style={{ opacity: 0.35 }} />
         )}
-      </span>
+      </Link>
     </th>
   );
 }
 
 function SaleDateCell({ record }: { record: LandSale }) {
-  if (record.sale_date) return formatDate(record.sale_date);
-  if (record.sale_date_raw) {
-    return (
-      <span
-        title={`Unrecognized date from import: "${record.sale_date_raw}". Flagged for review.`}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#92400e' }}
-      >
-        <TriangleAlert size={14} strokeWidth={2} />
-        {record.sale_date_raw}
-      </span>
-    );
+  const flagged = flaggedSaleDateRaw(record);
+  if (!flagged) {
+    const typed = record.columns['Sale Date'];
+    return typed != null && typed !== '' ? formatDate(String(typed)) : '—';
   }
-  return '—';
-}
-
-function CoreCell({ record, field }: { record: LandSale; field: CoreResultField }) {
-  switch (field) {
-    case 'sale_date':
-      return <SaleDateCell record={record} />;
-    case 'acreage':
-    case 'square_feet':
-      return formatNumber(record[field]);
-    case 'sale_price':
-    case 'price_per_acre':
-      return formatCurrency(record[field]);
-    case 'parcel_id':
-    case 'address':
-    case 'msa':
-    case 'buyer':
-      return record[field] || '—';
-    case 'city':
-    case 'county':
-    case 'state':
-    case 'property_type':
-      return record[field];
-    default: {
-      const _exhaustive: never = field;
-      return _exhaustive;
-    }
-  }
+  return (
+    <span
+      className="record-flag"
+      title={`Unrecognized date from import: "${flagged}". Flagged for review.`}
+    >
+      <TriangleAlert size={14} strokeWidth={1.5} />
+      {flagged}
+    </span>
+  );
 }
 
 function ResultCell({ record, column }: { record: LandSale; column: ResultColumn }) {
-  switch (column.kind) {
-    case 'extra':
-      return record.extras?.[column.key] || '—';
-    case 'core':
-      return <CoreCell record={record} field={column.key} />;
-    default: {
-      const _exhaustive: never = column;
-      return _exhaustive;
-    }
-  }
+  if (column.key === 'Sale Date') return <SaleDateCell record={record} />;
+  return formatCatalogValue(column.key, record.columns[column.key]);
 }
 
-export function ResultsTable({ records, columns, canEdit, filters }: { records: LandSale[]; columns: ResultColumn[]; canEdit: boolean; filters: LandSaleFilters }) {
+function exportFailureMessage(payload: unknown): string {
+  if (payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string') {
+    return payload.error;
+  }
+  return 'Could not export the selected records.';
+}
+
+export function ResultsToolbar({
+  columns,
+  canEdit,
+  canDelete = false,
+  filters,
+  sort,
+}: {
+  columns: ResultColumn[];
+  canEdit: boolean;
+  canDelete?: boolean;
+  filters: LandSaleFilters;
+  sort: ResultsSort;
+}) {
+  const filtersKey = encodeFilters(filters).toString();
+  useActivateResultsSelection(filtersKey);
+  const { selectedIds, selectedCount, clear } = useResultsSelection(filtersKey);
   const router = useRouter();
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [sort, setSort] = useState<Sort | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
-  function handleSort(column: ResultColumn) {
-    setSort(prev => (prev && sameColumn(prev.column, column) ? { column, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { column, dir: 'asc' }));
+  async function exportCsv() {
+    if (!selectedCount) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const response = await fetch('/land-sales/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedIds] }),
+      });
+      if (!response.ok) {
+        const payload: unknown = await response.json().catch(() => null);
+        const message = exportFailureMessage(payload);
+        setExportError(message);
+        return;
+      }
+      downloadCsv('land-sales-export.csv', await response.text());
+    } catch {
+      setExportError('Could not export the selected records.');
+    } finally {
+      setExporting(false);
+    }
   }
 
-  const keyed = useMemo(() => keyedRecords(records), [records]);
-
-  const sortedKeyed = useMemo(() => {
-    if (!sort) return keyed;
-    const { column, dir } = sort;
-    const factor = dir === 'asc' ? 1 : -1;
-    return [...keyed].sort((a, b) => {
-      const av = resultSortValue(a.record, column);
-      const bv = resultSortValue(b.record, column);
-      if (av == null && bv == null) return 0;
-      if (av == null) return 1;
-      if (bv == null) return -1;
-      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * factor;
-      return String(av).localeCompare(String(bv)) * factor;
-    });
-  }, [keyed, sort]);
-
-  const tableMinWidth = useMemo(
-    () => HEADER_GUTTER_PX + columns.reduce((sum, column) => sum + headerMinWidth(column.label), 0),
-    [columns],
-  );
-
-  function toggleRow(key: string) {
-    setSelectedIds(prev => toggleSelection(prev, key));
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteError(null);
+    const result = await deleteLandSales([...selectedIds]);
+    setDeleting(false);
+    if (result?.error) {
+      setDeleteError(result.error);
+      return;
+    }
+    setConfirmDelete(false);
+    clear();
+    router.refresh();
   }
 
-  function toggleAll() {
-    setSelectedIds(prev => prev.size === keyed.length ? new Set() : new Set(keyed.map(row => row.key)));
-  }
-
-  const selectedCount = selectedIds.size;
-
-  // Carried as `?from=` so View Details / Edit can offer a "Back to search"
-  // link that lands the user back on this exact filtered result set.
-  const searchQuery = encodeFilters(filters).toString();
-
-  function viewDetails(id: string) {
-    router.push(searchQuery ? `/land-sales/${id}?from=${encodeURIComponent(searchQuery)}` : `/land-sales/${id}`);
-  }
-
-  function editDetails(id: string) {
-    const params = new URLSearchParams({ edit: '1' });
-    if (searchQuery) params.set('from', searchQuery);
-    router.push(`/land-sales/${id}?${params.toString()}`);
-  }
-
-  function exportCsv() {
-    const selected = selectedRecords(keyed, selectedIds);
-    if (!selected.length) return;
-    downloadCsv('land-sales-export.csv', makeCsv(selected));
-  }
-
-  const selectionLabel = useMemo(() => (
-    selectedCount === 0 ? 'No records selected' : `${selectedCount} record${selectedCount === 1 ? '' : 's'} selected`
-  ), [selectedCount]);
+  const selectionLabel = selectedCount === 0
+    ? 'No records selected'
+    : `${selectedCount} record${selectedCount === 1 ? '' : 's'} selected`;
 
   return (
     <>
@@ -188,89 +170,265 @@ export function ResultsTable({ records, columns, canEdit, filters }: { records: 
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
             {selectionLabel}
           </p>
-          <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
-            {records.length} record{records.length === 1 ? '' : 's'} matching your search criteria
-          </p>
+          {(deleteError || exportError) && (
+            <p className="record-error" style={{ margin: 0 }}>{deleteError ?? exportError}</p>
+          )}
         </div>
       </div>
 
       <div className="results-fab-dock">
         {canEdit && <ResultsAddMenu />}
-        <FiltersSidebar filters={filters} columns={columns} />
-        <ResultsExportMenu disabled={selectedCount < 1} onExportCsv={exportCsv} />
+        {canDelete && (
+          <Button
+            variant="secondary"
+            onClick={() => setConfirmDelete(true)}
+            disabled={selectedCount < 1}
+            title={selectedCount < 1 ? 'Select records to delete' : 'Delete selected records'}
+          >
+            Delete
+          </Button>
+        )}
+        <FiltersSidebar filters={filters} columns={columns} sort={sort} />
+        <ResultsExportMenu
+          disabled={selectedCount < 1 || exporting}
+          onExportCsv={() => { void exportCsv(); }}
+        />
       </div>
-      <div className="results-shell" style={{ flex: 1, display: 'flex', gap: 'var(--space-6)', boxSizing: 'border-box', background: 'var(--color-accent-2-200)' }}>
-        <main style={{ flex: 1, minWidth: 0, paddingTop: 0, boxSizing: 'border-box' }}>
-          <div style={{ width: '100%' }}>
-            <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 250px)', background: 'var(--color-accent-2-100)' }}>
-              <table className="table results-table" style={{ width: '100%', minWidth: tableMinWidth }}>
-                <thead>
+
+      <Dialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title={`Delete ${selectedCount} record${selectedCount === 1 ? '' : 's'}?`}
+        actions={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setConfirmDelete(false)} disabled={deleting}>
+              Cancel
+            </button>
+            <Button variant="primary" onClick={handleDelete} disabled={deleting || selectedCount < 1}>
+              {deleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </>
+        }
+      >
+        <p style={{ fontSize: 14, color: 'var(--color-text)', margin: 0 }}>
+          This cannot be undone. The selected records are removed from the database.
+        </p>
+      </Dialog>
+    </>
+  );
+}
+
+export function ResultsTable({
+  records,
+  totalCount,
+  page,
+  columns,
+  canEdit,
+  filters,
+  sort,
+}: {
+  records: LandSale[];
+  totalCount: number;
+  page: number;
+  columns: ResultColumn[];
+  canEdit: boolean;
+  filters: LandSaleFilters;
+  sort: ResultsSort;
+}) {
+  const filtersKey = encodeFilters(filters).toString();
+  const { selectedIds, toggleRow, togglePage } = useResultsSelection(filtersKey);
+
+  return (
+    <>
+      <ResultsCount records={records} totalCount={totalCount} page={page} filters={filters} sort={sort} />
+      <ResultsBody
+        records={records}
+        columns={columns}
+        canEdit={canEdit}
+        sort={sort}
+        filters={filters}
+        selectedIds={selectedIds}
+        toggleRow={toggleRow}
+        togglePage={togglePage}
+        searchQuery={landSalesReturnQuery(filters, page, sort)}
+      />
+    </>
+  );
+}
+
+function ResultsCount({
+  records,
+  totalCount,
+  page,
+  filters,
+  sort,
+}: {
+  records: LandSale[];
+  totalCount: number;
+  page: number;
+  filters: LandSaleFilters;
+  sort: ResultsSort;
+}) {
+  const lastPage = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const prevPage = page > lastPage ? lastPage : page - 1;
+  const showPager = lastPage > 1 || page > 1;
+
+  return (
+    <div style={{ width: '100%', boxSizing: 'border-box', padding: '0 var(--space-6) var(--space-3)', background: 'var(--color-accent-2-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+      <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
+        {resultsRangeLabel(page, totalCount, records.length)} matching your search criteria
+      </p>
+      {showPager && (
+        <nav aria-label="Results pages" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+          {page > 1 ? (
+            <Link href={landSalesPageHref(filters, prevPage, sort)} className="btn btn-secondary">Previous</Link>
+          ) : (
+            <span className="btn btn-secondary" aria-disabled="true" style={{ pointerEvents: 'none', opacity: 0.45 }}>Previous</span>
+          )}
+          <span style={{ fontSize: 14, color: 'var(--color-neutral-700)' }}>
+            Page {page} of {lastPage}
+          </span>
+          {page < lastPage ? (
+            <Link href={landSalesPageHref(filters, page + 1, sort)} className="btn btn-secondary">Next</Link>
+          ) : (
+            <span className="btn btn-secondary" aria-disabled="true" style={{ pointerEvents: 'none', opacity: 0.45 }}>Next</span>
+          )}
+        </nav>
+      )}
+    </div>
+  );
+}
+
+function ResultsBody({
+  records,
+  columns,
+  canEdit,
+  sort,
+  filters,
+  selectedIds,
+  toggleRow,
+  togglePage,
+  searchQuery,
+}: {
+  records: LandSale[];
+  columns: ResultColumn[];
+  canEdit: boolean;
+  sort: ResultsSort;
+  filters: LandSaleFilters;
+  selectedIds: Set<string>;
+  toggleRow: (id: string) => void;
+  togglePage: (pageIds: readonly string[]) => void;
+  searchQuery: string;
+}) {
+  const router = useRouter();
+  const keyed = useMemo(() => keyedRecords(records), [records]);
+  const pageIds = useMemo(() => keyed.map(row => row.key), [keyed]);
+  const pageState = pageSelectionState(selectedIds, pageIds);
+
+  const tableMinWidth = useMemo(
+    () => HEADER_GUTTER_PX + columns.reduce((sum, column) => sum + headerMinWidth(column.label), 0),
+    [columns],
+  );
+
+  function viewDetails(id: string) {
+    router.push(searchQuery ? `/land-sales/${id}?from=${encodeURIComponent(searchQuery)}` : `/land-sales/${id}`);
+  }
+
+  function editDetails(id: string) {
+    const params = new URLSearchParams({ edit: '1' });
+    if (searchQuery) params.set('from', searchQuery);
+    router.push(`/land-sales/${id}?${params.toString()}`);
+  }
+
+  return (
+    <div className="results-shell" style={{ flex: 1, display: 'flex', gap: 'var(--space-6)', boxSizing: 'border-box', background: 'var(--color-accent-2-200)' }}>
+      <main style={{ flex: 1, minWidth: 0, paddingTop: 0, boxSizing: 'border-box' }}>
+        <div style={{ width: '100%' }}>
+          <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 250px)', background: 'var(--color-accent-2-100)' }}>
+            <table className="table results-table" style={{ width: '100%', minWidth: tableMinWidth }}>
+              <thead>
+                <tr>
+                  <th style={{ ...stickyHeaderCellStyle, width: 40 }}>
+                    <input
+                      type="checkbox"
+                      checked={pageState === 'all'}
+                      ref={input => {
+                        if (input) input.indeterminate = pageState === 'some';
+                      }}
+                      onChange={() => togglePage(pageIds)}
+                      aria-label="Select all rows on this page"
+                    />
+                  </th>
+                  <th style={{ ...stickyHeaderCellStyle, width: 52 }} />
+                  {columns.map(col => (
+                    <SortableHeader
+                      key={fieldVisibilityId(col)}
+                      column={col}
+                      sort={sort}
+                      href={landSalesPageHref(filters, 1, toggleResultsSort(sort, col.key))}
+                    />
+                  ))}
+                </tr>
+              </thead>
+              <tbody style={{ background: 'var(--color-paper)' }}>
+                {records.length === 0 ? (
                   <tr>
-                    <th style={{ ...stickyHeaderCellStyle, width: 40 }}>
-                      <input type="checkbox" checked={records.length > 0 && selectedCount === records.length} onChange={toggleAll} aria-label="Select all rows" />
-                    </th>
-                    <th style={{ ...stickyHeaderCellStyle, width: 52 }} />
-                    {columns.map(col => <SortableHeader key={fieldVisibilityId(col)} column={col} sort={sort} onSort={handleSort} />)}
+                    <td colSpan={2 + columns.length} style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--color-neutral-600)' }}>
+                      No records match your search criteria.
+                    </td>
                   </tr>
-                </thead>
-                <tbody style={{ background: '#FFFFFF' }}>
-                  {records.length === 0 ? (
-                    <tr>
-                      <td colSpan={2 + columns.length} style={{ textAlign: 'center', padding: 'var(--space-6)', color: 'var(--color-neutral-600)' }}>
-                        No records match your search criteria.
+                ) : keyed.map(({ record: r, key }) => {
+                  const isSelected = selectedIds.has(key);
+                  const address = String(r.columns['Property Address'] ?? '').trim();
+                  const parcel = String(r.columns['Parcel Number 1 (Min)'] ?? '').trim();
+                  return (
+                    <tr
+                      key={key}
+                      onClick={() => toggleRow(key)}
+                      style={{ background: isSelected ? 'var(--color-accent-100)' : undefined, cursor: 'pointer' }}
+                    >
+                      <td onClick={e => e.stopPropagation()}>
+                        <input type="checkbox" checked={isSelected} onChange={() => toggleRow(key)} aria-label={`Select ${parcel || address || r.id}`} />
                       </td>
-                    </tr>
-                  ) : sortedKeyed.map(({ record: r, key }) => {
-                    const isSelected = selectedIds.has(key);
-                    return (
-                      <tr
-                        key={key}
-                        onClick={() => toggleRow(key)}
-                        style={{ background: isSelected ? 'var(--color-accent-100)' : undefined, cursor: 'pointer' }}
-                      >
-                        <td onClick={e => e.stopPropagation()}>
-                          <input type="checkbox" checked={isSelected} onChange={() => toggleRow(key)} aria-label={`Select ${r.parcel_id || r.address}`} />
-                        </td>
-                        <td onClick={e => e.stopPropagation()} style={{ padding: 4, width: 52 }}>
-                          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                      <td onClick={e => e.stopPropagation()} style={{ padding: 4, width: 52 }}>
+                        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                          <button
+                            type="button"
+                            className="row-action-btn"
+                            onClick={() => viewDetails(r.id)}
+                            title="View Details"
+                            aria-label="View Details"
+                          >
+                            <Eye size={12} strokeWidth={1.5} />
+                          </button>
+                          {canEdit && (
                             <button
                               type="button"
                               className="row-action-btn"
-                              onClick={() => viewDetails(r.id)}
-                              title="View Details"
-                              aria-label="View Details"
+                              onClick={() => editDetails(r.id)}
+                              title="Edit Details"
+                              aria-label="Edit Details"
                             >
-                              <Eye size={12} strokeWidth={1.75} />
+                              <Pencil size={12} strokeWidth={1.5} />
                             </button>
-                            {canEdit && (
-                              <button
-                                type="button"
-                                className="row-action-btn"
-                                onClick={() => editDetails(r.id)}
-                                title="Edit Details"
-                                aria-label="Edit Details"
-                              >
-                                <Pencil size={12} strokeWidth={1.75} />
-                              </button>
-                            )}
+                          )}
+                        </div>
+                      </td>
+                      {columns.map(col => (
+                        <td key={fieldVisibilityId(col)}>
+                          <div className="results-cell">
+                            <ResultCell record={r} column={col} />
                           </div>
                         </td>
-                        {columns.map(col => (
-                          <td key={fieldVisibilityId(col)}>
-                            <div className="results-cell">
-                              <ResultCell record={r} column={col} />
-                            </div>
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </Blueprint>
-          </div>
-        </main>
-      </div>
-    </>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Blueprint>
+        </div>
+      </main>
+    </div>
   );
 }

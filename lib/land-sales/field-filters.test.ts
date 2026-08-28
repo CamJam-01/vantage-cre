@@ -16,9 +16,9 @@ import {
 const known = new Set(['Property City', 'Sale Price', 'Land Area AC', 'Sale Date', 'Recording Date', 'Has Lab Space', 'Zoning']);
 
 const columns: ResultColumn[] = [
-  { kind: 'extra', key: 'Property City', label: 'Property City' },
-  { kind: 'extra', key: 'Property County', label: 'Property County' },
-  { kind: 'extra', key: 'Zoning', label: 'Zoning' },
+  { key: 'Property City', label: 'Property City' },
+  { key: 'Property County', label: 'Property County' },
+  { key: 'Zoning', label: 'Zoning' },
 ];
 
 describe('encodeFieldFilter / decodeFieldFilter', () => {

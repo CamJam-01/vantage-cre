@@ -1,12 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { LAND_SALES_FIELDS } from './database-descriptor.ts';
+import { DATABASE_CATEGORIES } from './database-descriptor.ts';
 
-describe('LAND_SALES_FIELDS', () => {
-  it('marks every field optional', () => {
+describe('DATABASE_CATEGORIES', () => {
+  it('treats only Land Sales as available', () => {
     assert.deepEqual(
-      LAND_SALES_FIELDS.filter(f => f.required).map(f => f.name),
-      [],
+      DATABASE_CATEGORIES.filter(c => c.available).map(c => c.key),
+      ['sales'],
     );
   });
 });

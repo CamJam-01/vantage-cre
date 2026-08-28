@@ -1,20 +1,21 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { logAudit } from '@/lib/audit/log';
 import { landSaleFromRow, landSaleToRow } from '@/lib/land-sales/db';
-import {
-  extrasFromFormData,
-  formDataHasExtras,
-  landSaleInputSchema,
-} from '@/lib/land-sales/schema';
+import { columnsFromFormData } from '@/lib/land-sales/schema';
 import {
   looksLikeWrongDelimiter, parseCsv, recordKey, csvHeaderError,
-  importLandSaleRow, validateDataRows,
+  importLandSaleRow, validateDataRows, duplicateLabel, splitFreshAndDuplicates,
+  RECORD_KEY_COLUMNS,
 } from '@/lib/land-sales/csv';
-import { landSaleWriteDeniedMessage } from '@/lib/users/roles';
-import { resultColumns } from '@/lib/land-sales/result-columns';
+import {
+  landSaleDeleteDeniedMessage,
+  landSaleWriteDeniedMessage,
+} from '@/lib/users/roles';
+import { chunkIds } from '@/lib/land-sales/export-ids';
 import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
 import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
 import { mergeVisibleUpdate, sanitizeVisibleCreate } from '@/lib/land-sales/visible-record-input';
@@ -27,44 +28,36 @@ export async function signOutAction() {
 
 export type CreateFormState = { errors?: Record<string, string>; message?: string } | null;
 
+function recordLabel(columns: Record<string, unknown>, fallback: string): string {
+  const address = columns['Property Address'];
+  const parcel = columns['Parcel Number 1 (Min)'];
+  if (typeof address === 'string' && address.trim()) return address.trim();
+  if (typeof parcel === 'string' && parcel.trim()) return parcel.trim();
+  return fallback;
+}
+
 export async function createLandSale(_prevState: CreateFormState, formData: FormData): Promise<CreateFormState> {
   const supabase = await createClient();
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { message: denied };
 
-  const [settings] = await Promise.all([
-    loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
-      .then(hidden => ({ hidden, error: null }))
-      .catch((error: unknown) => ({
-        hidden: new Set<string>(),
-        error: error instanceof Error ? error.message : 'Could not load field visibility.',
-      })),
-  ]);
+  const settings = await loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
+    .then(hidden => ({ hidden, error: null as string | null }))
+    .catch((error: unknown) => ({
+      hidden: new Set<string>(),
+      error: error instanceof Error ? error.message : 'Could not load field visibility.',
+    }));
   if (settings.error) return { message: settings.error };
 
-  const catalogLabels: string[] = [];
-  const extras = extrasFromFormData(formData);
-  const raw = Object.fromEntries(formData.entries());
-  const parsed = landSaleInputSchema.safeParse({ ...raw, extras });
-  if (!parsed.success) {
-    const errors: Record<string, string> = {};
-    for (const issue of parsed.error.issues) errors[String(issue.path[0])] = issue.message;
-    return { errors };
-  }
-  const availableExtraLabels = resultColumns({ catalogLabels })
-    .flatMap(column => column.kind === 'extra' ? [column.key] : []);
-  const sanitized = sanitizeVisibleCreate(
-    parsed.data,
-    availableExtraLabels,
-    settings.hidden,
-  );
+  const submitted = columnsFromFormData(formData, settings.hidden);
+  const sanitized = sanitizeVisibleCreate(submitted, settings.hidden);
 
   const { error } = await supabase
     .from('land_sales')
     .insert(landSaleToRow(sanitized));
 
   if (error) return { message: error.message };
-  await logAudit(supabase, 'Created Record', `${sanitized.parcel_id || sanitized.address || 'record'} added`);
+  await logAudit(supabase, 'Created Record', `${recordLabel(sanitized.columns, 'record')} added`);
   redirect('/land-sales');
 }
 
@@ -79,7 +72,7 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
   const [existingResult, settings] = await Promise.all([
     supabase.from('land_sales').select('*').eq('id', id).maybeSingle(),
     loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
-      .then(hidden => ({ hidden, error: null }))
+      .then(hidden => ({ hidden, error: null as string | null }))
       .catch((error: unknown) => ({
         hidden: new Set<string>(),
         error: error instanceof Error ? error.message : 'Could not load field visibility.',
@@ -90,40 +83,66 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
   if (settings.error) return { message: settings.error };
 
   const existing = landSaleFromRow(existingResult.data as Record<string, unknown>);
-  const catalogLabels: string[] = [];
-  const availableExtraLabels = resultColumns({ catalogLabels, records: [existing] })
-    .flatMap(column => column.kind === 'extra' ? [column.key] : []);
+  if (!existing) return { message: 'This record is missing its identity and cannot be updated.' };
 
-  // Carried through from the edit form's hidden `from` field (the results
-  // page's filters at the time the user navigated to this edit) purely to
-  // relay it onward to the post-save redirect — not part of the record shape.
   const from = formData.get('from');
   formData.delete('from');
 
-  const extrasPresent = formDataHasExtras(formData);
-  const extras = extrasFromFormData(formData);
-  const raw = Object.fromEntries(formData.entries());
-  const parsed = landSaleInputSchema.safeParse(extrasPresent ? { ...raw, extras } : raw);
-  if (!parsed.success) {
-    const errors: Record<string, string> = {};
-    for (const issue of parsed.error.issues) errors[String(issue.path[0])] = issue.message;
-    return { errors };
-  }
-
-  const merged = mergeVisibleUpdate(
-    existing,
-    parsed.data,
-    availableExtraLabels,
-    settings.hidden,
-  );
+  const submitted = columnsFromFormData(formData, settings.hidden);
+  const merged = mergeVisibleUpdate(existing, submitted, settings.hidden);
   const { error } = await supabase
     .from('land_sales')
     .update(landSaleToRow(merged))
     .eq('id', id);
 
   if (error) return { message: error.message };
-  await logAudit(supabase, 'Updated Record', `${merged.parcel_id || merged.address || id} updated`);
+  await logAudit(supabase, 'Updated Record', `${recordLabel(merged.columns, id)} updated`);
   redirect(from ? `/land-sales/${id}?from=${encodeURIComponent(String(from))}` : `/land-sales/${id}`);
+}
+
+export type DeleteFormState = { error?: string } | null;
+
+export async function deleteLandSale(id: string): Promise<DeleteFormState> {
+  const supabase = await createClient();
+  const denied = await landSaleDeleteDeniedMessage(supabase);
+  if (denied) return { error: denied };
+
+  const { data: existing } = await supabase
+    .from('land_sales')
+    .select('"Property Address","Parcel Number 1 (Min)"')
+    .eq('id', id)
+    .maybeSingle();
+
+  const { error } = await supabase.from('land_sales').delete().eq('id', id);
+  if (error) return { error: error.message };
+
+  await logAudit(supabase, 'Deleted Record', `${existing ? recordLabel(existing as Record<string, unknown>, id) : id} deleted`);
+  revalidatePath('/land-sales');
+  redirect('/land-sales');
+}
+
+export async function deleteLandSales(ids: string[]): Promise<DeleteFormState> {
+  const supabase = await createClient();
+  const denied = await landSaleDeleteDeniedMessage(supabase);
+  if (denied) return { error: denied };
+
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!unique.length) return { error: 'No records selected.' };
+
+  // Same chunking as the export read path: a selection spanning several pages
+  // of uuids overflows PostgREST's URL limit when sent as one `in` filter.
+  for (const chunk of chunkIds(unique)) {
+    const { error } = await supabase.from('land_sales').delete().in('id', chunk);
+    if (error) return { error: error.message };
+  }
+
+  await logAudit(
+    supabase,
+    'Deleted Records',
+    `${unique.length} record${unique.length === 1 ? '' : 's'} deleted`,
+  );
+  revalidatePath('/land-sales');
+  return null;
 }
 
 export type ImportOutcome = {
@@ -132,12 +151,18 @@ export type ImportOutcome = {
   warnings?: string[];
   duplicates?: string[];
   inserted?: number;
+  awaitingConfirmation?: boolean;
+  freshCount?: number;
 };
 
 /** Re-parses the raw CSV text server-side (never trusts the client parse).
  * Headers must match the import template exactly — extra or renamed columns
- * are rejected rather than mapped or stored as new fields. */
-export async function importLandSales(csvText: string): Promise<ImportOutcome> {
+ * are rejected rather than mapped or stored as new fields. Duplicates halt
+ * the import until the caller explicitly chooses to import the rest. */
+export async function importLandSales(
+  csvText: string,
+  options?: { importNonDuplicates?: boolean },
+): Promise<ImportOutcome> {
   const supabase = await createClient();
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { rowErrors: [denied] };
@@ -167,15 +192,27 @@ export async function importLandSales(csvText: string): Promise<ImportOutcome> {
   if (!toInsert.length) return { rowErrors: ['No valid rows to import.'] };
   const warnings = results.flatMap(r => (r.ok ? r.warnings ?? [] : []));
 
-  const { data: existing } = await supabase.from('land_sales').select('*');
-  const existingKeys = new Set((existing ?? []).map(r => recordKey(landSaleFromRow(r as Record<string, unknown>))));
+  const { data: existing } = await supabase
+    .from('land_sales')
+    .select(RECORD_KEY_COLUMNS.map(name => `"${name}"`).join(','));
+  const existingRows = Array.isArray(existing) ? existing : [];
+  const existingKeys = new Set(
+    existingRows.map(r => recordKey(r as unknown as Record<string, unknown>)),
+  );
 
-  const duplicates: string[] = [];
-  const fresh: Record<string, unknown>[] = [];
-  for (const row of toInsert) {
-    const key = recordKey(row.data);
-    if (existingKeys.has(key)) duplicates.push(row.data.parcel_id || row.data.address);
-    else fresh.push(importLandSaleRow(row));
+  const prepared = toInsert.map(row => ({
+    columns: importLandSaleRow(row),
+    label: duplicateLabel(row.data.columns),
+  }));
+  const { fresh, duplicates } = splitFreshAndDuplicates(prepared, existingKeys);
+
+  if (duplicates.length && !options?.importNonDuplicates) {
+    return {
+      duplicates,
+      awaitingConfirmation: true,
+      freshCount: fresh.length,
+      warnings: warnings.length ? warnings : undefined,
+    };
   }
 
   let inserted = 0;
@@ -188,9 +225,8 @@ export async function importLandSales(csvText: string): Promise<ImportOutcome> {
   }
 
   if (inserted > 0) {
-    const dupNote = duplicates.length ? `, ${duplicates.length} duplicate${duplicates.length === 1 ? '' : 's'} skipped` : '';
-    await logAudit(supabase, 'Imported CSV', `${inserted} record${inserted === 1 ? '' : 's'} imported${dupNote}`);
+    await logAudit(supabase, 'Imported CSV', `${inserted} record${inserted === 1 ? '' : 's'} imported`);
   }
 
-  return { inserted, duplicates, warnings: warnings.length ? warnings : undefined };
+  return { inserted, warnings: warnings.length ? warnings : undefined };
 }

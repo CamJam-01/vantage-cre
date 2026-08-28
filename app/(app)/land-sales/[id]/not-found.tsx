@@ -10,7 +10,7 @@ export default function NotFound() {
         Record not found
       </h1>
       <p style={{ fontSize: 15, color: 'var(--color-neutral-700)', margin: '0 0 var(--space-6)' }}>
-        This land sale record doesn't exist or may have been removed.
+        This land sale record does not exist or may have been removed.
       </p>
       <Link href="/land-sales" className="btn btn-primary">Back to results</Link>
     </main>

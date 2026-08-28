@@ -52,20 +52,20 @@ export default function SignupPage() {
         <Field
           id="fullName" label="Full name" type="text" placeholder="Jane Smith"
           required value={fullName} onChange={e => setFullName(e.target.value)}
-          style={{ backgroundColor: '#FFFFFF' }}
+          style={{ backgroundColor: 'var(--color-paper)' }}
         />
         <Field
           id="email" label="Email address" type="email" placeholder="you@company.com"
           required value={email} onChange={e => setEmail(e.target.value)}
-          style={{ backgroundColor: '#FFFFFF' }}
+          style={{ backgroundColor: 'var(--color-paper)' }}
         />
         <Field
           id="password" label="Password" type="password" placeholder="••••••••"
           required minLength={8} value={password} onChange={e => setPassword(e.target.value)}
-          style={{ backgroundColor: '#FFFFFF' }}
+          style={{ backgroundColor: 'var(--color-paper)' }}
         />
 
-        {error && <div style={{ fontSize: 13, color: '#b3261e' }}>{error}</div>}
+        {error && <div className="record-error">{error}</div>}
 
         <Button type="submit" variant="primary" block disabled={loading}>
           {loading ? 'Creating account…' : 'Create account'}

@@ -38,7 +38,7 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
           {...rest}
         />
       )}
-      {error && <div style={{ fontSize: 12, color: '#b3261e', marginTop: 4 }}>{error}</div>}
+      {error && <div className="record-error" style={{ marginTop: 4 }}>{error}</div>}
     </div>
   );
 });

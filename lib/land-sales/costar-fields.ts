@@ -8,27 +8,23 @@ export const COSTAR_HEADERS = COSTAR_HEADER_ROW.split(',') as readonly string[];
 
 export type CostarHeader = (typeof COSTAR_HEADERS)[number];
 
+const DEFAULT_COLUMN_NAMES: readonly string[] = [...new Set(COSTAR_HEADERS)];
+const DEFAULT_FIELDS: ReadonlyArray<{ header: string; column: string }> =
+  COSTAR_HEADERS.map(header => ({ header, column: header }));
+
 /** Postgres cannot have two columns named Sprinklers; both CSV headers share this column. */
-export function costarFields(headers: readonly string[] = COSTAR_HEADERS): ReadonlyArray<{ header: string; column: string }> {
+export function costarFields(headers?: readonly string[]): ReadonlyArray<{ header: string; column: string }> {
+  if (headers === undefined) return [...DEFAULT_FIELDS];
   return headers.map(header => ({ header, column: header }));
 }
 
-export function costarColumnNames(headers: readonly string[] = COSTAR_HEADERS): string[] {
+export function costarColumnNames(headers?: readonly string[]): string[] {
+  if (headers === undefined) return [...DEFAULT_COLUMN_NAMES];
   return [...new Set(headers)];
 }
 
-/** CoStar headers that back the app's existing core land-sale fields. */
-export const COSTAR_CORE_HEADER_MAP = {
-  'Property Address': 'address',
-  'Property City': 'city',
-  'Property State': 'state',
-  'Property Type': 'property_type',
-  'Land Area AC': 'acreage',
-  'Land Area SF': 'square_feet',
-  'Sale Price': 'sale_price',
-  'Sale Date': 'sale_date',
-  'Buyer (True) Company': 'buyer',
-  'Property County': 'county',
-  'Market': 'msa',
-  'Parcel Number 1 (Min)': 'parcel_id',
-} as const;
+/** Non-catalog columns on land_sales. Neither is a field; neither may appear in
+ * the template, the export, or the UI. `_sale_date_raw` holds the original
+ * text of an unrecognized Sale Date so ingest can flag rather than drop it. */
+export const SALE_DATE_RAW_COLUMN = '_sale_date_raw';
+export const LAND_SALES_SYSTEM_COLUMNS = ['id', SALE_DATE_RAW_COLUMN] as const;

@@ -1,86 +1,142 @@
-import { z } from 'zod';
+import { costarColumnNames, SALE_DATE_RAW_COLUMN } from './costar-fields';
+import { costarColumnType, type CostarColumnType } from './costar-column-types';
 import { parseFlexibleDate } from './dates';
 
-/** Best-effort numeric coercion for CSV/form input — strips currency symbols,
- * thousands separators and stray whitespace, then quietly drops the value
- * (becomes undefined, not a validation error) if it still doesn't parse as a
- * number or fails `validate`. CSV imports routinely carry non-numeric or
- * out-of-range cells in numeric-looking columns; those rows should still
- * import with the field left blank rather than being rejected outright. */
-function numericField(validate: (n: number) => boolean) {
-  return z.preprocess(v => {
-    if (v === '' || v == null) return undefined;
-    const raw = typeof v === 'number' ? v : Number(String(v).replace(/[$,\s]/g, ''));
-    if (!Number.isFinite(raw) || !validate(raw)) return undefined;
-    return raw;
-  }, z.number().optional());
-}
-
-/** Single source of truth for the land-sale record shape: the manual-create form,
- * the CSV row validator, and Supabase insert typing all consume this.
- *
- * No user-facing field is required — empty records and blank CSV rows are valid.
- * When a value *is* present, property type is stored as free text, numbers are
- * best-effort coerced (unparseable cells become null), and dates go through
- * `parseFlexibleDate` (unrecognized dates become null with the original text
- * preserved in `sale_date_raw` for the UI to flag). A present state must still
- * be a 2-letter code. */
-export const landSaleInputSchema = z.object({
-  parcel_id: z.string().trim().default(''),
-  address: z.string().trim().default(''),
-  city: z.string().trim().default(''),
-  county: z.string().trim().default(''),
-  state: z.string().trim().default('').transform(v => v.toUpperCase()).refine(
-    v => v === '' || v.length === 2,
-    'State must be a 2-letter code',
-  ),
-  msa: z.string().trim().optional().transform(v => (v ? v : undefined)),
-  property_type: z.string().trim().default(''),
-  square_feet: numericField(n => n > 0),
-  acreage: numericField(n => n > 0),
-  /** Never blocks import: an unparseable date just comes through as undefined
-   * (stored null) — `sale_date_raw` below is where the CSV row builder stashes
-   * the original text in that case, so the UI can flag the record for review
-   * instead of losing the source data or rejecting the row. */
-  sale_date: z.preprocess(
-    v => (typeof v === 'string' ? (parseFlexibleDate(v) ?? undefined) : v),
-    z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
-  ),
-  sale_date_raw: z.string().trim().optional().transform(v => (v ? v : undefined)),
-  sale_price: numericField(n => n >= 0),
-  buyer: z.string().trim().default(''),
-  extras: z.record(z.string(), z.string()).optional().default({}),
-});
-
-export type LandSaleInput = z.infer<typeof landSaleInputSchema>;
-
-export const EXTRAS_FIELD_PREFIX = 'extra:';
-
-export function extraInputName(label: string): string {
-  return `${EXTRAS_FIELD_PREFIX}${label}`;
-}
-
-export function extrasFromFormData(formData: FormData): Record<string, string> {
-  const extras: Record<string, string> = {};
-  for (const [key, value] of formData.entries()) {
-    if (!key.startsWith(EXTRAS_FIELD_PREFIX) || typeof value !== 'string') continue;
-    const trimmed = value.trim();
-    if (!trimmed) continue;
-    extras[key.slice(EXTRAS_FIELD_PREFIX.length)] = trimmed;
-  }
-  return extras;
-}
-
-export function formDataHasExtras(formData: FormData): boolean {
-  for (const key of formData.keys()) {
-    if (key.startsWith(EXTRAS_FIELD_PREFIX)) return true;
-  }
-  return false;
-}
+/** A land-sale record is a header-keyed map of catalog columns, plus the uuid
+ * identity carve-out and the optional raw-date system store. A field *is* a
+ * header string — there is no second name. */
+export type LandSaleInput = {
+  columns: Record<string, unknown>;
+  saleDateRaw?: string;
+};
 
 export type LandSale = LandSaleInput & {
   id: string;
-  price_per_acre: number | null;
-  created_at: string;
-  updated_at: string;
 };
+
+export function emptyLandSale(): LandSale {
+  return { id: '', columns: {}, saleDateRaw: undefined };
+}
+
+function asIsoDate(value: unknown): string | null {
+  if (value == null || value === '') return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  return parseFlexibleDate(text);
+}
+
+/** Per-column coercion driven by `costarColumnType`. Forgiving: an unparseable
+ * value becomes null rather than an error, so ingest captures the row. */
+export function coerceColumnValue(header: string, value: unknown): unknown {
+  if (value == null) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+
+  const kind: CostarColumnType = costarColumnType(header);
+  switch (kind) {
+    case 'text':
+      return String(value).trim() || null;
+    case 'number': {
+      const n = typeof value === 'number' ? value : Number(String(value).replace(/[$,\s]/g, ''));
+      return Number.isFinite(n) ? n : null;
+    }
+    case 'date':
+      return asIsoDate(value);
+    case 'boolean': {
+      if (typeof value === 'boolean') return value;
+      const s = String(value).trim().toLowerCase();
+      if (/^(true|yes)$/.test(s)) return true;
+      if (/^(false|no)$/.test(s)) return false;
+      return null;
+    }
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
+  }
+}
+
+/** Coerce a header-keyed bag of raw cells. Unrecognized Sale Date text is
+ * preserved on `saleDateRaw` and warned; every other unparseable value is
+ * dropped as null. The row itself is never rejected. */
+export function coerceLandSaleInput(
+  raw: Record<string, unknown>,
+  rowNumber?: number,
+): { input: LandSaleInput; warnings: string[] } {
+  const columns: Record<string, unknown> = {};
+  const warnings: string[] = [];
+  let saleDateRaw: string | undefined;
+
+  for (const header of costarColumnNames()) {
+    const value = raw[header];
+    if (header === 'Sale Date') {
+      const text = value == null ? '' : String(value).trim();
+      const parsed = coerceColumnValue(header, value);
+      if (text && parsed == null) {
+        saleDateRaw = text;
+        columns[header] = null;
+        const where = rowNumber != null ? `Row ${rowNumber}, ` : '';
+        warnings.push(
+          `${where}Sale Date: "${text}" wasn't recognized as a date — imported without a Sale Date and flagged for review.`,
+        );
+      } else {
+        columns[header] = parsed;
+      }
+      continue;
+    }
+    columns[header] = coerceColumnValue(header, value);
+  }
+
+  return { input: { columns, saleDateRaw }, warnings };
+}
+
+export function columnsFromFormData(formData: FormData, hidden: ReadonlySet<string>): LandSaleInput {
+  const raw: Record<string, unknown> = {};
+  for (const header of costarColumnNames()) {
+    if (hidden.has(header)) continue;
+    const value = formData.get(header);
+    if (typeof value === 'string') raw[header] = value;
+  }
+  const { input } = coerceLandSaleInput(raw);
+  // coerce fills every catalog column; drop hidden keys so they are absent,
+  // not null — merge/create must not treat them as submitted values.
+  for (const header of hidden) {
+    delete input.columns[header];
+  }
+  return input;
+}
+
+/** The original text of a `Sale Date` that ingest could not parse, or undefined
+ * when the typed column holds a date. Every surface that shows a Sale Date must
+ * flag this rather than render an empty value — the raw text is the only record
+ * of what the source file said. */
+export function flaggedSaleDateRaw(record: LandSale): string | undefined {
+  const typed = record.columns['Sale Date'];
+  if (typed != null && typed !== '') return undefined;
+  return record.saleDateRaw || undefined;
+}
+
+export function columnInputValue(record: LandSale, header: string): string {
+  if (header === 'Sale Date') {
+    const typed = record.columns['Sale Date'];
+    if (typed != null && typed !== '') return toInputString(typed);
+    return record.saleDateRaw ?? '';
+  }
+  return toInputString(record.columns[header]);
+}
+
+export function toInputString(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  return text;
+}
+
+export function fieldInputId(header: string): string {
+  return `field-${header.replaceAll(/[^a-zA-Z0-9]+/g, '-')}`;
+}
+
+export function isSystemColumn(name: string): boolean {
+  return name === 'id' || name === SALE_DATE_RAW_COLUMN;
+}

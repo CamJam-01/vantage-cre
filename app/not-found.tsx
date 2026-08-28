@@ -11,7 +11,7 @@ export default function NotFound() {
         Page not found
       </h1>
       <p style={{ fontSize: 15, color: 'var(--color-neutral-700)', margin: '0 0 var(--space-6)' }}>
-        The page you're looking for doesn't exist.
+        The page you are looking for does not exist.
       </p>
       <Link href="/search" className="btn btn-primary">Back to search</Link>
     </div>

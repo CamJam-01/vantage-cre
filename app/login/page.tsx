@@ -34,12 +34,12 @@ export default function LoginPage() {
         <Field
           label="Email address" type="email" id="email" autoComplete="on" placeholder="you@company.com"
           required value={email} onChange={e => setEmail(e.target.value)}
-          style={{ backgroundColor: '#FFFFFF' }}
+          style={{ backgroundColor: 'var(--color-paper)' }}
         />
         <Field
           label="Password" type="password" id="password" autoComplete="on" placeholder="••••••••"
           required value={password} onChange={e => setPassword(e.target.value)}
-          style={{ backgroundColor: '#FFFFFF' }}
+          style={{ backgroundColor: 'var(--color-paper)' }}
         />
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'calc(var(--space-2) * -1)' }}>
@@ -51,7 +51,7 @@ export default function LoginPage() {
           <Link href="/auth/reset-password" style={{ fontSize: 14 }}>Forgot password?</Link>
         </div>
 
-        {error && <div style={{ fontSize: 13, color: '#b3261e' }}>{error}</div>}
+        {error && <div className="record-error">{error}</div>}
 
         <Button type="submit" variant="primary" block disabled={loading}>
           {loading ? 'Signing in…' : 'Sign in'}

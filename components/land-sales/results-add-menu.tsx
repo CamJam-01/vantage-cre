@@ -48,7 +48,7 @@ export function ResultsAddMenu() {
           setOpen(current => !current);
         }}
       >
-        <Plus size={20} strokeWidth={2.25} aria-hidden />
+        <Plus size={20} strokeWidth={1.5} aria-hidden />
       </button>
       <div id={menuId} className="results-add-dropdown" role="menu">
         <Link href="/land-sales/new" role="menuitem">Add Record</Link>

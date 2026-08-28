@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getCurrentUserProfile, landSaleWriteDeniedMessage, listUserProfiles } from './roles.ts';
+import { getCurrentUserProfile, landSaleExportDeniedMessage, landSaleWriteDeniedMessage, listUserProfiles } from './roles.ts';
 
 const rowWithoutAvatar = {
   id: 'user-1',
@@ -122,6 +122,41 @@ describe('landSaleWriteDeniedMessage', () => {
   it('allows an Admin', async () => {
     const supabase = profileClient(rowWithoutAvatar);
     assert.equal(await landSaleWriteDeniedMessage(supabase), null);
+  });
+});
+
+describe('landSaleExportDeniedMessage', () => {
+  function profileClient(row: typeof rowWithoutAvatar & { avatar_url?: string | null }) {
+    return mockSupabase({
+      user: { id: row.id },
+      bySelect: {
+        'id, email, full_name, username, role, is_suspended, avatar_url': {
+          data: { ...row, avatar_url: row.avatar_url ?? null },
+          error: null,
+        },
+      },
+    });
+  }
+
+  it('allows a Viewer so export stays a read-side capability', async () => {
+    const supabase = profileClient({ ...rowWithoutAvatar, role: 'Viewer' });
+    assert.equal(await landSaleExportDeniedMessage(supabase), null);
+  });
+
+  it('denies a signed-out caller', async () => {
+    const supabase = mockSupabase({ user: null, bySelect: {} });
+    assert.equal(
+      await landSaleExportDeniedMessage(supabase),
+      'You do not have permission to export records.',
+    );
+  });
+
+  it('denies a suspended Viewer', async () => {
+    const supabase = profileClient({ ...rowWithoutAvatar, role: 'Viewer', is_suspended: true });
+    assert.equal(
+      await landSaleExportDeniedMessage(supabase),
+      'You do not have permission to export records.',
+    );
   });
 });
 

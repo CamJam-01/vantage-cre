@@ -39,7 +39,7 @@ describe('loadHiddenFieldIds', () => {
       fakeClient({ data: { hidden_field_keys: ['core:address', 'extra:Zoning'] }, error: null }),
       'sales',
     );
-    assert.deepEqual([...hidden], ['core:address', 'extra:Zoning']);
+    assert.deepEqual([...hidden], ['Zoning']);
   });
 
   it('treats a null key array as an empty set', async () => {
@@ -83,8 +83,8 @@ describe('loadDisplaySettings', () => {
       }),
       'sales',
     );
-    assert.deepEqual([...settings.hidden], ['extra:Zoning']);
-    assert.deepEqual(settings.fieldOrder, ['extra:Market', 'extra:Zoning']);
+    assert.deepEqual([...settings.hidden], ['Zoning']);
+    assert.deepEqual(settings.fieldOrder, ['Market', 'Zoning']);
   });
 
   it('treats a null arrangement as no saved order', async () => {

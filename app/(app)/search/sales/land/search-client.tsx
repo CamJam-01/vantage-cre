@@ -33,7 +33,7 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
   const [timeMode, setTimeMode] = useState<'last' | 'range'>(initial.time?.mode === 'range' ? 'range' : 'last');
 
   const [state, setState] = useState(initial.state ?? '');
-  const [msa, setMsa] = useState(initial.msa ?? '');
+  const [market, setMarket] = useState(initial.market ?? '');
   const [county, setCounty] = useState(initial.county ?? '');
   const [city, setCity] = useState(initial.city ?? '');
   const [types, setTypes] = useState<string[]>([...initial.types]);
@@ -64,7 +64,7 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
     }
     const filters: LandSaleFilters = {
       state: state || undefined,
-      msa: msa.trim() || undefined,
+      market: market.trim() || undefined,
       county: county.trim() || undefined,
       city: city.trim() || undefined,
       types,
@@ -102,7 +102,7 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
                 onClick={() => setActiveTab(t.key)}
                 style={{
                   background: active ? 'var(--color-accent-600)' : 'transparent',
-                  color: active ? '#FFFFFF' : 'var(--color-text)',
+                  color: active ? 'var(--color-paper)' : 'var(--color-text)',
                   flex: 1, fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.02em',
                   padding: 'var(--space-4) var(--space-3)', cursor: 'pointer', border: 'none',
                 }}
@@ -117,14 +117,14 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
           <div style={{ ...sectionStyle, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
             <div className="field">
               <label htmlFor="state">State</label>
-              <select id="state" className="input" value={state} onChange={e => setState(e.target.value)} style={{ backgroundColor: '#FFFFFF', cursor: 'pointer' }}>
+              <select id="state" className="input" value={state} onChange={e => setState(e.target.value)} style={{ backgroundColor: 'var(--color-paper)', cursor: 'pointer' }}>
                 <option value="">Select state</option>
                 {US_STATES.map(([code]) => <option key={code} value={code}>{code}</option>)}
               </select>
             </div>
-            <Field id="msa" label="MSA" type="text" placeholder="e.g. New York–Newark–Jersey City" value={msa} onChange={e => setMsa(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
-            <Field id="county" label="County" type="text" placeholder="e.g. New York" value={county} onChange={e => setCounty(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
-            <Field id="city" label="City" type="text" placeholder="e.g. New York" value={city} onChange={e => setCity(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+            <Field id="market" label="Market" type="text" placeholder="e.g. New York–Newark–Jersey City" value={market} onChange={e => setMarket(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
+            <Field id="county" label="County" type="text" placeholder="e.g. New York" value={county} onChange={e => setCounty(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
+            <Field id="city" label="City" type="text" placeholder="e.g. New York" value={city} onChange={e => setCity(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
           </div>
         )}
 
@@ -137,8 +137,8 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
                   key={t}
                   onClick={() => toggleType(t)}
                   style={{
-                    background: selected ? 'var(--color-accent-600)' : '#FFFFFF',
-                    color: selected ? '#FFFFFF' : 'var(--color-neutral-900)',
+                    background: selected ? 'var(--color-accent-600)' : 'var(--color-paper)',
+                    color: selected ? 'var(--color-paper)' : 'var(--color-neutral-900)',
                     border: `1px solid ${selected ? 'var(--color-accent-600)' : 'var(--color-neutral-400)'}`,
                     cursor: 'pointer', fontSize: 14, fontWeight: 500, gap: 0, padding: 10,
                   }}
@@ -176,16 +176,16 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                 <label htmlFor="sfMin" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>Land Area SF</label>
                 <div style={twoColStyle}>
-                  <Field id="sfMin" label="Min" type="text" inputMode="decimal" placeholder="" value={sfMin} onChange={e => setSfMin(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
-                  <Field id="sfMax" label="Max" type="text" inputMode="decimal" placeholder="" value={sfMax} onChange={e => setSfMax(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+                  <Field id="sfMin" label="Min" type="text" inputMode="decimal" placeholder="" value={sfMin} onChange={e => setSfMin(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
+                  <Field id="sfMax" label="Max" type="text" inputMode="decimal" placeholder="" value={sfMax} onChange={e => setSfMax(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
                 </div>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
                 <label htmlFor="acMin" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>Land Area AC</label>
                 <div style={twoColStyle}>
-                  <Field id="acMin" label="Min" type="text" inputMode="decimal" placeholder="" value={acMin} onChange={e => setAcMin(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
-                  <Field id="acMax" label="Max" type="text" inputMode="decimal" placeholder="" value={acMax} onChange={e => setAcMax(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+                  <Field id="acMin" label="Min" type="text" inputMode="decimal" placeholder="" value={acMin} onChange={e => setAcMin(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
+                  <Field id="acMax" label="Max" type="text" inputMode="decimal" placeholder="" value={acMax} onChange={e => setAcMax(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
                 </div>
               </div>
             )}
@@ -209,7 +209,7 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
             </div>
             {timeMode === 'last' ? (
               <div style={{ ...twoColStyle, alignItems: 'end' }}>
-                <Field id="lastDuration" label="Duration" type="number" placeholder="0" value={lastDuration} onChange={e => setLastDuration(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+                <Field id="lastDuration" label="Duration" type="number" placeholder="0" value={lastDuration} onChange={e => setLastDuration(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
                 <SegmentedControl
                   name="last-unit"
                   value={lastUnit}
@@ -219,8 +219,8 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
               </div>
             ) : (
               <div style={twoColStyle}>
-                <Field id="dateFrom" label="From" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
-                <Field id="dateTo" label="To" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ backgroundColor: '#FFFFFF' }} />
+                <Field id="dateFrom" label="From" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
+                <Field id="dateTo" label="To" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
               </div>
             )}
           </div>
@@ -233,7 +233,7 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
           display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4) var(--space-6)',
           background: 'var(--color-bg)', color: 'var(--color-text)', boxShadow: 'var(--shadow-md)', textDecoration: 'none',
         }}>
-          <ArrowLeft size={18} strokeWidth={2} />
+          <ArrowLeft size={18} strokeWidth={1.5} />
           <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.03em' }}>BACK</span>
         </Link>
 
@@ -248,7 +248,7 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
           }}
         >
           <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.03em' }}>CONTINUE</span>
-          <ArrowRight size={18} strokeWidth={2} />
+          <ArrowRight size={18} strokeWidth={1.5} />
         </button>
       </div>
     </main>

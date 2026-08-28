@@ -7,7 +7,7 @@ export type TimeFilter =
 
 export type LandSaleFilters = {
   state?: string;
-  msa?: string;
+  market?: string;
   county?: string;
   city?: string;
   types: string[];
@@ -24,7 +24,7 @@ export const emptyFilters: LandSaleFilters = { types: [], fieldFilters: [] };
 export function encodeFilters(filters: LandSaleFilters): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.state) params.set('state', filters.state);
-  if (filters.msa) params.set('msa', filters.msa);
+  if (filters.market) params.set('market', filters.market);
   if (filters.county) params.set('county', filters.county);
   if (filters.city) params.set('city', filters.city);
   for (const t of filters.types) params.append('type', t);
@@ -94,7 +94,7 @@ export function decodeFilters(input: SearchParamsInput): LandSaleFilters {
 
   return {
     state: params.get('state') ?? undefined,
-    msa: params.get('msa') ?? undefined,
+    market: params.get('market') ?? undefined,
     county: params.get('county') ?? undefined,
     city: params.get('city') ?? undefined,
     types,
@@ -109,7 +109,7 @@ export function decodeFilters(input: SearchParamsInput): LandSaleFilters {
 
 export function hasAnyFilter(filters: LandSaleFilters): boolean {
   return Boolean(
-    filters.state || filters.msa || filters.county || filters.city ||
+    filters.state || filters.market || filters.county || filters.city ||
     filters.types.length || filters.sfMin != null || filters.sfMax != null ||
     filters.acMin != null || filters.acMax != null || filters.time ||
     (filters.fieldFilters ?? []).length
@@ -119,7 +119,7 @@ export function hasAnyFilter(filters: LandSaleFilters): boolean {
 export function appliedFilterCount(filters: LandSaleFilters): number {
   return [
     !!filters.state,
-    !!filters.msa,
+    !!filters.market,
     !!filters.county,
     !!filters.city,
     filters.types.length > 0,

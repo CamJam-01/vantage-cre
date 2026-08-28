@@ -18,8 +18,10 @@ import {
   appliedFilterCount,
   encodeFilters,
   type LandSaleFilters,
-  type TimeFilter,
 } from '@/lib/land-sales/search-params';
+import { landSalesPageHref } from '@/lib/land-sales/pagination';
+import { DEFAULT_RESULTS_SORT, type ResultsSort } from '@/lib/land-sales/results-sort';
+import { buildSearchFilterEntries, type SearchFilterEntry } from '@/lib/land-sales/search-filter-entries';
 import { US_STATES } from '@/lib/land-sales/constants';
 import type { ResultColumn } from '@/lib/land-sales/result-columns';
 
@@ -49,108 +51,15 @@ function computeMenuStyle(triggerRect: DOMRect): CSSProperties {
   };
 }
 
-type SearchFilterEntry =
-  | { kind: 'number'; key: string; label: string; min: string; max: string; remove: () => void; commit: (min: string, max: string) => void }
-  | { kind: 'text'; key: string; label: string; value: string; remove: () => void; commit: (v: string) => void }
-  | { kind: 'state'; key: string; value: string; remove: () => void; commit: (v: string) => void }
-  | { kind: 'type'; key: string; value: string; remove: () => void }
-  | { kind: 'dateRange'; key: string; label: string; from: string; to: string; remove: () => void; commit: (from: string, to: string) => void }
-  | { kind: 'last'; key: string; label: string; duration: string; unit: 'months' | 'years'; remove: () => void; commit: (duration: string, unit: 'months' | 'years') => void };
-
-function buildSearchFilterEntries(
-  filters: LandSaleFilters,
-  apply: (next: LandSaleFilters) => void,
-): SearchFilterEntry[] {
-  const set = (patch: Partial<LandSaleFilters>): LandSaleFilters => ({ ...filters, ...patch });
-  const commit = (next: LandSaleFilters) => apply(next);
-
-  const entries: SearchFilterEntry[] = [];
-
-  if (filters.state !== undefined) {
-    entries.push({
-      kind: 'state', key: 'state', value: filters.state,
-      remove: () => commit(set({ state: undefined })),
-      commit: v => commit(set({ state: v || undefined })),
-    });
-  }
-  if (filters.msa !== undefined) {
-    entries.push({
-      kind: 'text', key: 'msa', label: 'MSA', value: filters.msa,
-      remove: () => commit(set({ msa: undefined })),
-      commit: v => commit(set({ msa: v.trim() || undefined })),
-    });
-  }
-  if (filters.county !== undefined) {
-    entries.push({
-      kind: 'text', key: 'county', label: 'County', value: filters.county,
-      remove: () => commit(set({ county: undefined })),
-      commit: v => commit(set({ county: v.trim() || undefined })),
-    });
-  }
-  if (filters.city !== undefined) {
-    entries.push({
-      kind: 'text', key: 'city', label: 'City', value: filters.city,
-      remove: () => commit(set({ city: undefined })),
-      commit: v => commit(set({ city: v.trim() || undefined })),
-    });
-  }
-  for (const type of filters.types) {
-    entries.push({
-      kind: 'type', key: `type:${type}`, value: type,
-      remove: () => commit(set({ types: filters.types.filter(t => t !== type) })),
-    });
-  }
-  if (filters.sfMin != null || filters.sfMax != null) {
-    entries.push({
-      kind: 'number', key: 'sf', label: 'Land Area SF',
-      min: filters.sfMin != null ? String(filters.sfMin) : '',
-      max: filters.sfMax != null ? String(filters.sfMax) : '',
-      remove: () => commit(set({ sfMin: undefined, sfMax: undefined })),
-      commit: (min, max) => commit(set({
-        sfMin: min === '' ? undefined : Number(min),
-        sfMax: max === '' ? undefined : Number(max),
-      })),
-    });
-  }
-  if (filters.acMin != null || filters.acMax != null) {
-    entries.push({
-      kind: 'number', key: 'ac', label: 'Land Area AC',
-      min: filters.acMin != null ? String(filters.acMin) : '',
-      max: filters.acMax != null ? String(filters.acMax) : '',
-      remove: () => commit(set({ acMin: undefined, acMax: undefined })),
-      commit: (min, max) => commit(set({
-        acMin: min === '' ? undefined : Number(min),
-        acMax: max === '' ? undefined : Number(max),
-      })),
-    });
-  }
-  const time = filters.time;
-  if (time?.mode === 'last' && (time as { mode: 'last'; duration: number; unit: 'months' | 'years' }).duration) {
-    const t = time as { mode: 'last'; duration: number; unit: 'months' | 'years' };
-    entries.push({
-      kind: 'last', key: 'time', label: 'Sale Date',
-      duration: String(t.duration), unit: t.unit,
-      remove: () => commit(set({ time: undefined })),
-      commit: (duration, unit) => {
-        const n = Number(duration);
-        if (!Number.isFinite(n) || n <= 0) { commit(set({ time: undefined })); return; }
-        const next: TimeFilter = { mode: 'last', duration: n, unit };
-        commit(set({ time: next }));
-      },
-    });
-  } else if (time?.mode === 'range' && (time.from || time.to)) {
-    const t = time as { mode: 'range'; from?: string; to?: string };
-    entries.push({
-      kind: 'dateRange', key: 'time', label: 'Sale Date',
-      from: t.from ?? '', to: t.to ?? '',
-      remove: () => commit(set({ time: undefined })),
-      commit: (from, to) => commit(set({ time: { mode: 'range', from: from || undefined, to: to || undefined } })),
-    });
-  }
-  return entries;
-}
-
-export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters; columns: ResultColumn[] }) {
+export function FiltersSidebar({
+  filters,
+  columns,
+  sort = DEFAULT_RESULTS_SORT,
+}: {
+  filters: LandSaleFilters;
+  columns: ResultColumn[];
+  sort?: ResultsSort;
+}) {
   const router = useRouter();
   const filtersKey = encodeFilters(filters).toString();
   const [draft, setDraft] = useState<DraftFieldFilter[]>(() => appliedToDraft(filters.fieldFilters ?? []));
@@ -170,7 +79,7 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
 
   const activeCount = appliedFilterCount(filters);
   const applySearch = (next: LandSaleFilters) => {
-    router.replace(`/land-sales?${encodeFilters(next).toString()}`);
+    router.replace(landSalesPageHref(next, 1, sort));
   };
   const searchEntries = buildSearchFilterEntries(filters, applySearch);
   const dirty = draftsDiffer(draft, filters.fieldFilters ?? []);
@@ -267,7 +176,7 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
 
   function applyFilters() {
     const next: LandSaleFilters = { ...filters, fieldFilters: compactDraftFilters(draft) };
-    router.replace(`/land-sales?${encodeFilters(next).toString()}`);
+    applySearch(next);
     setAddMenuOpen(false);
     setOpen(false);
   }
@@ -289,7 +198,7 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
         aria-controls="results-sidebar"
         hidden={open}
       >
-        <Filter size={16} strokeWidth={1.75} aria-hidden />
+        <Filter size={16} strokeWidth={1.5} aria-hidden />
         Filters
         {activeCount > 0 ? (
           <span className="tag tag-accent">{activeCount}</span>
@@ -370,7 +279,7 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
             + Add Filter
           </Button>
           {addMenuOpen && addMenuStyle && (
-            <Blueprint elevation="md" style={{ ...addMenuStyle, background: '#FFFFFF', zIndex: 50, display: 'flex', flexDirection: 'column' }}>
+            <Blueprint elevation="md" style={{ ...addMenuStyle, background: 'var(--color-paper)', zIndex: 50, display: 'flex', flexDirection: 'column' }}>
               <div style={{ flexShrink: 0, padding: 'var(--space-2) var(--space-3)', borderBottom: '1px solid var(--color-neutral-300)' }}>
                 <input
                   className="input"
@@ -380,7 +289,7 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
                   placeholder="Search fields"
                   aria-label="Search fields"
                   autoFocus
-                  style={{ backgroundColor: '#FFFFFF' }}
+                  style={{ backgroundColor: 'var(--color-paper)' }}
                 />
               </div>
               <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
@@ -427,7 +336,7 @@ const removeFilterButtonStyle = {
   padding: 0,
   border: 'none',
   background: 'transparent',
-  color: '#dc2626',
+  color: 'var(--color-danger-500)',
   cursor: 'pointer',
   flexShrink: 0,
 } as const;
@@ -440,7 +349,7 @@ function RemoveFilterButton({ column, onRemove }: { column: string; onRemove: ()
       aria-label={`Remove ${column} filter`}
       style={removeFilterButtonStyle}
     >
-      <X size={14} strokeWidth={2} />
+      <X size={14} strokeWidth={1.5} />
     </button>
   );
 }
@@ -488,7 +397,7 @@ function DraftFilterFields({
               type="text"
               value={item.contains}
               onChange={e => onChange({ ...item, contains: e.target.value })}
-              style={{ backgroundColor: '#FFFFFF', flex: 1, minWidth: 0 }}
+              style={{ backgroundColor: 'var(--color-paper)', flex: 1, minWidth: 0 }}
             />
             <RemoveFilterButton column={item.column} onRemove={onRemove} />
           </div>
@@ -507,7 +416,7 @@ function DraftFilterFields({
                 inputMode="decimal"
                 value={item.min}
                 onChange={e => onChange({ ...item, min: e.target.value })}
-                style={{ backgroundColor: '#FFFFFF' }}
+                style={{ backgroundColor: 'var(--color-paper)' }}
               />
             </div>
             <div className="field">
@@ -519,7 +428,7 @@ function DraftFilterFields({
                 inputMode="decimal"
                 value={item.max}
                 onChange={e => onChange({ ...item, max: e.target.value })}
-                style={{ backgroundColor: '#FFFFFF' }}
+                style={{ backgroundColor: 'var(--color-paper)' }}
               />
             </div>
           </div>
@@ -540,7 +449,7 @@ function DraftFilterFields({
                 type="date"
                 value={item.from}
                 onChange={e => onChange({ ...item, from: e.target.value })}
-                style={{ backgroundColor: '#FFFFFF' }}
+                style={{ backgroundColor: 'var(--color-paper)' }}
               />
             </div>
             <div className="field">
@@ -551,7 +460,7 @@ function DraftFilterFields({
                 type="date"
                 value={item.to}
                 onChange={e => onChange({ ...item, to: e.target.value })}
-                style={{ backgroundColor: '#FFFFFF' }}
+                style={{ backgroundColor: 'var(--color-paper)' }}
               />
             </div>
           </div>
@@ -573,7 +482,7 @@ function DraftFilterFields({
                 const value = e.target.value;
                 if (value === '' || value === 'true' || value === 'false') onChange({ ...item, value });
               }}
-              style={{ backgroundColor: '#FFFFFF', cursor: 'pointer', flex: 1, minWidth: 0 }}
+              style={{ backgroundColor: 'var(--color-paper)', cursor: 'pointer', flex: 1, minWidth: 0 }}
             >
               <option value=""></option>
               <option value="true">Yes</option>
@@ -634,7 +543,7 @@ function SearchFilterControl({
                   value={min}
                   onChange={e => onLocalChange({ min: e.target.value })}
                   onBlur={e => { const v = e.currentTarget.value; if (v !== entry.min) entry.commit(v, max); onClearLocal(); }}
-                  style={{ backgroundColor: '#FFFFFF' }}
+                  style={{ backgroundColor: 'var(--color-paper)' }}
                 />
               </div>
               <div className="field">
@@ -647,7 +556,7 @@ function SearchFilterControl({
                   value={max}
                   onChange={e => onLocalChange({ max: e.target.value })}
                   onBlur={e => { const v = e.currentTarget.value; if (v !== entry.max) entry.commit(min, v); onClearLocal(); }}
-                  style={{ backgroundColor: '#FFFFFF' }}
+                  style={{ backgroundColor: 'var(--color-paper)' }}
                 />
               </div>
             </div>
@@ -673,7 +582,7 @@ function SearchFilterControl({
                 value={value}
                 onChange={e => onLocalChange({ value: e.target.value })}
                 onBlur={e => { const v = e.currentTarget.value; if (v !== entry.value) entry.commit(v); onClearLocal(); }}
-                style={{ backgroundColor: '#FFFFFF' }}
+                style={{ backgroundColor: 'var(--color-paper)' }}
               />
             </div>
             <div style={{ display: 'flex', alignItems: 'center', height: 36, flexShrink: 0 }}>
@@ -696,7 +605,7 @@ function SearchFilterControl({
                 className="input"
                 value={value}
                 onChange={e => { entry.commit(e.target.value); onClearLocal(); }}
-                style={{ backgroundColor: '#FFFFFF', cursor: 'pointer', flex: 1, minWidth: 0 }}
+                style={{ backgroundColor: 'var(--color-paper)', cursor: 'pointer', flex: 1, minWidth: 0 }}
               >
                 <option value=""></option>
                 {US_STATES.map(([code]) => <option key={code} value={code}>{code}</option>)}
@@ -737,7 +646,7 @@ function SearchFilterControl({
                   value={from}
                   onChange={e => onLocalChange({ from: e.target.value })}
                   onBlur={e => { const v = e.currentTarget.value; if (v !== entry.from || (edits?.to != null && edits.to !== entry.to)) entry.commit(v, to); else if (!edits) {}; onClearLocal(); }}
-                  style={{ backgroundColor: '#FFFFFF' }}
+                  style={{ backgroundColor: 'var(--color-paper)' }}
                 />
               </div>
               <div className="field">
@@ -749,7 +658,7 @@ function SearchFilterControl({
                   value={to}
                   onChange={e => onLocalChange({ to: e.target.value })}
                   onBlur={e => { const v = e.currentTarget.value; if (v !== entry.to || (edits?.from != null && edits.from !== entry.from)) entry.commit(from, v); onClearLocal(); }}
-                  style={{ backgroundColor: '#FFFFFF' }}
+                  style={{ backgroundColor: 'var(--color-paper)' }}
                 />
               </div>
             </div>
@@ -777,7 +686,7 @@ function SearchFilterControl({
                 value={duration}
                 onChange={e => onLocalChange({ duration: e.target.value })}
                 onBlur={e => { const v = e.currentTarget.value; if (v !== entry.duration) entry.commit(v, unit); onClearLocal(); }}
-                style={{ backgroundColor: '#FFFFFF' }}
+                style={{ backgroundColor: 'var(--color-paper)' }}
               />
             </div>
             <div className="seg" style={{ flexShrink: 0 }}>

@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { RecordDetails } from '@/components/land-sales/record-details';
 import { landSaleFromRow } from '@/lib/land-sales/db';
-import { canEdit, getCurrentUserProfile } from '@/lib/users/roles';
+import { canDelete, canEdit, getCurrentUserProfile } from '@/lib/users/roles';
 import { loadDisplaySettings } from '@/lib/land-sales/display-settings';
 import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
 
@@ -23,16 +23,18 @@ export default async function RecordDetailsPage({ params, searchParams }: PagePr
   if (error) throw new Error(error.message);
   if (!record) notFound();
   const r = landSaleFromRow(record as Record<string, unknown>);
-  const editable = canEdit(profile?.role ?? 'Viewer');
-  const catalogLabels: string[] = [];
+  if (!r) notFound();
+  const role = profile?.role ?? 'Viewer';
+  const active = Boolean(profile && !profile.is_suspended);
+  const editable = active && canEdit(role);
 
   return (
     <RecordDetails
       record={r}
       from={from}
       canEdit={editable}
+      canDelete={active && canDelete(role)}
       startEditing={edit === '1' && editable}
-      catalogLabels={catalogLabels}
       hiddenFieldIds={[...display.hidden]}
       fieldOrder={display.fieldOrder}
       fieldDividers={display.fieldDividers}

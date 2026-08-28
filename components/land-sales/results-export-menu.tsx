@@ -53,7 +53,7 @@ export function ResultsExportMenu({
           setOpen(current => !current);
         }}
       >
-        <Download size={16} strokeWidth={1.75} aria-hidden />
+        <Download size={16} strokeWidth={1.5} aria-hidden />
         Export
       </button>
       <div id={menuId} className="results-add-dropdown" role="menu">

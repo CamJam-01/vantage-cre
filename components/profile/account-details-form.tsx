@@ -67,7 +67,7 @@ export function AccountDetailsForm({
           <Field id="email" label="Email address" type="email" value={email} onChange={e => setEmail(e.target.value)} />
         </div>
       </div>
-      {error && <div style={{ marginTop: 'var(--space-3)', fontSize: 13, color: '#b3261e' }}>{error}</div>}
+      {error && <div className="record-error" style={{ marginTop: 'var(--space-3)' }}>{error}</div>}
       {message && <div style={{ marginTop: 'var(--space-3)', fontSize: 13, color: 'var(--color-accent-700)' }}>{message}</div>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-4)' }}>
         <Button variant="primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>

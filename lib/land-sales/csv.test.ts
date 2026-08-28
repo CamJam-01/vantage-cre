@@ -1,7 +1,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { COSTAR_HEADER_ROW, COSTAR_HEADERS } from './costar-fields.ts';
-import { csvHeaderError, csvHeaders, importLandSaleRow, makeCsv, makeCsvTemplate, parseCsv, validateDataRows } from './csv.ts';
+import {
+  csvHeaderError, csvHeaders, importLandSaleRow, makeCsv, makeCsvTemplate,
+  parseCsv, recordKey, RECORD_KEY_COLUMNS, splitFreshAndDuplicates, validateDataRows,
+} from './csv.ts';
+import { SALE_DATE_RAW_COLUMN } from './costar-fields.ts';
+import type { LandSale } from './schema.ts';
+import { projectVisibleLandSale } from './db.ts';
 
 function blankCostarRow(): string[] {
   return COSTAR_HEADERS.map(() => '');
@@ -15,6 +21,10 @@ function costarRow(values: Record<string, string>): string[] {
     row[index] = value;
   }
   return row;
+}
+
+function record(columns: Record<string, unknown>, extras: Partial<LandSale> = {}): LandSale {
+  return { id: extras.id ?? '1', columns, saleDateRaw: extras.saleDateRaw };
 }
 
 describe('csvHeaderError', () => {
@@ -49,6 +59,11 @@ describe('makeCsvTemplate', () => {
     assert.equal(rows[0], COSTAR_HEADERS.join(','));
     assert.equal(rows[1], COSTAR_HEADERS.map(() => '').join(','));
   });
+
+  it('never lists a system column in the template header', () => {
+    assert.equal(COSTAR_HEADERS.includes('id'), false);
+    assert.equal(COSTAR_HEADERS.includes(SALE_DATE_RAW_COLUMN), false);
+  });
 });
 
 describe('validateDataRows', () => {
@@ -56,15 +71,13 @@ describe('validateDataRows', () => {
     const results = validateDataRows([blankCostarRow()]);
     assert.equal(results[0].ok, true);
     if (results[0].ok) {
-      assert.equal(results[0].data.city, '');
-      assert.equal(results[0].data.state, '');
-      assert.equal(results[0].data.property_type, '');
-      assert.equal(results[0].data.acreage, undefined);
+      assert.equal(results[0].data.columns['Property City'], null);
+      assert.equal(results[0].data.columns['Property State'], null);
       assert.equal(results[0].columns['Property Address'], null);
     }
   });
 
-  it('copies CoStar cells onto exact header columns and mapped core fields', () => {
+  it('coerces typed cells onto exact header columns', () => {
     const results = validateDataRows([costarRow({
       'Property Address': '123 Main St',
       'Property City': 'Wendell',
@@ -75,19 +88,17 @@ describe('validateDataRows', () => {
     })]);
     assert.equal(results[0].ok, true);
     if (results[0].ok) {
-      assert.equal(results[0].data.address, '123 Main St');
-      assert.equal(results[0].data.city, 'Wendell');
-      assert.equal(results[0].data.state, 'NC');
-      assert.equal(results[0].data.sale_price, 1000);
-      assert.equal(results[0].data.buyer, 'Acme LLC');
-      assert.equal(results[0].data.parcel_id, 'PIN-1');
-      assert.equal(results[0].columns['Property Address'], '123 Main St');
-      assert.equal(results[0].columns['Buyer (True) Company'], 'Acme LLC');
+      assert.equal(results[0].data.columns['Property Address'], '123 Main St');
+      assert.equal(results[0].data.columns['Property City'], 'Wendell');
+      assert.equal(results[0].data.columns['Property State'], 'NC');
+      assert.equal(results[0].data.columns['Sale Price'], 1000);
+      assert.equal(results[0].data.columns['Buyer (True) Company'], 'Acme LLC');
+      assert.equal(results[0].data.columns['Parcel Number 1 (Min)'], 'PIN-1');
       assert.equal(results[0].columns['Sale Price'], '$1,000');
     }
   });
 
-  it('imports onto CoStar columns without the old parcel_id/address fields', () => {
+  it('imports onto CoStar columns without prototype identifiers', () => {
     const results = validateDataRows([costarRow({
       'Property Address': '123 Main St',
       'Property State': 'North Carolina',
@@ -109,7 +120,7 @@ describe('validateDataRows', () => {
     const results = validateDataRows([costarRow({ 'Property State': 'North Carolina' })]);
     assert.equal(results[0].ok, true);
     if (results[0].ok) {
-      assert.equal(results[0].data.state, '');
+      assert.equal(results[0].data.columns['Property State'], 'North Carolina');
       assert.equal(results[0].columns['Property State'], 'North Carolina');
     }
   });
@@ -118,10 +129,59 @@ describe('validateDataRows', () => {
     const results = validateDataRows([costarRow({ 'Sale Date': '8/13/2026 0:00' })]);
     assert.equal(results[0].ok, true);
     if (results[0].ok) {
-      assert.equal(results[0].data.sale_date, '2026-08-13');
-      assert.equal(results[0].data.sale_date_raw, undefined);
+      assert.equal(results[0].data.columns['Sale Date'], '2026-08-13');
+      assert.equal(results[0].data.saleDateRaw, undefined);
       assert.equal(results[0].warnings, undefined);
     }
+  });
+
+  it('preserves unrecognized Sale Date text and warns instead of rejecting', () => {
+    const results = validateDataRows([costarRow({ 'Sale Date': 'sometime last spring' })]);
+    assert.equal(results[0].ok, true);
+    if (!results[0].ok) return;
+    assert.equal(results[0].data.columns['Sale Date'], null);
+    assert.equal(results[0].data.saleDateRaw, 'sometime last spring');
+    assert.ok(results[0].warnings?.[0]?.includes('sometime last spring'));
+    const inserted = importLandSaleRow(results[0]);
+    assert.equal(inserted[SALE_DATE_RAW_COLUMN], 'sometime last spring');
+    assert.equal(inserted['Sale Date'], null);
+  });
+});
+
+describe('recordKey / splitFreshAndDuplicates', () => {
+  it('keys on Parcel Number 1 (Min), Sale Date, and Property Address', () => {
+    assert.equal(
+      recordKey({
+        'Parcel Number 1 (Min)': 'PIN-1',
+        'Sale Date': '2026-07-31T00:00:00',
+        'Property Address': '123 Main St',
+      }),
+      'pin-1|2026-07-31|123 main st',
+    );
+  });
+
+  it('names three catalog headers and no others', () => {
+    assert.equal(RECORD_KEY_COLUMNS.length, 3);
+    for (const name of RECORD_KEY_COLUMNS) {
+      assert.equal(COSTAR_HEADERS.includes(name), true, `${name} is not a catalog header`);
+    }
+    const onlyKey = {
+      'Parcel Number 1 (Min)': 'PIN-1',
+      'Sale Date': '2026-07-31',
+      'Property Address': '123 Main St',
+    };
+    assert.equal(recordKey({ ...onlyKey, Zoning: 'RA' }), recordKey(onlyKey));
+  });
+
+  it('separates fresh rows from duplicates without inserting either', () => {
+    const existing = new Set(['pin-1|2026-07-31|123 main st']);
+    const { fresh, duplicates } = splitFreshAndDuplicates([
+      { columns: { 'Parcel Number 1 (Min)': 'PIN-1', 'Sale Date': '2026-07-31', 'Property Address': '123 Main St' }, label: 'PIN-1' },
+      { columns: { 'Parcel Number 1 (Min)': 'PIN-2', 'Sale Date': '2026-08-01', 'Property Address': '9 Pine' }, label: 'PIN-2' },
+    ], existing);
+    assert.deepEqual(duplicates, ['PIN-1']);
+    assert.equal(fresh.length, 1);
+    assert.equal(fresh[0]['Parcel Number 1 (Min)'], 'PIN-2');
   });
 });
 
@@ -132,39 +192,64 @@ describe('makeCsv', () => {
     assert.equal(csvHeaderError(header.split(',')), undefined);
   });
 
-  it('uses the CoStar template headers in the same order as import', () => {
-    const row = {
-      id: '1',
-      parcel_id: 'PIN-1',
-      address: '1012 Poinsettia Ln',
-      city: 'Wendell',
-      county: 'Wake',
-      state: 'NC',
-      property_type: 'Land',
-      square_feet: undefined,
-      acreage: 1.5,
-      sale_date: '2026-07-31',
-      sale_price: 485000,
-      buyer: '',
-      extras: { Zoning: 'RA', Market: 'Raleigh, NC' },
-      price_per_acre: 323333.33,
-      created_at: '',
-      updated_at: '',
-    };
-    const csv = makeCsv([row]);
+  it('emits all 278 positions in canonical order regardless of which fields are populated', () => {
+    const csv = makeCsv([record({ Zoning: 'RA' })]);
     const [headerRow, dataRow] = parseCsv(csv);
+    assert.equal(headerRow.length, 278);
     assert.equal(headerRow.join(','), COSTAR_HEADER_ROW);
-    assert.equal(headerRow.join(','), COSTAR_HEADERS.join(','));
+    assert.equal(dataRow.length, 278);
+    const values = Object.fromEntries(headerRow.map((name, index) => [name, dataRow[index] ?? '']));
+    assert.equal(values.Zoning, 'RA');
+    assert.equal(values['Property Address'], '');
+    assert.equal(headerRow.includes('id'), false);
+    assert.equal(headerRow.includes(SALE_DATE_RAW_COLUMN), false);
+  });
+
+  it('re-emits unrecognized Sale Date text so the row round-trips', () => {
+    const csv = makeCsv([record({ 'Sale Date': null }, { saleDateRaw: 'sometime last spring' })]);
+    const [, dataRow] = parseCsv(csv);
+    const dateIndex = COSTAR_HEADERS.indexOf('Sale Date');
+    assert.equal(dataRow[dateIndex], 'sometime last spring');
+  });
+
+  it('writes populated catalog values into the matching header positions', () => {
+    const csv = makeCsv([record({
+      'Property Address': '1012 Poinsettia Ln',
+      'Property City': 'Wendell',
+      'Property State': 'NC',
+      'Property Type': 'Land',
+      'Land Area AC': 1.5,
+      'Sale Price': 485000,
+      'Sale Date': '2026-07-31',
+      Zoning: 'RA',
+      Market: 'Raleigh, NC',
+      'Parcel Number 1 (Min)': 'PIN-1',
+    })]);
+    const [headerRow, dataRow] = parseCsv(csv);
     const values = Object.fromEntries(headerRow.map((name, index) => [name, dataRow[index] ?? '']));
     assert.equal(values['Property Address'], '1012 Poinsettia Ln');
     assert.equal(values['Property City'], 'Wendell');
-    assert.equal(values['Property State'], 'NC');
-    assert.equal(values['Property Type'], 'Land');
     assert.equal(values['Land Area AC'], '1.5');
-    assert.equal(values['Sale Price'], '485000');
     assert.equal(values['Sale Date'], '2026-07-31');
     assert.equal(values.Zoning, 'RA');
-    assert.equal(values.Market, 'Raleigh, NC');
-    assert.equal(values['Parcel Number 1 (Min)'], 'PIN-1');
+  });
+
+  it('round-trips a hidden catalog value: export still emits it and re-import restores it', () => {
+    const original = record({
+      'Property Address': '9 Hidden St',
+      'Parcel Number 1 (Min)': 'PIN-H',
+      'Sale Date': '2026-01-02',
+      Zoning: 'RA',
+    });
+    const visible = projectVisibleLandSale(original, new Set(['Property Address', 'Sale Date']));
+    assert.equal('Zoning' in visible.columns, false);
+    const csv = makeCsv([original]);
+    const rows = parseCsv(csv);
+    const validated = validateDataRows(rows.slice(1));
+    assert.equal(validated[0]?.ok, true);
+    if (!validated[0] || !validated[0].ok) return;
+    const imported = importLandSaleRow(validated[0]);
+    assert.equal(imported.Zoning, 'RA');
+    assert.equal(imported['Property Address'], '9 Hidden St');
   });
 });

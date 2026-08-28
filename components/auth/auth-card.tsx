@@ -8,7 +8,7 @@ export function AuthCard({ subtitle, children }: { subtitle?: string; children: 
       style={{
         minHeight: '100vh', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 'var(--space-6)', boxSizing: 'border-box', fontFamily: 'var(--font-body)',
-        background: 'linear-gradient(190deg, #627D98, #1F2D3A)',
+        background: 'linear-gradient(190deg, var(--color-accent-2-600), var(--color-accent-2-900))',
       }}
     >
       <Blueprint
