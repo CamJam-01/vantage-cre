@@ -1,5 +1,4 @@
-import { costarColumnNames, costarFields } from './costar-fields';
-import { parseFlexibleDate } from './dates';
+import { costarColumnNames, costarFields, SALE_DATE_RAW_COLUMN } from './costar-fields';
 import type { LandSale, LandSaleInput } from './schema';
 
 function asString(value: unknown): string {
@@ -7,103 +6,49 @@ function asString(value: unknown): string {
   return String(value).trim();
 }
 
-function asNumber(value: unknown): number | undefined {
-  if (value == null || value === '') return undefined;
-  const n = typeof value === 'number' ? value : Number(String(value).replace(/[$,\s]/g, ''));
-  return Number.isFinite(n) ? n : undefined;
-}
+/** Map a land_sales row onto the app record. Fail closed when the uuid `id` is
+ * missing — Comp ID is not unique and must never stand in for row identity. */
+export function landSaleFromRow(row: Record<string, unknown>): LandSale | null {
+  const id = asString(row.id);
+  if (!id) return null;
 
-function asDate(value: unknown): string | undefined {
-  if (value == null || value === '') return undefined;
-  const text = String(value);
-  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
-  return parseFlexibleDate(text) ?? undefined;
-}
-
-function emptyToNull(value: string): string | null {
-  return value ? value : null;
-}
-
-function extrasFromCostarRow(row: Record<string, unknown>): Record<string, string> {
-  const extras: Record<string, string> = {};
+  const columns: Record<string, unknown> = {};
   for (const name of costarColumnNames()) {
-    const value = asString(row[name]);
-    if (value) extras[name] = value;
+    columns[name] = row[name] ?? null;
   }
-  return extras;
-}
-
-/** Map a land_sales row (CoStar column names) onto the app's LandSale shape. */
-export function landSaleFromRow(row: Record<string, unknown>): LandSale {
-  const acreage = asNumber(row['Land Area AC']);
-  const salePrice = asNumber(row['Sale Price']);
-  const rawState = asString(row['Property State']);
-  const state = rawState.length === 2 ? rawState.toUpperCase() : '';
-  const pricePerAcre = acreage && acreage > 0 && salePrice != null
-    ? Math.round((salePrice / acreage) * 100) / 100
-    : null;
-
+  const raw = row[SALE_DATE_RAW_COLUMN];
   return {
-    id: asString(row.id) || String(row['Comp ID'] ?? ''),
-    parcel_id: asString(row['Parcel Number 1 (Min)']),
-    address: asString(row['Property Address']),
-    city: asString(row['Property City']),
-    county: asString(row['Property County']),
-    state,
-    msa: asString(row['Market']) || undefined,
-    property_type: asString(row['Property Type']),
-    square_feet: asNumber(row['Land Area SF']),
-    acreage,
-    sale_date: asDate(row['Sale Date']),
-    sale_date_raw: undefined,
-    sale_price: salePrice,
-    buyer: asString(row['Buyer (True) Company']),
-    extras: extrasFromCostarRow(row),
-    price_per_acre: pricePerAcre,
-    created_at: '',
-    updated_at: '',
+    id,
+    columns,
+    saleDateRaw: typeof raw === 'string' && raw.trim() ? raw.trim() : undefined,
   };
 }
 
-/** Map a form/import LandSale onto CoStar land_sales columns. */
+/** Results-table projection: keep identity and the raw-date flag, drop catalog
+ * values the Admin has hidden. Export re-fetches the full row; this must never
+ * be the export path. */
+export function projectVisibleLandSale(record: LandSale, visible: ReadonlySet<string>): LandSale {
+  const columns: Record<string, unknown> = {};
+  for (const name of visible) {
+    columns[name] = record.columns[name] ?? null;
+  }
+  return { id: record.id, columns, saleDateRaw: record.saleDateRaw };
+}
+
+/** Write a record back onto land_sales columns, including the raw-date store.
+ * Catalog headers only — system columns other than `_sale_date_raw` stay out. */
 export function landSaleToRow(input: LandSaleInput): Record<string, unknown> {
   const columns: Record<string, unknown> = {};
   for (const name of costarColumnNames()) {
-    const extra = input.extras?.[name]?.trim();
-    columns[name] = extra ? extra : null;
+    columns[name] = input.columns[name] ?? null;
   }
-
-  const mapped: Record<string, unknown> = {
-    'Parcel Number 1 (Min)': emptyToNull(input.parcel_id),
-    'Property Address': emptyToNull(input.address),
-    'Property City': emptyToNull(input.city),
-    'Property County': emptyToNull(input.county),
-    'Property State': emptyToNull(input.state),
-    'Market': input.msa ? input.msa : null,
-    'Property Type': emptyToNull(input.property_type),
-    'Land Area SF': input.square_feet ?? null,
-    'Land Area AC': input.acreage ?? null,
-    'Sale Date': input.sale_date ?? null,
-    'Sale Price': input.sale_price ?? null,
-    'Buyer (True) Company': emptyToNull(input.buyer),
-  };
-  for (const [key, value] of Object.entries(mapped)) {
-    if (columns[key] == null && value != null && value !== '') columns[key] = value;
-  }
-
-  const lab = columns['Has Lab Space'];
-  if (typeof lab === 'string') {
-    columns['Has Lab Space'] = /^(true|yes)$/i.test(lab);
-  }
-  const saleDate = input.sale_date ?? parseFlexibleDate(asString(columns['Sale Date']));
-  if (saleDate) columns['Sale Date'] = saleDate;
-  if (input.acreage != null) columns['Land Area AC'] = input.acreage;
-  if (input.square_feet != null) columns['Land Area SF'] = input.square_feet;
-  if (input.sale_price != null) columns['Sale Price'] = input.sale_price;
-
+  columns[SALE_DATE_RAW_COLUMN] = input.saleDateRaw ?? null;
   return columns;
 }
 
+/** Walk the 278 header positions into the 277 columns. Positions 259 and 260
+ * both write `Sprinklers`, so the second value wins — accepted known lossiness
+ * (README §3A); do not add a column without a §5 decision. */
 export function costarTextValues(values: string[]): Record<string, string | null> {
   const columns: Record<string, string | null> = {};
   costarFields().forEach((field, index) => {

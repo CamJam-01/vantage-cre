@@ -39,4 +39,10 @@ describe('fieldFilters in search params', () => {
     assert.equal(hasAnyFilter(emptyFilters), false);
     assert.equal(hasAnyFilter({ types: [], fieldFilters: [{ column: 'Zoning', kind: 'text', contains: 'RA' }] }), true);
   });
+
+  it('does not treat a leftover msa param as Market', () => {
+    const decoded = decodeFilters(new URLSearchParams('msa=Austin&market=Raleigh'));
+    assert.equal(decoded.market, 'Raleigh');
+    assert.equal('msa' in decoded, false);
+  });
 });

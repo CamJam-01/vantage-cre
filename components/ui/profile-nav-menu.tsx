@@ -7,26 +7,23 @@ import { signOutAction } from '@/app/(app)/land-sales/actions';
 import { ProfileAvatar } from '@/components/ui/profile-avatar';
 
 export function ProfileNavMenu({ avatarUrl }: { avatarUrl?: string | null }) {
-  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const [openForPath, setOpenForPath] = useState<string | null>(null);
+  const open = openForPath === pathname;
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
-  const pathname = usePathname();
-
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
 
   useEffect(() => {
     if (!open) return;
 
     function onPointerDown(event: PointerEvent) {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
+        setOpenForPath(null);
       }
     }
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') setOpenForPath(null);
     }
 
     document.addEventListener('pointerdown', onPointerDown);
@@ -46,7 +43,7 @@ export function ProfileNavMenu({ avatarUrl }: { avatarUrl?: string | null }) {
         aria-expanded={open}
         aria-controls={menuId}
         aria-label="Account menu"
-        onClick={() => setOpen(current => !current)}
+        onClick={() => setOpenForPath(current => (current === pathname ? null : pathname))}
       >
         <ProfileAvatar src={avatarUrl} size={40} iconSize={18} />
       </button>

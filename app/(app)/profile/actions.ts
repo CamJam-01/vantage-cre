@@ -3,7 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { logAudit } from '@/lib/audit/log';
-import type { Role } from '@/lib/users/roles';
+import {
+  adminDeniedMessage,
+  adminRpcErrorMessage,
+  profileWriteDeniedMessage,
+  type Role,
+} from '@/lib/users/roles';
 import {
   AVATAR_BUCKET,
   avatarFileErrorMessage,
@@ -18,6 +23,8 @@ export async function updateProfileAction(_prev: ProfileFormState, formData: For
   const username = String(formData.get('username') ?? '').trim();
 
   const supabase = await createClient();
+  const denied = await profileWriteDeniedMessage(supabase);
+  if (denied) return { error: denied };
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not signed in.' };
 
@@ -41,6 +48,8 @@ export async function updateAvatarAction(formData: FormData): Promise<ProfileFor
   if (invalid) return { error: avatarFileErrorMessage(invalid) };
 
   const supabase = await createClient();
+  const denied = await profileWriteDeniedMessage(supabase);
+  if (denied) return { error: denied };
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Not signed in.' };
 
@@ -84,9 +93,11 @@ export type AdminActionResult = { error?: string } | null;
 
 export async function adminSetRoleAction(userId: string, role: Role): Promise<AdminActionResult> {
   const supabase = await createClient();
+  const denied = await adminDeniedMessage(supabase);
+  if (denied) return { error: denied };
   const { data: target } = await supabase.from('users').select('email, full_name').eq('id', userId).maybeSingle();
   const { error } = await supabase.rpc('admin_set_user_role', { target_id: userId, new_role: role });
-  if (error) return { error: error.message };
+  if (error) return { error: adminRpcErrorMessage(error.message) };
   await logAudit(supabase, 'Changed User Role', `${target?.full_name || target?.email || userId} → ${role}`);
   revalidatePath('/profile');
   return null;
@@ -94,9 +105,11 @@ export async function adminSetRoleAction(userId: string, role: Role): Promise<Ad
 
 export async function adminSetSuspendedAction(userId: string, suspended: boolean): Promise<AdminActionResult> {
   const supabase = await createClient();
+  const denied = await adminDeniedMessage(supabase);
+  if (denied) return { error: denied };
   const { data: target } = await supabase.from('users').select('email, full_name').eq('id', userId).maybeSingle();
   const { error } = await supabase.rpc('admin_set_user_suspended', { target_id: userId, suspended });
-  if (error) return { error: error.message };
+  if (error) return { error: adminRpcErrorMessage(error.message) };
   await logAudit(supabase, suspended ? 'Suspended User' : 'Reactivated User', `${target?.full_name || target?.email || userId}`);
   revalidatePath('/profile');
   return null;

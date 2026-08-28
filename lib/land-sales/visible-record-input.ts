@@ -1,68 +1,36 @@
+import { costarColumnNames } from './costar-fields';
 import type { HiddenFieldIds } from './field-visibility';
-import { landSaleInputSchema, type LandSaleInput } from './schema';
-
-const WRITABLE_CORE_FIELDS = [
-  'parcel_id',
-  'address',
-  'city',
-  'county',
-  'state',
-  'msa',
-  'property_type',
-  'square_feet',
-  'acreage',
-  'sale_date',
-  'sale_price',
-  'buyer',
-] as const satisfies ReadonlyArray<Exclude<keyof LandSaleInput, 'extras' | 'sale_date_raw'>>;
+import type { LandSale, LandSaleInput } from './schema';
 
 export function mergeVisibleUpdate(
-  existing: LandSaleInput,
+  existing: LandSale,
   submitted: LandSaleInput,
-  availableExtraLabels: string[],
   hidden: HiddenFieldIds,
 ): LandSaleInput {
-  const merged: LandSaleInput = { ...submitted, extras: { ...existing.extras } };
-
-  for (const field of WRITABLE_CORE_FIELDS) {
-    if (!hidden.has(`core:${field}`)) continue;
-    Object.assign(merged, { [field]: existing[field] });
+  const columns: Record<string, unknown> = { ...existing.columns };
+  for (const header of costarColumnNames()) {
+    if (hidden.has(header)) continue;
+    if (Object.prototype.hasOwnProperty.call(submitted.columns, header)) {
+      columns[header] = submitted.columns[header];
+    }
   }
-
-  merged.sale_date_raw = hidden.has('core:sale_date')
-    ? existing.sale_date_raw
-    : submitted.sale_date_raw;
-
-  for (const label of availableExtraLabels) {
-    if (hidden.has(`extra:${label}`)) continue;
-    const value = submitted.extras[label];
-    if (value) merged.extras[label] = value;
-    else delete merged.extras[label];
-  }
-
-  return merged;
+  return {
+    columns,
+    saleDateRaw: hidden.has('Sale Date') ? existing.saleDateRaw : submitted.saleDateRaw,
+  };
 }
 
 export function sanitizeVisibleCreate(
   submitted: LandSaleInput,
-  availableExtraLabels: string[],
   hidden: HiddenFieldIds,
 ): LandSaleInput {
-  const defaults = landSaleInputSchema.parse({});
-  const sanitized: LandSaleInput = { ...submitted, extras: {} };
-
-  for (const field of WRITABLE_CORE_FIELDS) {
-    if (!hidden.has(`core:${field}`)) continue;
-    Object.assign(sanitized, { [field]: defaults[field] });
+  const columns: Record<string, unknown> = {};
+  for (const header of costarColumnNames()) {
+    if (hidden.has(header)) continue;
+    columns[header] = submitted.columns[header] ?? null;
   }
-
-  if (hidden.has('core:sale_date')) sanitized.sale_date_raw = undefined;
-
-  for (const label of availableExtraLabels) {
-    if (hidden.has(`extra:${label}`)) continue;
-    const value = submitted.extras[label];
-    if (value) sanitized.extras[label] = value;
-  }
-
-  return sanitized;
+  return {
+    columns,
+    saleDateRaw: hidden.has('Sale Date') ? undefined : submitted.saleDateRaw,
+  };
 }

@@ -134,16 +134,17 @@ import template, or the export file.** Hiding a field does not drop a column.
 Reordering fields does not reorder the CSV. Every export emits all 278 header
 positions in canonical order regardless of what any user can see.
 
-### The two carve-outs
+### The carve-outs
 
-Exactly two things in the physical table are not catalog fields. Both are
-required, both are documented here, and **neither may ever appear in the
+Exactly three things in the physical table are not catalog fields. All are
+required, all are documented here, and **none may ever appear in the
 catalog, the import template, the export file, or the UI as a field**:
 
 | | What | Why |
 | --- | --- | --- |
 | `id` | `uuid`, primary key | Row identity. CoStar's `Comp ID` is not unique — many rows share `0` or null — so it cannot serve as a key. |
-| `Sprinklers` | one column, two header positions | The header row lists `Sprinklers` twice (positions 259 and 260 of 278). Postgres cannot hold two columns of one name, so 278 header positions map to 277 columns. |
+| `Sprinklers` | one column, two header positions | The header row lists `Sprinklers` twice (positions 259 and 260 of 278). Postgres cannot hold two columns of one name, so 278 header positions map to 277 columns. An import keeps the second position's value and export writes that value into both. If a source file ever carries different values there, one is lost. **Accepted known lossiness** — do not add a column without a §5 decision. |
+| `_sale_date_raw` | `text`, system store | Holds the original text of an unrecognized `Sale Date` so ingest can flag the row for review and export can re-emit it. Named to be self-evidently outside the catalog. |
 
 Any future non-catalog storage column joins this table or it does not exist.
 
@@ -152,7 +153,7 @@ Any future non-catalog storage column joins this table or it does not exist.
 As of this writing the four representations agree exactly: the canonical list in
 Appendix A, the `COSTAR_HEADER_ROW` constant in `lib/land-sales/costar-fields.ts`,
 the header list in the creating migration, and the live `land_sales` columns
-(277 catalog columns in canonical order, plus `id`). **Appendix A is the
+(277 catalog columns in canonical order, plus `id` and `_sale_date_raw`). **Appendix A is the
 contract; the code constant is its executable copy.** A test must assert they
 remain byte-identical — that test is what makes the single-source claim real
 rather than aspirational.
@@ -198,8 +199,10 @@ Seven capabilities. A change either extends one of these or is out of scope.
 
 6. **Get the comps out.** Export the *selected* rows in the provider format:
    **all 278 header positions, in canonical order, every time** — never only the
-   visible fields, never in the Admin's display order. Export is a Viewer-level
-   capability: reading and taking away what you read are the same permission.
+   visible fields, never in the Admin's display order. Selection survives paging
+   through a result set; the header checkbox adds or removes the current page
+   only. Export is a Viewer-level capability: reading and taking away what you
+   read are the same permission.
 
 7. **Get records in.** Two paths, both Editor-level:
    - **Bulk import** of a provider-format CSV, whose header row must match the
@@ -472,7 +475,8 @@ you may expect.
 (`Sprinklers` appears at positions 259 and 260). It defines, identically and
 simultaneously:
 
-- the `public.land_sales` columns (these 277 names, plus the `id` carve-out);
+- the `public.land_sales` columns (these 277 names, plus the `id` and
+  `_sale_date_raw` carve-outs);
 - the CSV **import** template header row;
 - the CSV **export** header row;
 - every field the application knows about.

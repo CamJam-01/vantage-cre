@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { DatabaseKey, FieldDivider, FieldDividerKind } from './field-visibility';
+import {
+  canonicalizeStoredIds,
+  type DatabaseKey,
+  type FieldDivider,
+  type FieldDividerKind,
+} from './field-visibility';
 
 export class DisplaySettingsReadError extends Error {
   constructor(message: string) {
@@ -55,8 +60,8 @@ export async function loadDisplaySettings(
     field_dividers?: unknown;
   } | null;
   return {
-    hidden: new Set(row?.hidden_field_keys ?? []),
-    fieldOrder: row?.field_order ?? [],
+    hidden: new Set(canonicalizeStoredIds(row?.hidden_field_keys)),
+    fieldOrder: canonicalizeStoredIds(row?.field_order),
     fieldDividers: readFieldDividers(row?.field_dividers),
   };
 }

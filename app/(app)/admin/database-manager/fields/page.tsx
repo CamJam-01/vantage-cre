@@ -10,7 +10,7 @@ import { SALES_DATABASE_KEY, type FieldDivider } from '@/lib/land-sales/field-vi
 
 type PageProps = { searchParams: Promise<{ db?: string }> };
 
-export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
+export default async function DatabaseFieldsPage({ searchParams }: PageProps) {
   const supabase = await createClient();
   const profile = await getCurrentUserProfile(supabase);
   if (!profile) redirect('/login');
@@ -28,8 +28,7 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
       fieldDividers: [] as FieldDivider[],
       error: error instanceof Error ? error.message : 'Could not load field visibility.',
     }));
-  const catalogLabels: string[] = [];
-  const columns = resultColumns({ catalogLabels });
+  const columns = resultColumns();
   const disabledReason = settings.error ?? undefined;
 
   return (
@@ -42,7 +41,7 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
         <div>
           <div className="tag tag-outline" style={{ marginBottom: 'var(--space-2)' }}>DATABASE MANAGER</div>
           <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: 0 }}>
-            {category.name}
+            Field configuration
           </h1>
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 'var(--space-2) 0 0' }}>
             Choose which fields every user sees — and the order they appear in — across results,
@@ -53,7 +52,7 @@ export default async function DatabaseSchemaPage({ searchParams }: PageProps) {
 
         <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: 'var(--color-neutral-100)' }}>
           <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)', marginBottom: 'var(--space-4)' }}>
-            Results &amp; Record Display
+            {category.name}
           </div>
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: '0 0 var(--space-4)' }}>
             This is one global display configuration for the selected table. Hidden fields keep their data and remain available to CSV workflows.

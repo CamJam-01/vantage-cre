@@ -1,84 +1,63 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { extrasFromFormData, EXTRAS_FIELD_PREFIX, landSaleInputSchema } from './schema.ts';
+import { coerceColumnValue, coerceLandSaleInput, columnsFromFormData, isSystemColumn } from './schema.ts';
+import { SALE_DATE_RAW_COLUMN } from './costar-fields.ts';
 
-const core = {
-  city: 'Wendell',
-  county: 'Wake',
-  state: 'NC',
-  property_type: 'Land',
-};
-
-describe('landSaleInputSchema empty records', () => {
-  it('accepts a completely empty payload', () => {
-    const parsed = landSaleInputSchema.parse({});
-    assert.equal(parsed.city, '');
-    assert.equal(parsed.county, '');
-    assert.equal(parsed.state, '');
-    assert.equal(parsed.property_type, '');
-    assert.equal(parsed.parcel_id, '');
-    assert.equal(parsed.address, '');
-    assert.equal(parsed.buyer, '');
-    assert.equal(parsed.acreage, undefined);
-    assert.equal(parsed.sale_price, undefined);
-    assert.equal(parsed.sale_date, undefined);
+describe('coerceColumnValue', () => {
+  it('strips currency from numbers and yields null rather than an error', () => {
+    assert.equal(coerceColumnValue('Sale Price', '$1,000'), 1000);
+    assert.equal(coerceColumnValue('Sale Price', 'nope'), null);
+    assert.equal(coerceColumnValue('Sale Price', ''), null);
   });
 
-  it('accepts blank strings from an empty form or CSV row', () => {
-    const parsed = landSaleInputSchema.parse({
-      parcel_id: '',
-      address: '',
-      city: '',
-      county: '',
-      state: '',
-      msa: '',
-      property_type: '',
-      square_feet: '',
-      acreage: '',
-      sale_date: '',
-      sale_price: '',
-      buyer: '',
-    });
-    assert.equal(parsed.city, '');
-    assert.equal(parsed.state, '');
-    assert.equal(parsed.property_type, '');
-    assert.equal(parsed.acreage, undefined);
-    assert.equal(parsed.sale_date, undefined);
+  it('parses dates and booleans the same way import does', () => {
+    assert.equal(coerceColumnValue('Sale Date', '8/13/2026 0:00'), '2026-08-13');
+    assert.equal(coerceColumnValue('Sale Date', 'not a date'), null);
+    assert.equal(coerceColumnValue('Has Lab Space', 'Yes'), true);
+    assert.equal(coerceColumnValue('Has Lab Space', 'no'), false);
+    assert.equal(coerceColumnValue('Has Lab Space', 'maybe'), null);
   });
 
-  it('still rejects a present but invalid state code', () => {
-    const parsed = landSaleInputSchema.safeParse({ ...core, state: 'N' });
-    assert.equal(parsed.success, false);
+  it('leaves text as trimmed text, including a full state name', () => {
+    assert.equal(coerceColumnValue('Property State', 'North Carolina'), 'North Carolina');
+    assert.equal(coerceColumnValue('Property State', '  NC  '), 'NC');
   });
 });
 
-describe('landSaleInputSchema extras', () => {
-  it('defaults extras to an empty object when omitted', () => {
-    const parsed = landSaleInputSchema.parse(core);
-    assert.deepEqual(parsed.extras, {});
+describe('coerceLandSaleInput', () => {
+  it('accepts an empty payload', () => {
+    const { input, warnings } = coerceLandSaleInput({});
+    assert.equal(input.columns['Property Address'], null);
+    assert.equal(input.saleDateRaw, undefined);
+    assert.deepEqual(warnings, []);
   });
 
-  it('keeps custom field values keyed by their CSV header', () => {
-    const parsed = landSaleInputSchema.parse({
-      ...core,
-      extras: { Zoning: 'RA', Market: 'Raleigh, NC' },
-    });
-    assert.deepEqual(parsed.extras, { Zoning: 'RA', Market: 'Raleigh, NC' });
+  it('preserves unrecognized Sale Date text as a warning, not a rejection', () => {
+    const { input, warnings } = coerceLandSaleInput({ 'Sale Date': 'spring-ish' }, 4);
+    assert.equal(input.columns['Sale Date'], null);
+    assert.equal(input.saleDateRaw, 'spring-ish');
+    assert.match(warnings[0] ?? '', /Row 4, Sale Date/);
   });
 });
 
-describe('extrasFromFormData', () => {
-  it('reads extra: prefixed fields and omits blanks', () => {
+describe('columnsFromFormData', () => {
+  it('reads visible header names and skips hidden ones', () => {
     const form = new FormData();
-    form.set(`${EXTRAS_FIELD_PREFIX}Zoning`, 'RA');
-    form.set(`${EXTRAS_FIELD_PREFIX}Market`, '  ');
-    form.set('city', 'Wendell');
-    assert.deepEqual(extrasFromFormData(form), { Zoning: 'RA' });
+    form.set('Property Address', '123 Main St');
+    form.set('Zoning', 'RA');
+    form.set('Sale Date', 'not-a-date');
+    const input = columnsFromFormData(form, new Set(['Zoning']));
+    assert.equal(input.columns['Property Address'], '123 Main St');
+    assert.equal('Zoning' in input.columns, false);
+    assert.equal(input.saleDateRaw, 'not-a-date');
   });
+});
 
-  it('returns empty when the form has no extra fields', () => {
-    const form = new FormData();
-    form.set('city', 'Wendell');
-    assert.deepEqual(extrasFromFormData(form), {});
+describe('system columns', () => {
+  it('recognizes only the documented carve-outs as system stores', () => {
+    assert.equal(isSystemColumn('id'), true);
+    assert.equal(isSystemColumn(SALE_DATE_RAW_COLUMN), true);
+    assert.equal(isSystemColumn('Sale Date'), false);
+    assert.equal(isSystemColumn('Sprinklers'), false);
   });
 });

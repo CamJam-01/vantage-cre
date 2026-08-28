@@ -132,26 +132,25 @@ One header set is the catalog, the `land_sales` columns, the import template, an
 - The count `278` is asserted in the migration. If it changes, that assertion changes with it, deliberately.
 - **The catalog is closed.** Adding, removing, renaming, or reordering a header is a contract change requiring a §5 decision, then a migration + constant + Appendix A update together.
 
-**Two carve-outs, and only these two** — neither is a catalog field, and neither may reach the catalog, the template, the export, or the UI:
+**Three carve-outs** — none is a catalog field, and none may reach the catalog, the template, the export, or the UI:
 
 | | What | Why |
 | --- | --- | --- |
 | `id` | `uuid` primary key | Row identity; `Comp ID` is not unique. |
-| `Sprinklers` | one column serving two header positions | Postgres name collision. |
+| `Sprinklers` | one column serving two header positions | Postgres name collision. Import keeps the second value; export writes it into both. Accepted known lossiness. |
+| `_sale_date_raw` | `text` system store | Original text of an unrecognized `Sale Date`. Not a field. |
 
 Any new non-catalog storage column joins that table in README §3A, or it is not added.
 
 **Display never affects storage.** Field visibility and ordering are admin presentation configuration. Hiding a field never drops a column; reordering never reorders the CSV. Export always emits all 278 positions in canonical order, whatever the arrangement says.
 
-**Required drift guard.** A test must assert that README Appendix A, `COSTAR_HEADER_ROW`, and the live `land_sales` columns (277 catalog names in order, plus `id`) agree, and that `costar-column-types.ts` matches the live Postgres types. Without it, "single source of truth" is aspirational.
+**Required drift guard.** A test must assert that README Appendix A, `COSTAR_HEADER_ROW`, and the live `land_sales` columns (277 catalog names in order, plus `id` and `_sale_date_raw`) agree, and that `costar-column-types.ts` matches the live Postgres types. Without it, "single source of truth" is aspirational.
 
 ### 3.2 Validation
 
 Validation is **per column, driven by the column's type** — `costarColumnType` in `lib/land-sales/costar-column-types.ts` classifies every catalog header as text, number, date, or boolean. There is one validation path, and it addresses columns by header name. Never re-validate ad hoc at a call site, and never hand-write rules for a favoured subset of fields.
 
 It is **deliberately forgiving** (README §6.2). Numeric coercion strips currency symbols and separators and yields nothing rather than an error; an unrecognized date yields nothing, with the original text preserved and surfaced as a *warning*. Essentially nothing is required; an empty record is valid.
-
-> ⚠️ `landSaleInputSchema` in `lib/land-sales/schema.ts` still encodes the deprecated prototype model — a renamed subset of headers with bespoke identifiers and per-field rules (e.g. a 2-letter check on `state`). It is scheduled for removal, not extension. Do not add fields to it, and do not treat its identifiers as field names.
 
 **Do not "tighten" this schema into rejecting rows.** Rejection is the failure mode it exists to prevent.
 
@@ -239,7 +238,7 @@ The interface is built against the **Industry** design system, which lives entir
 - Build from its component classes (`.btn`, `.card`, `.table`, `.field`, `.tag`, `.seg`, `.dialog`) rather than parallel ones.
 - Cards, figures, and primary buttons are blueprint objects: the `.blueprint` class. Square corners; no fills on cards.
 - Icons are `lucide-react` at `strokeWidth={1.5}`. Never thicker.
-- **Tonal ramps**: every role carries `100`–`900` steps on one shared perceptual lightness scale. Use `100`–`300` for tinted fills, hovers and subtle borders, `500` as the role's base, and `700`–`900` for text on tinted fills and pressed states. Prefer a ramp step over an ad-hoc `color-mix()`. Elevation comes from `--shadow-sm/md/lg`, never a hand-rolled `box-shadow`.
+- **Tonal ramps**: every role carries `100`–`900` steps on one shared perceptual lightness scale. Use `100`–`300` for tinted fills, hovers and subtle borders, `500` as the role's base, and `700`–`900` for text on tinted fills and pressed states. Prefer a ramp step over an ad-hoc `color-mix()`. Elevation comes from `--shadow-sm/md/lg`, never a hand-rolled `box-shadow`. Danger and warning use `--color-danger-*` and `--color-warning-*`; input fills and paper surfaces use `--color-paper`.
 - **Contrast caveat**: the accent-to-ground pair is tuned to ~3:1 — enough for icons, large text and chrome, *not* for body copy. For paragraph-size text in the accent use a deep step (`--color-accent-700`).
 - The palette is mono: `--color-accent-2-*` is a machine-derived stand-in that resolves to the same role as the accent. Treat them as one; do not build a two-accent design on it.
 - Hover, pressed, `:focus-visible`, and disabled states are built into the system. Do not restyle them per screen.
@@ -253,7 +252,7 @@ The interface is built against the **Industry** design system, which lives entir
 
 `node:test` with `node:assert/strict`, colocated as `lib/**/*.test.ts`, importing subjects with explicit `.ts` extensions. Tests target pure functions in `lib/` — that is what the layering in §2.2 buys.
 
-⚠️ **There is no configured test command**, and `package.json` has no `test` script. Plain `node --test` fails on every suite: test files use explicit `.ts` specifiers while the sources they pull in use Next-style extensionless imports, which Node's ESM resolver cannot follow. Running the suite requires registering a resolve hook that retries failed relative specifiers with `.ts`/`.tsx` and delegates via `next()`. **A first-run `ERR_MODULE_NOT_FOUND` means the harness is missing, not that your change broke something.**
+Run them with `npm test`. That registers `scripts/resolve-ts.mjs`, which retries failed relative specifiers with `.ts`/`.tsx` and delegates via `next()` so Node can follow the extensionless imports in `lib/` sources. Plain `node --test` without the hook still fails with `ERR_MODULE_NOT_FOUND`; that is the missing import, not a broken change.
 
 `tsconfig.json` excludes `**/*.test.ts`, so type-checking does not cover test files.
 
@@ -300,10 +299,8 @@ For anything touching rendering or interaction, verify at runtime against `next 
 Specific, earned, and each one has cost time here before:
 
 - **`Comp ID` is not unique.** Many imported rows share `0` or null. Row identity is the separate `id` uuid primary key. Never key, route, or deduplicate on `Comp ID`.
-- **A deprecated second field model is still wired in.** Parts of `lib/land-sales/` (`schema.ts`, `db.ts`, `result-columns.ts`, `visible-record-input.ts`) and `lib/admin/database-descriptor.ts` still project a renamed subset of headers into bespoke identifiers, with an `extras` bag for the remainder. **This is prototype wreckage, not architecture.** It is inconsistently applied — the record UI already ignores its layout sheets, and the admin arrangement never saves its identifiers. Do not extend it, imitate it, or restore it; a field is a header string (§3.1). Removing it is planned work.
-- **`Sprinklers` round-trips lossily.** Two header positions share one column, so an import keeps only the second position's value and export writes that value into both. If the two ever differ in a source file, data is lost. Known and unresolved — do not "fix" it by adding a column without a §5 decision.
+- **`Sprinklers` round-trips lossily.** Two header positions share one column, so an import keeps only the second position's value and export writes that value into both. If the two ever differ in a source file, data is lost. **Accepted known lossiness** — do not "fix" it by adding a column without a §5 decision.
 - **Write repository text files as UTF-8.** `README.md` was previously UTF-16 and rendered as garbage in most tooling.
-- **`lib/supabase/server.ts` has a stale comment** referring to "Middleware refreshes sessions." It means `proxy.ts`. Harmless, but do not take it as evidence that a middleware file exists.
 - **Field visibility is global, not per-user** (README §2). A request phrased as "let me hide that column" is an admin configuration change, not a user preference — and if it truly means per-user, it is a scope change to raise, not build.
 
 ---

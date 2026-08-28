@@ -60,10 +60,10 @@ export function OptionPicker({ title, subtitle, options, backHref, continueHref 
               <div style={{
                 flexShrink: 0, width: 22, height: 22,
                 border: `1.5px solid ${isSelected ? 'var(--color-accent-600)' : 'var(--color-neutral-500)'}`,
-                background: isSelected ? 'var(--color-accent-600)' : '#FFFFFF',
+                background: isSelected ? 'var(--color-accent-600)' : 'var(--color-paper)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                {isSelected && <Check size={14} strokeWidth={3} color="var(--color-bg)" />}
+                {isSelected && <Check size={14} strokeWidth={1.5} color="var(--color-bg)" />}
               </div>
               <div style={{ textAlign: 'left' }}>
                 <div style={{ fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)' }}>
@@ -81,7 +81,7 @@ export function OptionPicker({ title, subtitle, options, backHref, continueHref 
             display: 'flex', alignItems: 'center', gap: 'var(--space-3)', padding: 'var(--space-4) var(--space-6)',
             background: 'var(--color-bg)', color: 'var(--color-text)', boxShadow: 'var(--shadow-md)', textDecoration: 'none',
           }}>
-            <ArrowLeft size={18} strokeWidth={2} />
+            <ArrowLeft size={18} strokeWidth={1.5} />
             <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.03em' }}>BACK</span>
           </Link>
         )}
@@ -100,7 +100,7 @@ export function OptionPicker({ title, subtitle, options, backHref, continueHref 
           }}
         >
           <span style={{ fontFamily: 'var(--font-heading)', fontSize: 16, fontWeight: 600, letterSpacing: '0.03em' }}>CONTINUE</span>
-          <ArrowRight size={18} strokeWidth={2} />
+          <ArrowRight size={18} strokeWidth={1.5} />
         </button>
       </div>
     </main>

@@ -131,7 +131,7 @@ export function ProfilePhotoField({ initialUrl }: { initialUrl: string | null })
       <button type="button" className="btn btn-ghost" onClick={openPicker} disabled={uploading} style={{ fontSize: 12 }}>
         {uploading ? 'Uploading…' : previewUrl ? 'Replace photo' : 'Upload photo'}
       </button>
-      {error && <div style={{ fontSize: 12, color: '#b3261e', textAlign: 'center', maxWidth: 120 }}>{error}</div>}
+      {error && <div className="record-error" style={{ textAlign: 'center', maxWidth: 120 }}>{error}</div>}
     </div>
   );
 }

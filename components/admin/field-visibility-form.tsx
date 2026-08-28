@@ -19,7 +19,7 @@ import {
 import {
   saveFieldVisibilityAction,
   type FieldVisibilityActionState,
-} from '@/app/(app)/admin/database-manager/schema/actions';
+} from '@/app/(app)/admin/database-manager/fields/actions';
 
 type FieldVisibilityFormProps = {
   databaseKey: DatabaseKey;
@@ -329,7 +329,7 @@ export function FieldVisibilityForm({
                         cursor: disabled ? 'not-allowed' : 'grab',
                       }}
                     >
-                      <GripVertical size={15} strokeWidth={2} aria-hidden />
+                      <GripVertical size={15} strokeWidth={1.5} aria-hidden />
                     </button>
                   </td>
 
@@ -365,7 +365,7 @@ export function FieldVisibilityForm({
                           onClick={() => removeDivider(row.divider)}
                           style={rowActionStyle}
                         >
-                          <X size={12} strokeWidth={2.5} aria-hidden />
+                          <X size={12} strokeWidth={1.5} aria-hidden />
                           Remove
                         </button>
                       </div>
@@ -392,7 +392,7 @@ export function FieldVisibilityForm({
                                 marginRight: kind === 'group' ? 'var(--space-2)' : 0,
                               }}
                             >
-                              <Plus size={12} strokeWidth={2.5} aria-hidden />
+                              <Plus size={12} strokeWidth={1.5} aria-hidden />
                               {DIVIDER_BUTTON_LABELS[kind]}
                             </button>
                           ))}
@@ -433,7 +433,7 @@ export function FieldVisibilityForm({
       </div>
 
       {visibleCount === 0 && !disabledReason ? (
-        <p role="alert" style={{ margin: 'var(--space-3) 0 0', color: '#b3261e', fontSize: 13 }}>
+        <p role="alert" style={{ margin: 'var(--space-3) 0 0', color: 'var(--color-danger-500)', fontSize: 13 }}>
           At least one field must remain visible.
         </p>
       ) : null}
@@ -443,7 +443,7 @@ export function FieldVisibilityForm({
           aria-live="polite"
           style={{
             margin: 'var(--space-3) 0 0',
-            color: state?.status === 'success' && !disabledReason ? 'var(--color-accent-700)' : '#b3261e',
+            color: state?.status === 'success' && !disabledReason ? 'var(--color-accent-700)' : 'var(--color-danger-500)',
             fontSize: 13,
           }}
         >

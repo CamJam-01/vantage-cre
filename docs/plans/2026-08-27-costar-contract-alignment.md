@@ -17,12 +17,13 @@ All four are the same list, in the same order, with the same spelling. **278 hea
 
 **Display never touches storage.** What appears in the results table and the record create/view/edit screens is purely the result of an Admin toggling visibility and reordering fields in settings. That configuration is presentation. **It has no bearing on the database columns, the import template, or the export file.** Hiding a field does not drop a column. Reordering does not reorder the CSV. Export always emits all 278 positions in canonical order.
 
-**Exactly two carve-outs**, both documented in README §3A, neither a catalog field, neither ever appearing in the template, the export, or the UI:
+**Exactly three carve-outs**, all documented in README §3A, none a catalog field, none ever appearing in the template, the export, or the UI:
 
 | | What | Why |
 | --- | --- | --- |
 | `id` | `uuid` primary key | Row identity; `Comp ID` is not unique (many rows share `0`/null). |
-| `Sprinklers` | one column, two header positions (259, 260) | Postgres cannot hold two columns of one name. |
+| `Sprinklers` | one column, two header positions (259, 260) | Postgres cannot hold two columns of one name. Import keeps the second value; export writes it into both. **Accepted known lossiness.** |
+| `_sale_date_raw` | `text` system store | Original text of an unrecognized `Sale Date`. |
 
 The parallel **"core field" model** — a hand-picked subset of headers renamed to bespoke identifiers with their own types, labels, layout sheets, computed values, and `core:` ids — is a **relic of a deprecated prototype**. It is removed wholesale by this plan, not restored. After Phase 2 it must not appear anywhere: not in `lib/`, `app/`, `components/`, tests, comments, or admin descriptors.
 
@@ -206,7 +207,7 @@ Small, and the thing that keeps the contract true after everyone forgets this pl
 
 ### Phase 6 — Design-system fidelity (§6.5)
 
-- Add semantic tokens if missing (`--color-danger`, `--color-warning`, tint fills) to `industry.css`, mapped from the current hard-coded values.
+- Add semantic tokens if missing (`--color-danger`, `--color-warning`, tint fills, `--color-paper`) to `styles/main.css`, mapped from the current hard-coded values. The design system lives in `main.css` (AGENTS §6); `industry.css` is gone.
 - Replace component hex and `color: 'red'` with tokens; prefer existing `.tag` / `.record-error` classes over one-off styles.
 - Normalize Lucide `strokeWidth={1.5}`.
 
@@ -222,15 +223,15 @@ Small, and the thing that keeps the contract true after everyone forgets this pl
 
 Completed ahead of this revision, so the plan and the docs no longer disagree:
 
-- **README §3A "The field catalog — closed and canonical"** — one header set governs all four representations; the catalog is closed; display never touches storage; the two carve-outs; verified state.
+- **README §3A "The field catalog — closed and canonical"** — one header set governs all four representations; the catalog is closed; display never touches storage; the three carve-outs (`id`, `Sprinklers`, `_sale_date_raw`); verified state.
 - **README Appendix A** — the canonical 278-position header row verbatim, plus the typed-column classification. Verified byte-identical to `COSTAR_HEADER_ROW`.
 - **README §3** — core-field and derived-field vocabulary deleted; a field *is* a header string.
 - **README §4** — filters and record layout restated in header terms; export always emits all 278 positions.
 - **README §6.1** — rewritten as "The CoStar header row *is* the schema," explicitly naming the core-field layer as deprecated prototype wreckage.
 - **README §8** — extension table rows for closed-catalog changes, display-rename refusals, and partial-export refusals.
-- **AGENTS.md §3.1, §3.2, §10** — Appendix A named as the contract, carve-outs tabulated, drift guard required, prototype schema flagged as removal-only, `Sprinklers` lossiness recorded as a known trap.
+- **AGENTS.md §3.1, §3.2, §10** — Appendix A named as the contract, three carve-outs tabulated, drift guard required, prototype field model removed, `Sprinklers` lossiness recorded as accepted.
 
-Remaining doc work is Phase 1's carve-out entry if a raw-date store is added.
+Phase 1's `_sale_date_raw` carve-out is now in README §3A and AGENTS §3.1.
 
 ---
 

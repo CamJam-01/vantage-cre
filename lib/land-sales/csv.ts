@@ -1,21 +1,8 @@
-import { COSTAR_CORE_HEADER_MAP, COSTAR_HEADER_ROW, COSTAR_HEADERS } from './costar-fields';
+import { COSTAR_HEADER_ROW, COSTAR_HEADERS, SALE_DATE_RAW_COLUMN } from './costar-fields';
 import { costarTextValues, landSaleToRow } from './db';
-import { parseFlexibleDate } from './dates';
-import { landSaleInputSchema, type LandSale, type LandSaleInput } from './schema';
+import { coerceLandSaleInput, type LandSale, type LandSaleInput } from './schema';
 
 export const csvHeaders = COSTAR_HEADERS;
-
-export const csvFields = [
-  'parcel_id', 'address', 'city', 'county', 'state', 'msa', 'property_type',
-  'square_feet', 'acreage', 'sale_date', 'sale_price', 'buyer',
-] as const;
-
-export type CsvField = (typeof csvFields)[number];
-
-/** CoStar template headers for import-validation error messages. */
-export const fieldToHeader = Object.fromEntries(
-  Object.entries(COSTAR_CORE_HEADER_MAP).map(([header, field]) => [field, header]),
-) as Record<CsvField, string>;
 
 export function csvCell(value: string | number | null | undefined): string {
   const text = String(value ?? '');
@@ -25,18 +12,26 @@ export function csvCell(value: string | number | null | undefined): string {
 function exportCellValue(value: unknown): string {
   if (value == null) return '';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  return String(value);
+  const text = String(value);
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  return text;
 }
 
-/** Export-side CSV builder — used client-side by the results table's "Export CSV"
- * button (selected rows only). Headers match the CoStar import template exactly. */
+function saleDateExport(record: LandSale): string {
+  const typed = record.columns['Sale Date'];
+  if (typed != null && typed !== '') return exportCellValue(typed);
+  return record.saleDateRaw ?? '';
+}
+
+/** Export-side CSV builder. Always emits all 278 header positions in
+ * canonical order; display configuration cannot change the file. */
 export function makeCsv(rows: LandSale[]): string {
   const body = rows.map(row => {
     const columns = landSaleToRow(row);
-    if (!row.sale_date && row.sale_date_raw) {
-      columns['Sale Date'] = row.sale_date_raw;
-    }
-    return COSTAR_HEADERS.map(name => csvCell(exportCellValue(columns[name]))).join(',');
+    return COSTAR_HEADERS.map(name => {
+      if (name === 'Sale Date') return csvCell(saleDateExport(row));
+      return csvCell(exportCellValue(columns[name]));
+    }).join(',');
   });
   return [COSTAR_HEADER_ROW, ...body].join('\r\n');
 }
@@ -112,85 +107,68 @@ export type ImportRowResult =
   | { row: number; ok: true; data: LandSaleInput; columns: Record<string, string | null>; warnings?: string[] }
   | { row: number; ok: false; errors: string[] };
 
-function costarCell(values: string[], header: string): string {
-  const index = csvHeaders.indexOf(header);
-  return index >= 0 ? (values[index] ?? '') : '';
-}
-
-function headerForCore(field: (typeof COSTAR_CORE_HEADER_MAP)[keyof typeof COSTAR_CORE_HEADER_MAP]): string {
-  const entry = Object.entries(COSTAR_CORE_HEADER_MAP).find(([, value]) => value === field);
-  if (!entry) throw new Error(`No CoStar header mapped to ${field}`);
-  return entry[0];
-}
-
-/** Merge validated core fields with CoStar columns for a land_sales insert.
- * Parsed numeric/date values overlay the CSV text so typed columns accept the row. */
+/** Merge coerced typed values onto the CSV text columns for a land_sales insert.
+ * `_sale_date_raw` is written only when Sale Date was unrecognized. */
 export function importLandSaleRow(row: Extract<ImportRowResult, { ok: true }>): Record<string, unknown> {
-  const lab = row.columns['Has Lab Space'];
   return {
     ...row.columns,
-    'Sale Price': row.data.sale_price ?? null,
-    'Sale Date': row.data.sale_date ?? parseFlexibleDate(row.columns['Sale Date'] ?? '') ?? null,
-    'Publication Date': parseFlexibleDate(row.columns['Publication Date'] ?? '') ?? null,
-    'Recording Date': parseFlexibleDate(row.columns['Recording Date'] ?? '') ?? null,
-    'Land Area AC': row.data.acreage ?? null,
-    'Land Area SF': row.data.square_feet ?? null,
-    'Has Lab Space': lab == null || lab === '' ? null : /^(true|yes)$/i.test(lab),
+    ...row.data.columns,
+    [SALE_DATE_RAW_COLUMN]: row.data.saleDateRaw ?? null,
   };
 }
 
-/** Validates template-ordered CoStar data rows against the schema, producing
- * specific per-row/column error messages (e.g. "Row 4, Sale Price: ...").
- * Runs identically client-side (instant feedback) and server-side (never trust
- * the client).
- *
- * Sale Date is never a blocking error: if it doesn't parse, the row still
- * imports with sale_date left blank and the original text captured in
- * sale_date_raw, surfaced back as a warning rather than a rejection.
- * A Property State that isn't a 2-letter code stays on the CoStar column
- * and leaves the core state field empty. */
+/** Validates template-ordered CoStar data rows. Unparseable cells become null
+ * with a warning (Sale Date keeps its original text); the row is never rejected
+ * for a value the type cannot understand. */
 export function validateDataRows(rows: string[][]): ImportRowResult[] {
   return rows.map((values, index) => {
-    const rowNumber = index + 2; // +1 for the header row, +1 to make it 1-indexed
-    const core = {
-      parcel_id: costarCell(values, headerForCore('parcel_id')),
-      address: costarCell(values, headerForCore('address')),
-      city: costarCell(values, headerForCore('city')),
-      county: costarCell(values, headerForCore('county')),
-      state: costarCell(values, headerForCore('state')).trim(),
-      msa: costarCell(values, headerForCore('msa')) || undefined,
-      property_type: costarCell(values, headerForCore('property_type')),
-      square_feet: costarCell(values, headerForCore('square_feet')) || undefined,
-      acreage: costarCell(values, headerForCore('acreage')),
-      sale_date: costarCell(values, headerForCore('sale_date')),
-      sale_price: costarCell(values, headerForCore('sale_price')),
-      buyer: costarCell(values, headerForCore('buyer')),
+    const rowNumber = index + 2;
+    const textColumns = costarTextValues(values);
+    const { input, warnings } = coerceLandSaleInput(textColumns, rowNumber);
+    return {
+      row: rowNumber,
+      ok: true as const,
+      data: input,
+      columns: textColumns,
+      warnings: warnings.length ? warnings : undefined,
     };
-    const dateRecognized = !!core.sale_date && parseFlexibleDate(core.sale_date) !== null;
-    const parsed = landSaleInputSchema.safeParse({
-      ...core,
-      state: core.state.length === 2 ? core.state : '',
-      sale_date_raw: dateRecognized ? undefined : (core.sale_date.trim() || undefined),
-    });
-    if (!parsed.success) {
-      const errors = parsed.error.issues.map(issue => {
-        const field = String(issue.path[0] ?? '');
-        const header = Object.hasOwn(fieldToHeader, field) ? fieldToHeader[field as CsvField] : field;
-        return `Row ${rowNumber}, ${header}: ${issue.message}`;
-      });
-      return { row: rowNumber, ok: false, errors };
-    }
-    const warnings = parsed.data.sale_date_raw
-      ? [`Row ${rowNumber}, Sale Date: "${parsed.data.sale_date_raw}" wasn't recognized as a date — imported without a Sale Date and flagged for review.`]
-      : undefined;
-    return { row: rowNumber, ok: true, data: parsed.data, columns: costarTextValues(values), warnings };
   });
 }
 
-/** Dedupe fingerprint — flags likely-duplicate rows against existing records
- * (reported to the user, never silently skipped). */
-export function recordKey(record: Pick<LandSaleInput, 'parcel_id' | 'sale_date' | 'address'>): string {
-  return [record.parcel_id, record.sale_date, record.address]
-    .map(v => String(v ?? '').trim().toLowerCase())
-    .join('|');
+function keyPart(value: unknown): string {
+  if (value == null) return '';
+  const text = String(value).trim().toLowerCase();
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
+  return text;
+}
+
+/** Dedupe fingerprint — Parcel Number 1 (Min), Sale Date, Property Address.
+ * Likely duplicates are reported, never silently skipped or merged. */
+export const RECORD_KEY_COLUMNS = [
+  'Parcel Number 1 (Min)',
+  'Sale Date',
+  'Property Address',
+] as const;
+
+export function recordKey(columns: Record<string, unknown>): string {
+  return RECORD_KEY_COLUMNS.map(name => keyPart(columns[name])).join('|');
+}
+
+export function duplicateLabel(columns: Record<string, unknown>): string {
+  return keyPart(columns['Parcel Number 1 (Min)'])
+    || keyPart(columns['Property Address'])
+    || 'record';
+}
+
+export function splitFreshAndDuplicates(
+  rows: Array<{ columns: Record<string, unknown>; label: string }>,
+  existingKeys: Set<string>,
+): { fresh: Record<string, unknown>[]; duplicates: string[] } {
+  const duplicates: string[] = [];
+  const fresh: Record<string, unknown>[] = [];
+  for (const row of rows) {
+    if (existingKeys.has(recordKey(row.columns))) duplicates.push(row.label);
+    else fresh.push(row.columns);
+  }
+  return { fresh, duplicates };
 }

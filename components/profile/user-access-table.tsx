@@ -32,7 +32,7 @@ export function UserAccessTable({ users, currentUserId }: { users: UserProfile[]
         <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)' }}>User Access Management</div>
         <span className="tag tag-accent">ADMIN</span>
       </div>
-      {error && <div style={{ marginBottom: 'var(--space-3)', fontSize: 13, color: '#b3261e' }}>{error}</div>}
+      {error && <div className="record-error" style={{ marginBottom: 'var(--space-3)' }}>{error}</div>}
       <table className="table" style={{ width: '100%' }}>
         <thead>
           <tr>

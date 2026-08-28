@@ -62,9 +62,9 @@ export default function ResetPasswordPage() {
           <Field
             id="password" label="New password" type="password" placeholder="••••••••"
             required minLength={8} value={password} onChange={e => setPassword(e.target.value)}
-            style={{ backgroundColor: '#FFFFFF' }}
+            style={{ backgroundColor: 'var(--color-paper)' }}
           />
-          {error && <div style={{ fontSize: 13, color: '#b3261e' }}>{error}</div>}
+          {error && <div style={{ fontSize: 13, color: 'var(--color-danger-500)' }}>{error}</div>}
           <Button type="submit" variant="primary" block disabled={loading}>
             {loading ? 'Updating…' : 'Update password'}
           </Button>
@@ -92,9 +92,9 @@ export default function ResetPasswordPage() {
         <Field
           id="email" label="Email address" type="email" placeholder="you@company.com"
           required value={email} onChange={e => setEmail(e.target.value)}
-          style={{ backgroundColor: '#FFFFFF' }}
+          style={{ backgroundColor: 'var(--color-paper)' }}
         />
-        {error && <div style={{ fontSize: 13, color: '#b3261e' }}>{error}</div>}
+        {error && <div style={{ fontSize: 13, color: 'var(--color-danger-500)' }}>{error}</div>}
         <Button type="submit" variant="primary" block disabled={loading}>
           {loading ? 'Sending…' : 'Send reset link'}
         </Button>

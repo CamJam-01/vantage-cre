@@ -1,4 +1,5 @@
 import { NavHeader } from '@/components/ui/nav-header';
+import { ResultsSelectionProvider } from '@/components/land-sales/results-selection';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUserProfile } from '@/lib/users/roles';
 import { signOutAction } from '@/app/(app)/land-sales/actions';
@@ -32,7 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div style={{ minHeight: '100vh', width: '100%', fontFamily: 'var(--font-body)', display: 'flex', flexDirection: 'column' }}>
       <NavHeader profile={profile} />
-      {children}
+      <ResultsSelectionProvider>{children}</ResultsSelectionProvider>
     </div>
   );
 }

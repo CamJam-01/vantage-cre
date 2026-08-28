@@ -2,31 +2,33 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildRecordDisplayPages,
-  buildRecordDisplaySheets,
+  canonicalFieldId,
   fieldDisplayRows,
   fieldVisibilityId,
   filterVisibleColumns,
-  filterVisibleDetailSheets,
   orderColumns,
   validateFieldOrder,
   validateVisibleFieldIds,
-  visibleCoreField,
-  visibleExtraField,
+  visibleField,
 } from './field-visibility.ts';
-import { DETAIL_SHEETS, resultColumns } from './result-columns.ts';
+import { resultColumns } from './result-columns.ts';
 
 describe('field visibility identifiers', () => {
-  it('namespaces core and custom fields so labels cannot collide', () => {
-    assert.equal(fieldVisibilityId({ kind: 'core', key: 'city', label: 'City' }), 'core:city');
-    assert.equal(fieldVisibilityId({ kind: 'extra', key: 'city', label: 'city' }), 'extra:city');
+  it('uses the catalog header as the identifier', () => {
+    assert.equal(fieldVisibilityId({ key: 'Property City', label: 'Property City' }), 'Property City');
   });
 
-  it('tests core and custom visibility with the same identifier convention', () => {
-    const hidden = new Set(['core:city', 'extra:Zoning']);
-    assert.equal(visibleCoreField('city', hidden), false);
-    assert.equal(visibleCoreField('county', hidden), true);
-    assert.equal(visibleExtraField('Zoning', hidden), false);
-    assert.equal(visibleExtraField('Market', hidden), true);
+  it('strips a stored extra: prefix and drops prototype core: ids', () => {
+    assert.equal(canonicalFieldId('extra:Zoning'), 'Zoning');
+    assert.equal(canonicalFieldId('core:city'), null);
+    assert.equal(canonicalFieldId('Property City'), 'Property City');
+    assert.equal(canonicalFieldId('page:txn'), 'page:txn');
+  });
+
+  it('hides by header name', () => {
+    const hidden = new Set(['Property City', 'Zoning']);
+    assert.equal(visibleField('Property City', hidden), false);
+    assert.equal(visibleField('Property County', hidden), true);
   });
 });
 
@@ -41,31 +43,10 @@ describe('field visibility filtering', () => {
   });
 
   it('removes hidden CoStar columns', () => {
-    const visible = filterVisibleColumns(columns, new Set(['extra:Property Address', 'extra:Zoning']));
-    assert.equal(visible.some(column => fieldVisibilityId(column) === 'extra:Property Address'), false);
-    assert.equal(visible.some(column => fieldVisibilityId(column) === 'extra:Zoning'), false);
-    assert.equal(visible.some(column => fieldVisibilityId(column) === 'extra:Property City'), true);
-  });
-
-  it('drops empty sections and sheets from record details', () => {
-    const allButBuyer = new Set(['core:parcel_id', 'core:address', 'core:city', 'core:county', 'core:state', 'core:msa', 'core:property_type', 'core:sale_date', 'core:acreage', 'core:square_feet', 'core:sale_price', 'core:price_per_acre']);
-    const sheets = filterVisibleDetailSheets(DETAIL_SHEETS, allButBuyer);
-    assert.deepEqual(sheets.map(sheet => sheet.id), ['transaction']);
-    assert.deepEqual(sheets[0].sections.flatMap(section => section.fields.map(field => field.key)), ['buyer']);
-  });
-
-  it('puts CoStar columns on the Additional Fields sheet when no core columns are listed', () => {
-    const sheets = buildRecordDisplaySheets(DETAIL_SHEETS, columns, new Set());
-    assert.deepEqual(sheets.map(sheet => sheet.id), ['additional']);
-    assert.equal(sheets[0].extraColumns.length, columns.length);
-    assert.equal(sheets[0].extraColumns[0]?.key, 'Property Address');
-  });
-
-  it('hides core drafting sheets when those fields are not in the column list', () => {
-    const hiddenCore = new Set(columns.filter(column => column.kind === 'core').map(fieldVisibilityId));
-    const sheets = buildRecordDisplaySheets(DETAIL_SHEETS, columns, hiddenCore);
-    assert.deepEqual(sheets.map(sheet => sheet.id), ['additional']);
-    assert.equal(sheets[0].extraColumns.some(column => column.key === 'Zoning'), true);
+    const visible = filterVisibleColumns(columns, new Set(['Property Address', 'Zoning']));
+    assert.equal(visible.some(column => column.key === 'Property Address'), false);
+    assert.equal(visible.some(column => column.key === 'Zoning'), false);
+    assert.equal(visible.some(column => column.key === 'Property City'), true);
   });
 });
 
@@ -76,19 +57,18 @@ describe('record display pages', () => {
     { id: 'site', kind: 'group' as const, label: 'Site' },
     { id: 'money', kind: 'group' as const, label: 'Pricing' },
   ];
-  /** Hides everything but the fields a case names, so the assertions stay short. */
   const hiddenExceptFor = (ids: string[]) => new Set(
     columns.map(fieldVisibilityId).filter(id => !ids.includes(id)),
   );
   const field = (key: string) => ({
     kind: 'field' as const,
-    column: { kind: 'extra' as const, key, label: key },
+    column: { key, label: key },
   });
 
   it('puts every field on one untitled page when nothing is arranged', () => {
     const pages = buildRecordDisplayPages(
       fieldDisplayRows(columns, []),
-      hiddenExceptFor(['extra:Property Address', 'extra:Zoning']),
+      hiddenExceptFor(['Property Address', 'Zoning']),
     );
 
     assert.equal(pages.length, 1);
@@ -98,13 +78,13 @@ describe('record display pages', () => {
 
   it('opens a titled page at each page divider', () => {
     const rows = fieldDisplayRows(columns, [
-      'extra:Property Address',
+      'Property Address',
       'page:txn',
-      'extra:Sale Price',
+      'Sale Price',
     ], dividers);
     const pages = buildRecordDisplayPages(
       rows,
-      hiddenExceptFor(['extra:Property Address', 'extra:Sale Price']),
+      hiddenExceptFor(['Property Address', 'Sale Price']),
     );
 
     assert.deepEqual(pages.map(page => page.title), [null, 'Transaction']);
@@ -116,9 +96,9 @@ describe('record display pages', () => {
     const rows = fieldDisplayRows(columns, [
       'page:txn',
       'group:money',
-      'extra:Sale Price',
+      'Sale Price',
     ], dividers);
-    const pages = buildRecordDisplayPages(rows, hiddenExceptFor(['extra:Sale Price']));
+    const pages = buildRecordDisplayPages(rows, hiddenExceptFor(['Sale Price']));
 
     assert.deepEqual(pages.map(page => page.title), ['Transaction']);
     assert.deepEqual(pages[0].items, [
@@ -130,13 +110,13 @@ describe('record display pages', () => {
   it('closes an open group at a page break', () => {
     const rows = fieldDisplayRows(columns, [
       'group:site',
-      'extra:Zoning',
+      'Zoning',
       'page:txn',
-      'extra:Sale Price',
+      'Sale Price',
     ], dividers);
     const pages = buildRecordDisplayPages(
       rows,
-      hiddenExceptFor(['extra:Zoning', 'extra:Sale Price']),
+      hiddenExceptFor(['Zoning', 'Sale Price']),
     );
 
     assert.deepEqual(pages[0].items, [
@@ -148,32 +128,32 @@ describe('record display pages', () => {
 
   it('drops a page whose fields are all hidden', () => {
     const rows = fieldDisplayRows(columns, [
-      'extra:Zoning',
+      'Zoning',
       'page:txn',
-      'extra:Sale Price',
+      'Sale Price',
     ], dividers);
-    const pages = buildRecordDisplayPages(rows, hiddenExceptFor(['extra:Zoning']));
+    const pages = buildRecordDisplayPages(rows, hiddenExceptFor(['Zoning']));
 
     assert.deepEqual(pages.map(page => page.title), [null]);
   });
 
   it('drops a group whose fields are all hidden', () => {
     const rows = fieldDisplayRows(columns, [
-      'extra:Zoning',
+      'Zoning',
       'group:money',
-      'extra:Sale Price',
+      'Sale Price',
     ], dividers);
-    const pages = buildRecordDisplayPages(rows, hiddenExceptFor(['extra:Zoning']));
+    const pages = buildRecordDisplayPages(rows, hiddenExceptFor(['Zoning']));
 
     assert.deepEqual(pages[0].items, [field('Zoning')]);
   });
 
-  it('drops a divider token the saved dividers no longer describe', () => {
+  it('resolves a stored extra: prefix onto the catalog header', () => {
     const rows = fieldDisplayRows(columns, ['page:retired', 'extra:Zoning'], dividers);
     assert.deepEqual(rows[0], {
       kind: 'column',
-      id: 'extra:Zoning',
-      column: { kind: 'extra', key: 'Zoning', label: 'Zoning' },
+      id: 'Zoning',
+      column: { key: 'Zoning', label: 'Zoning' },
     });
   });
 });
@@ -190,28 +170,28 @@ describe('visible-field validation', () => {
 
   it('rejects unknown identifiers', () => {
     assert.deepEqual(
-      validateVisibleFieldIds(['core:city', 'extra:Property City'], columns),
+      validateVisibleFieldIds(['core:city', 'Property City'], columns),
       { ok: false, message: 'The field selection contains an unknown field.' },
     );
   });
 
-  it('rejects duplicate identifiers', () => {
+  it('rejects duplicate identifiers, including extra: vs bare header', () => {
     assert.deepEqual(
-      validateVisibleFieldIds(['extra:Property City', 'extra:Property City'], columns),
+      validateVisibleFieldIds(['Property City', 'extra:Property City'], columns),
       { ok: false, message: 'The field selection contains a duplicate field.' },
     );
   });
 
   it('derives the normalized hidden set from authoritative columns', () => {
-    const result = validateVisibleFieldIds(['extra:Property City', 'extra:Zoning'], columns);
+    const result = validateVisibleFieldIds(['Property City', 'Zoning'], columns);
     assert.equal(result.ok, true);
     if (!result.ok) return;
-    assert.equal(result.hiddenFieldIds.includes('extra:Property City'), false);
-    assert.equal(result.hiddenFieldIds.includes('extra:Zoning'), false);
-    assert.equal(result.hiddenFieldIds.includes('extra:Property Address'), true);
+    assert.equal(result.hiddenFieldIds.includes('Property City'), false);
+    assert.equal(result.hiddenFieldIds.includes('Zoning'), false);
+    assert.equal(result.hiddenFieldIds.includes('Property Address'), true);
     assert.deepEqual(
       result.hiddenFieldIds,
-      columns.map(fieldVisibilityId).filter(id => !['extra:Property City', 'extra:Zoning'].includes(id)),
+      columns.map(fieldVisibilityId).filter(id => !['Property City', 'Zoning'].includes(id)),
     );
   });
 });
@@ -225,7 +205,7 @@ describe('orderColumns', () => {
   });
 
   it('follows the saved arrangement', () => {
-    const arranged = ['extra:Zoning', 'extra:Property City', 'extra:Property Address'];
+    const arranged = ['Zoning', 'Property City', 'Property Address'];
     assert.deepEqual(
       orderColumns(columns, [...arranged, ...catalogIds.filter(id => !arranged.includes(id))])
         .map(fieldVisibilityId)
@@ -235,18 +215,18 @@ describe('orderColumns', () => {
   });
 
   it('appends fields the saved arrangement never mentioned, in catalog order', () => {
-    const ordered = orderColumns(columns, ['extra:Zoning', 'extra:Market']).map(fieldVisibilityId);
-    assert.deepEqual(ordered.slice(0, 2), ['extra:Zoning', 'extra:Market']);
+    const ordered = orderColumns(columns, ['Zoning', 'Market']).map(fieldVisibilityId);
+    assert.deepEqual(ordered.slice(0, 2), ['Zoning', 'Market']);
     assert.deepEqual(
       ordered.slice(2),
-      catalogIds.filter(id => !['extra:Zoning', 'extra:Market'].includes(id)),
+      catalogIds.filter(id => !['Zoning', 'Market'].includes(id)),
     );
   });
 
   it('ignores identifiers that are no longer columns', () => {
     assert.deepEqual(
-      orderColumns(columns, ['extra:Retired Field', 'extra:Zoning']).map(fieldVisibilityId),
-      ['extra:Zoning', ...catalogIds.filter(id => id !== 'extra:Zoning')],
+      orderColumns(columns, ['Retired Field', 'Zoning']).map(fieldVisibilityId),
+      ['Zoning', ...catalogIds.filter(id => id !== 'Zoning')],
     );
   });
 });
@@ -260,18 +240,18 @@ describe('validateFieldOrder', () => {
   });
 
   it('completes a partial order with the fields it left out', () => {
-    const result = validateFieldOrder(['extra:Zoning'], columns);
+    const result = validateFieldOrder(['Zoning'], columns);
     assert.equal(result.ok, true);
     if (!result.ok) return;
     assert.deepEqual(
       result.fieldOrder,
-      ['extra:Zoning', ...catalogIds.filter(id => id !== 'extra:Zoning')],
+      ['Zoning', ...catalogIds.filter(id => id !== 'Zoning')],
     );
   });
 
   it('rejects duplicate identifiers', () => {
     assert.deepEqual(
-      validateFieldOrder(['extra:Zoning', 'extra:Zoning'], columns),
+      validateFieldOrder(['Zoning', 'Zoning'], columns),
       { ok: false, message: 'The field order contains a duplicate field.' },
     );
   });
@@ -289,15 +269,15 @@ describe('validateFieldOrder with dividers', () => {
   const dividers = [{ id: 'txn', kind: 'page' as const, label: 'Transaction' }];
 
   it('accepts a divider token the submission describes', () => {
-    const result = validateFieldOrder(['page:txn', 'extra:Zoning'], columns, dividers);
+    const result = validateFieldOrder(['page:txn', 'Zoning'], columns, dividers);
     assert.equal(result.ok, true);
     if (!result.ok) return;
-    assert.deepEqual(result.fieldOrder.slice(0, 2), ['page:txn', 'extra:Zoning']);
+    assert.deepEqual(result.fieldOrder.slice(0, 2), ['page:txn', 'Zoning']);
   });
 
   it('rejects a divider token nothing describes', () => {
     assert.deepEqual(
-      validateFieldOrder(['page:txn', 'extra:Zoning'], columns),
+      validateFieldOrder(['page:txn', 'Zoning'], columns),
       { ok: false, message: 'The field order contains an unknown page or field group.' },
     );
   });

@@ -29,8 +29,7 @@ export async function saveFieldVisibilityAction(
     return { status: 'error', message: 'Only active Admin users can change field visibility.' };
   }
 
-  const catalogLabels: string[] = [];
-  const columns = resultColumns({ catalogLabels });
+  const columns = resultColumns();
   const submission = parseVisibilitySubmission(formData, columns);
   if (!submission.ok) return { status: 'error', message: submission.message };
 
@@ -53,7 +52,7 @@ export async function saveFieldVisibilityAction(
     `Sales: ${visibleCount} of ${columns.length} fields visible, ${submission.fieldDividers.length} pages and field groups`,
   );
 
-  revalidatePath('/admin/database-manager/schema');
+  revalidatePath('/admin/database-manager/fields');
   revalidatePath('/land-sales');
   revalidatePath('/land-sales/new');
   revalidatePath('/land-sales/[id]', 'page');

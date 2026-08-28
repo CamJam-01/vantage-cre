@@ -1,112 +1,94 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { landSaleInputSchema } from './schema.ts';
 import { mergeVisibleUpdate, sanitizeVisibleCreate } from './visible-record-input.ts';
+import type { LandSale, LandSaleInput } from './schema.ts';
+
+function sale(columns: Record<string, unknown>, extras: Partial<LandSale> = {}): LandSale {
+  return { id: '1', columns, saleDateRaw: extras.saleDateRaw };
+}
+
+function input(columns: Record<string, unknown>, saleDateRaw?: string): LandSaleInput {
+  return { columns, saleDateRaw };
+}
 
 describe('mergeVisibleUpdate', () => {
-  const existing = landSaleInputSchema.parse({
-    parcel_id: 'LND-1',
-    address: 'Stored Address',
-    city: 'Austin',
-    buyer: 'Stored Buyer',
-    sale_date: '2026-08-01',
-    sale_date_raw: 'August 1, 2026',
-    extras: { Zoning: 'C-2', Market: 'Austin', Legacy: 'Keep me' },
-  });
+  const existing = sale({
+    'Parcel Number 1 (Min)': 'LND-1',
+    'Property Address': 'Stored Address',
+    'Property City': 'Austin',
+    'Buyer (True) Company': 'Stored Buyer',
+    'Sale Date': '2026-08-01',
+    Zoning: 'C-2',
+    Market: 'Austin',
+    Legacy: 'Keep me',
+  }, { saleDateRaw: 'August 1, 2026' });
 
-  it('preserves hidden core and custom values while applying visible edits', () => {
-    const submitted = landSaleInputSchema.parse({
-      parcel_id: 'LND-1',
-      address: 'Crafted replacement',
-      city: 'Dallas',
-      buyer: '',
-      extras: { Zoning: 'Crafted' },
-    });
+  it('preserves hidden values while applying visible edits', () => {
     const merged = mergeVisibleUpdate(
       existing,
-      submitted,
-      ['Zoning', 'Market', 'Legacy'],
-      new Set(['core:address', 'extra:Zoning']),
+      input({
+        'Parcel Number 1 (Min)': 'LND-1',
+        'Property Address': 'Crafted replacement',
+        'Property City': 'Dallas',
+        'Buyer (True) Company': '',
+        Zoning: 'Crafted',
+      }),
+      new Set(['Property Address', 'Zoning']),
     );
 
-    assert.equal(merged.address, 'Stored Address');
-    assert.equal(merged.city, 'Dallas');
-    assert.equal(merged.buyer, '');
-    assert.equal(merged.extras.Zoning, 'C-2');
-    assert.equal('Market' in merged.extras, false);
-    assert.equal('Legacy' in merged.extras, false);
+    assert.equal(merged.columns['Property Address'], 'Stored Address');
+    assert.equal(merged.columns['Property City'], 'Dallas');
+    assert.equal(merged.columns['Buyer (True) Company'], '');
+    assert.equal(merged.columns.Zoning, 'C-2');
   });
 
-  it('preserves custom values outside the authoritative editable field list', () => {
-    const submitted = landSaleInputSchema.parse({ city: 'Dallas', extras: {} });
+  it('keeps catalog values the form did not submit', () => {
     const merged = mergeVisibleUpdate(
       existing,
-      submitted,
-      ['Zoning', 'Market'],
+      input({ 'Property City': 'Dallas' }),
       new Set(),
     );
-
-    assert.equal(merged.extras.Legacy, 'Keep me');
+    assert.equal(merged.columns.Legacy, 'Keep me');
   });
 
-  it('ignores crafted custom values outside the authoritative field list', () => {
-    const submitted = landSaleInputSchema.parse({
-      city: 'Dallas',
-      extras: { Injected: 'Not allowed' },
-    });
-    const merged = mergeVisibleUpdate(existing, submitted, ['Zoning', 'Market', 'Legacy'], new Set());
-
-    assert.equal('Injected' in merged.extras, false);
+  it('ignores crafted values for headers that are not in the catalog', () => {
+    const merged = mergeVisibleUpdate(
+      existing,
+      input({ 'Property City': 'Dallas', Injected: 'Not allowed' }),
+      new Set(),
+    );
+    assert.equal('Injected' in merged.columns, false);
   });
 });
 
 describe('sanitizeVisibleCreate', () => {
-  it('drops crafted hidden and unknown values while retaining visible inputs', () => {
-    const submitted = landSaleInputSchema.parse({
-      address: 'Hidden address',
-      city: 'Dallas',
-      buyer: 'Visible buyer',
-      extras: {
+  it('drops hidden and unknown values while retaining visible inputs', () => {
+    const sanitized = sanitizeVisibleCreate(
+      input({
+        'Property Address': 'Hidden address',
+        'Property City': 'Dallas',
+        'Buyer (True) Company': 'Visible buyer',
         Zoning: 'Hidden zoning',
         Market: 'Dallas-Fort Worth',
         Injected: 'Not allowed',
-      },
-    });
-    const sanitized = sanitizeVisibleCreate(
-      submitted,
-      ['Zoning', 'Market'],
-      new Set(['core:address', 'extra:Zoning']),
+      }),
+      new Set(['Property Address', 'Zoning']),
     );
 
-    assert.equal(sanitized.address, '');
-    assert.equal(sanitized.city, 'Dallas');
-    assert.equal(sanitized.buyer, 'Visible buyer');
-    assert.deepEqual(sanitized.extras, { Market: 'Dallas-Fort Worth' });
+    assert.equal(sanitized.columns['Property Address'], undefined);
+    assert.equal(sanitized.columns['Property City'], 'Dallas');
+    assert.equal(sanitized.columns['Buyer (True) Company'], 'Visible buyer');
+    assert.equal(sanitized.columns.Market, 'Dallas-Fort Worth');
+    assert.equal('Zoning' in sanitized.columns && sanitized.columns.Zoning != null, false);
+    assert.equal('Injected' in sanitized.columns, false);
   });
 
   it('removes a crafted hidden sale date and its raw import value', () => {
-    const submitted = landSaleInputSchema.parse({
-      sale_date: '2026-08-01',
-      sale_date_raw: 'August 1, 2026',
-    });
     const sanitized = sanitizeVisibleCreate(
-      submitted,
-      [],
-      new Set(['core:sale_date']),
+      input({ 'Sale Date': '2026-08-01' }, 'August 1, 2026'),
+      new Set(['Sale Date']),
     );
-
-    assert.equal(sanitized.sale_date, undefined);
-    assert.equal(sanitized.sale_date_raw, undefined);
-  });
-
-  it('does not accept the computed price per acre as manual input', () => {
-    const submitted = landSaleInputSchema.parse({
-      sale_price: 500000,
-      acreage: 2,
-      price_per_acre: 1,
-    });
-    const sanitized = sanitizeVisibleCreate(submitted, [], new Set());
-
-    assert.equal('price_per_acre' in sanitized, false);
+    assert.equal(sanitized.columns['Sale Date'], undefined);
+    assert.equal(sanitized.saleDateRaw, undefined);
   });
 });

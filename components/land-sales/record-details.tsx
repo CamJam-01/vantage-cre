@@ -6,19 +6,26 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { updateLandSale, type CreateFormState } from '@/app/(app)/land-sales/actions';
-import { extraInputName, type LandSale } from '@/lib/land-sales/schema';
+import { Dialog } from '@/components/ui/dialog';
+import { deleteLandSale, updateLandSale, type CreateFormState } from '@/app/(app)/land-sales/actions';
+import {
+  columnInputValue,
+  fieldInputId,
+  toInputString,
+  type LandSale,
+} from '@/lib/land-sales/schema';
 import { resultColumns } from '@/lib/land-sales/result-columns';
 import {
   buildRecordDisplayPages,
   fieldDisplayRows,
-  visibleExtraField,
+  visibleField,
   type FieldDivider,
 } from '@/lib/land-sales/field-visibility';
 import {
   CURRENT_ACTION_STATE,
   visibleActionState,
 } from '@/lib/land-sales/visible-action-state';
+import { costarColumnType } from '@/lib/land-sales/costar-column-types';
 
 const initialState: CreateFormState = null;
 
@@ -48,8 +55,8 @@ export function RecordDetails({
   record,
   from,
   canEdit,
+  canDelete = false,
   startEditing = false,
-  catalogLabels = [],
   hiddenFieldIds = [],
   fieldOrder = [],
   fieldDividers = [],
@@ -57,14 +64,24 @@ export function RecordDetails({
   record: LandSale;
   from?: string;
   canEdit: boolean;
+  canDelete?: boolean;
   startEditing?: boolean;
-  catalogLabels?: string[];
   hiddenFieldIds?: string[];
   fieldOrder?: string[];
   fieldDividers?: FieldDivider[];
 }) {
   if (!canEdit) {
-    return <RecordDetailsForm record={record} from={from} canEdit={false} catalogLabels={catalogLabels} hiddenFieldIds={hiddenFieldIds} fieldOrder={fieldOrder} fieldDividers={fieldDividers} />;
+    return (
+      <RecordDetailsForm
+        record={record}
+        from={from}
+        canEdit={false}
+        canDelete={canDelete}
+        hiddenFieldIds={hiddenFieldIds}
+        fieldOrder={fieldOrder}
+        fieldDividers={fieldDividers}
+      />
+    );
   }
   return (
     <RecordDetailsEditor
@@ -72,7 +89,7 @@ export function RecordDetails({
       record={record}
       from={from}
       startEditing={startEditing}
-      catalogLabels={catalogLabels}
+      canDelete={canDelete}
       hiddenFieldIds={hiddenFieldIds}
       fieldOrder={fieldOrder}
       fieldDividers={fieldDividers}
@@ -84,7 +101,7 @@ function RecordDetailsEditor({
   record,
   from,
   startEditing = false,
-  catalogLabels,
+  canDelete,
   hiddenFieldIds,
   fieldOrder,
   fieldDividers,
@@ -92,7 +109,7 @@ function RecordDetailsEditor({
   record: LandSale;
   from?: string;
   startEditing?: boolean;
-  catalogLabels: string[];
+  canDelete: boolean;
   hiddenFieldIds: string[];
   fieldOrder: string[];
   fieldDividers: FieldDivider[];
@@ -112,7 +129,7 @@ function RecordDetailsEditor({
       from={from}
       startEditing={resetKey === 0 && startEditing}
       onCancel={handleCancel}
-      catalogLabels={catalogLabels}
+      canDelete={canDelete}
       hiddenFieldIds={hiddenFieldIds}
       fieldOrder={fieldOrder}
       fieldDividers={fieldDividers}
@@ -125,7 +142,7 @@ function BoundRecordDetailsForm({
   from,
   startEditing,
   onCancel,
-  catalogLabels,
+  canDelete,
   hiddenFieldIds,
   fieldOrder,
   fieldDividers,
@@ -134,7 +151,7 @@ function BoundRecordDetailsForm({
   from?: string;
   startEditing: boolean;
   onCancel: () => void;
-  catalogLabels: string[];
+  canDelete: boolean;
   hiddenFieldIds: string[];
   fieldOrder: string[];
   fieldDividers: FieldDivider[];
@@ -145,15 +162,59 @@ function BoundRecordDetailsForm({
       record={record}
       from={from}
       canEdit
+      canDelete={canDelete}
       startEditing={startEditing}
       state={state}
       formAction={formAction}
       pending={pending}
       onCancel={onCancel}
-      catalogLabels={catalogLabels}
       hiddenFieldIds={hiddenFieldIds}
       fieldOrder={fieldOrder}
       fieldDividers={fieldDividers}
+    />
+  );
+}
+
+function FieldControl({
+  header,
+  record,
+  editing,
+}: {
+  header: string;
+  record: LandSale;
+  editing: boolean;
+}) {
+  const id = fieldInputId(header);
+  const kind = costarColumnType(header);
+  if (!editing) {
+    return (
+      <input
+        className="input"
+        readOnly
+        tabIndex={-1}
+        value={toInputString(record.columns[header]) || '—'}
+      />
+    );
+  }
+  if (kind === 'boolean') {
+    const current = record.columns[header];
+    const selected = current === true ? 'Yes' : current === false ? 'No' : '';
+    return (
+      <select id={id} name={header} className="input" defaultValue={selected} style={{ cursor: 'pointer' }}>
+        <option value=""></option>
+        <option value="Yes">Yes</option>
+        <option value="No">No</option>
+      </select>
+    );
+  }
+  return (
+    <input
+      id={id}
+      name={header}
+      type="text"
+      className="input"
+      defaultValue={columnInputValue(record, header)}
+      inputMode={kind === 'number' ? 'decimal' : undefined}
     />
   );
 }
@@ -162,13 +223,13 @@ export function RecordDetailsForm({
   record,
   from,
   canEdit,
+  canDelete = false,
   startEditing = false,
   createMode = false,
   state = null,
   formAction,
   pending = false,
   onCancel,
-  catalogLabels = [],
   hiddenFieldIds = [],
   fieldOrder = [],
   fieldDividers = [],
@@ -176,24 +237,19 @@ export function RecordDetailsForm({
   record: LandSale;
   from?: string;
   canEdit: boolean;
+  canDelete?: boolean;
   startEditing?: boolean;
   createMode?: boolean;
   state?: CreateFormState;
   formAction?: (formData: FormData) => void;
   pending?: boolean;
   onCancel?: () => void;
-  catalogLabels?: string[];
   hiddenFieldIds?: string[];
   fieldOrder?: string[];
   fieldDividers?: FieldDivider[];
 }) {
   const hidden = new Set(hiddenFieldIds);
-  // `resultColumns` is the catalog of physical CoStar columns in Supabase.
-  // Do not prepend the former app-only core aliases: those are deprecated and
-  // are not configurable in Database Manager.
-  // Fields, group headings, and page breaks follow the arrangement an Admin
-  // saved in Database Manager, so view, edit, and create all agree with it.
-  const rows = fieldDisplayRows(resultColumns({ catalogLabels }), fieldOrder, fieldDividers);
+  const rows = fieldDisplayRows(resultColumns(), fieldOrder, fieldDividers);
   const pages = buildRecordDisplayPages(rows, hidden);
   const tabbedPages = pages.filter(page => page.title !== null);
   const [editing, setEditing] = useState(canEdit && (startEditing || createMode));
@@ -201,31 +257,55 @@ export function RecordDetailsForm({
   const [actionBaseline, setActionBaseline] = useState<CreateFormState | typeof CURRENT_ACTION_STATE>(
     startEditing ? CURRENT_ACTION_STATE : state,
   );
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const displayState = visibleActionState(state, actionBaseline);
   const backToSearchHref = from ? `/land-sales?${from}` : '/land-sales';
 
-  const visibleValue = (label: string) => (
-    visibleExtraField(label, hidden) ? record.extras?.[label]?.trim() ?? '' : ''
-  );
-  const address = visibleValue('Property Address');
-  const city = visibleValue('Property City');
-  const stateName = visibleValue('Property State');
-  const county = visibleValue('Property County');
+  const address = visibleField('Property Address', hidden)
+    ? toInputString(record.columns['Property Address'])
+    : '';
+  const city = visibleField('Property City', hidden)
+    ? toInputString(record.columns['Property City'])
+    : '';
+  const stateName = visibleField('Property State', hidden)
+    ? toInputString(record.columns['Property State'])
+    : '';
+  const county = visibleField('Property County', hidden)
+    ? toInputString(record.columns['Property County'])
+    : '';
   const location = [city, stateName].filter(Boolean).join(', ');
   const subtitle = [county ? `${county} County` : '', location]
     .filter(Boolean)
     .join(' · ');
 
+  async function handleDelete() {
+    setDeleting(true);
+    setDeleteError(null);
+    const result = await deleteLandSale(record.id);
+    setDeleting(false);
+    if (result?.error) {
+      setDeleteError(result.error);
+      return;
+    }
+  }
+
   return (
     <>
       <div className="record-bar">
         <Link href={backToSearchHref} className="record-bar-back">
-          <ArrowLeft size={15} strokeWidth={2} />
+          <ArrowLeft size={15} strokeWidth={1.5} />
           Land Sales
         </Link>
-        {canEdit && (
-          <div className="record-bar-actions">
-            {editing ? (
+        <div className="record-bar-actions">
+          {canDelete && !createMode && !editing && (
+            <Button type="button" variant="secondary" onClick={() => setConfirmDelete(true)}>
+              Delete
+            </Button>
+          )}
+          {canEdit && (
+            editing ? (
               <>
                 {createMode ? (
                   <Link href="/land-sales" className="btn btn-secondary">
@@ -251,9 +331,9 @@ export function RecordDetailsForm({
               >
                 Edit Record
               </Button>
-            )}
-          </div>
-        )}
+            )
+          )}
+        </div>
       </div>
 
       <main className="record-page">
@@ -275,8 +355,6 @@ export function RecordDetailsForm({
               )}
             </div>
 
-            {/* No pages arranged in Database Manager means no tab strip: the
-                lead page holds every field on one screen. */}
             {tabbedPages.length > 0 && (
               <div className="record-tabs" role="tablist" aria-label="Record pages">
                 {tabbedPages.map(page => (
@@ -303,13 +381,6 @@ export function RecordDetailsForm({
                 role={page.title === null ? undefined : 'tabpanel'}
                 aria-labelledby={page.title === null ? undefined : `record-tab-${page.id}`}
                 className="record-panel"
-                /* Hidden rather than unmounted: a save submits every field on
-                   every page, including whatever the user typed before
-                   switching tabs. The flip side is that a `required` field can
-                   fail native validation while off-screen — which the browser
-                   reports by silently refusing to submit — so bring its page
-                   forward synchronously before the browser tries to focus it.
-                   The lead page has no tab and always stays open. */
                 hidden={page.title !== null && page.id !== activePage}
                 onInvalidCapture={() => {
                   if (page.title !== null && page.id !== activePage) {
@@ -324,10 +395,6 @@ export function RecordDetailsForm({
                 )}
 
                 <div className="record-grid">
-                  {/* Every field here corresponds to a physical Supabase column
-                      and has already passed the Admin visibility filter; the
-                      group headings between them are the section breaks an
-                      Admin arranged in Database Manager. */}
                   {page.items.map(item => (
                     item.kind === 'group' ? (
                       <div key={`group-${item.id}`} className="record-field record-field-group record-span-12">
@@ -335,23 +402,8 @@ export function RecordDetailsForm({
                       </div>
                     ) : (
                       <div key={item.column.key} className="record-field record-span-4">
-                        <label htmlFor={editing ? extraInputName(item.column.key) : undefined}>{item.column.label}</label>
-                        {editing ? (
-                          <input
-                            id={extraInputName(item.column.key)}
-                            name={extraInputName(item.column.key)}
-                            type="text"
-                            className="input"
-                            defaultValue={record.extras?.[item.column.key] ?? ''}
-                          />
-                        ) : (
-                          <input
-                            className="input"
-                            readOnly
-                            tabIndex={-1}
-                            value={record.extras?.[item.column.key] || '—'}
-                          />
-                        )}
+                        <label htmlFor={editing ? fieldInputId(item.column.key) : undefined}>{item.column.label}</label>
+                        <FieldControl header={item.column.key} record={record} editing={editing} />
                       </div>
                     )
                   ))}
@@ -360,15 +412,36 @@ export function RecordDetailsForm({
               </section>
             ))}
 
-            {/* One notice for the whole form: the lead page and the open tab
-                are both on screen, so a per-page copy would show twice. */}
             {editing && displayState?.message && (
               <div className="record-error" style={{ marginBottom: 'var(--space-4)' }}>{displayState.message}</div>
+            )}
+            {deleteError && (
+              <div className="record-error" style={{ marginBottom: 'var(--space-4)' }}>{deleteError}</div>
             )}
 
           </OptionalForm>
         </div>
       </main>
+
+      <Dialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title="Delete this record?"
+        actions={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={() => setConfirmDelete(false)} disabled={deleting}>
+              Cancel
+            </button>
+            <Button variant="primary" onClick={handleDelete} disabled={deleting}>
+              {deleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </>
+        }
+      >
+        <p style={{ fontSize: 14, color: 'var(--color-text)', margin: 0 }}>
+          This cannot be undone. The record is removed from the database.
+        </p>
+      </Dialog>
     </>
   );
 }

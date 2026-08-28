@@ -1,29 +1,25 @@
-import type {
-  CoreResultField,
-  DetailSheet,
-  ResultColumn,
-} from './result-columns';
+import type { ResultColumn } from './result-columns';
 
 export type DatabaseKey = 'sales';
 export const SALES_DATABASE_KEY: DatabaseKey = 'sales';
 export type HiddenFieldIds = ReadonlySet<string>;
 
-type ExtraResultColumn = Extract<ResultColumn, { kind: 'extra' }>;
-
-export type RecordDisplaySheet = DetailSheet & {
-  extraColumns: ExtraResultColumn[];
-};
-
 export function fieldVisibilityId(column: ResultColumn): string {
-  return `${column.kind}:${column.key}`;
+  return column.key;
 }
 
-export function visibleCoreField(field: CoreResultField, hidden: HiddenFieldIds): boolean {
-  return !hidden.has(`core:${field}`);
+/** Stored arrangements used `extra:` before the prototype field model was
+ * removed. Treat that prefix as the header itself so an Admin does not have to
+ * re-save. Prototype `core:` ids name nothing in the catalog and are dropped. */
+export function canonicalFieldId(id: string): string | null {
+  if (isFieldDividerOrderId(id)) return id;
+  if (id.startsWith('core:')) return null;
+  if (id.startsWith('extra:')) return id.slice('extra:'.length);
+  return id;
 }
 
-export function visibleExtraField(label: string, hidden: HiddenFieldIds): boolean {
-  return !hidden.has(`extra:${label}`);
+export function visibleField(header: string, hidden: HiddenFieldIds): boolean {
+  return !hidden.has(header);
 }
 
 export function filterVisibleColumns(
@@ -68,6 +64,11 @@ export type FieldDisplayRow =
   | { kind: 'divider'; id: string; divider: FieldDivider }
   | { kind: 'column'; id: string; column: ResultColumn };
 
+function lookupColumn(columnsById: Map<string, ResultColumn>, rawId: string): ResultColumn | undefined {
+  const id = canonicalFieldId(rawId);
+  return id ? columnsById.get(id) : undefined;
+}
+
 /** Resolves the saved arrangement against the columns and dividers that still
  * exist. Tokens naming something gone are dropped, and columns the arrangement
  * never mentioned keep their catalog order at the end. */
@@ -81,19 +82,20 @@ export function fieldDisplayRows(
   const placed = new Set<string>();
   const rows: FieldDisplayRow[] = [];
 
-  for (const id of order) {
-    if (placed.has(id)) continue;
-    const divider = dividersById.get(id);
+  for (const rawId of order) {
+    const divider = dividersById.get(rawId);
     if (divider) {
-      placed.add(id);
-      rows.push({ kind: 'divider', id, divider });
+      if (placed.has(rawId)) continue;
+      placed.add(rawId);
+      rows.push({ kind: 'divider', id: rawId, divider });
       continue;
     }
-    const column = columnsById.get(id);
-    if (column) {
-      placed.add(id);
-      rows.push({ kind: 'column', id, column });
-    }
+    const column = lookupColumn(columnsById, rawId);
+    if (!column) continue;
+    const id = fieldVisibilityId(column);
+    if (placed.has(id)) continue;
+    placed.add(id);
+    rows.push({ kind: 'column', id, column });
   }
 
   for (const column of columns) {
@@ -106,7 +108,11 @@ export function fieldDisplayRows(
 
 export function orderColumns(columns: ResultColumn[], order: FieldOrder): ResultColumn[] {
   if (!order.length) return columns;
-  const rank = new Map(order.map((id, index) => [id, index]));
+  const rank = new Map<string, number>();
+  order.forEach((rawId, index) => {
+    const id = canonicalFieldId(rawId);
+    if (id && !rank.has(id)) rank.set(id, index);
+  });
   return columns
     .map((column, index) => ({ column, index, rank: rank.get(fieldVisibilityId(column)) }))
     .sort((a, b) => {
@@ -119,57 +125,10 @@ export function orderColumns(columns: ResultColumn[], order: FieldOrder): Result
     .map(entry => entry.column);
 }
 
-export function filterVisibleDetailSheets(
-  sheets: DetailSheet[],
-  hidden: HiddenFieldIds,
-  availableCoreKeys?: ReadonlySet<CoreResultField>,
-): DetailSheet[] {
-  return sheets.flatMap(sheet => {
-    const sections = sheet.sections.flatMap(section => {
-      const fields = section.fields.filter(field => {
-        if (availableCoreKeys && !availableCoreKeys.has(field.key)) return false;
-        return visibleCoreField(field.key, hidden);
-      });
-      return fields.length ? [{ ...section, fields }] : [];
-    });
-    return sections.length ? [{ ...sheet, sections }] : [];
-  });
-}
-
-export function buildRecordDisplaySheets(
-  sheets: DetailSheet[],
-  columns: ResultColumn[],
-  hidden: HiddenFieldIds,
-): RecordDisplaySheet[] {
-  const availableCoreKeys = new Set(
-    columns.flatMap(column => column.kind === 'core' ? [column.key] : []),
-  );
-  const coreSheets = filterVisibleDetailSheets(sheets, hidden, availableCoreKeys)
-    .map(sheet => ({ ...sheet, extraColumns: [] as ExtraResultColumn[] }));
-  const extraColumns = filterVisibleColumns(columns, hidden)
-    .filter((column): column is ExtraResultColumn => column.kind === 'extra');
-
-  if (!extraColumns.length) return coreSheets;
-  if (!coreSheets.length) {
-    return [{
-      id: 'additional',
-      tab: 'Additional Fields',
-      title: 'Additional Fields',
-      sections: [],
-      extraColumns,
-    }];
-  }
-
-  const lastIndex = coreSheets.length - 1;
-  return coreSheets.map((sheet, index) => (
-    index === lastIndex ? { ...sheet, extraColumns } : sheet
-  ));
-}
-
 /** What a record page lays out, in order: a group heading, or one field. */
 export type RecordDisplayItem =
   | { kind: 'group'; id: string; label: string }
-  | { kind: 'field'; column: ExtraResultColumn };
+  | { kind: 'field'; column: ResultColumn };
 
 /** One tab of the record screens. `title` is null for the lead page — the
  * fields an admin left above the first page divider, which need no tab. */
@@ -207,15 +166,13 @@ export function buildRecordDisplayPages(
       continue;
     }
 
-    const column = row.column;
-    if (column.kind !== 'extra') continue;
     if (hidden.has(row.id)) continue;
 
     if (pendingGroup && pendingGroup.id !== openGroupId) {
       current.items.push({ kind: 'group', id: pendingGroup.id, label: pendingGroup.label });
       openGroupId = pendingGroup.id;
     }
-    current.items.push({ kind: 'field', column });
+    current.items.push({ kind: 'field', column: row.column });
   }
 
   return pages.filter(page => page.items.some(item => item.kind === 'field'));
@@ -229,18 +186,25 @@ export function validateVisibleFieldIds(
   visibleFieldIds: string[],
   availableColumns: ResultColumn[],
 ): VisibleFieldValidation {
-  if (!visibleFieldIds.length) {
+  const canonical: string[] = [];
+  for (const raw of visibleFieldIds) {
+    const id = canonicalFieldId(raw);
+    if (!id) return { ok: false, message: 'The field selection contains an unknown field.' };
+    canonical.push(id);
+  }
+
+  if (!canonical.length) {
     return { ok: false, message: 'At least one field must remain visible.' };
   }
 
-  const visible = new Set(visibleFieldIds);
-  if (visible.size !== visibleFieldIds.length) {
+  const visible = new Set(canonical);
+  if (visible.size !== canonical.length) {
     return { ok: false, message: 'The field selection contains a duplicate field.' };
   }
 
   const availableIds = availableColumns.map(fieldVisibilityId);
   const available = new Set(availableIds);
-  if (visibleFieldIds.some(id => !available.has(id))) {
+  if (canonical.some(id => !available.has(id))) {
     return { ok: false, message: 'The field selection contains an unknown field.' };
   }
 
@@ -265,23 +229,47 @@ export function validateFieldOrder(
   const availableIds = availableColumns.map(fieldVisibilityId);
   if (!fieldOrder.length) return { ok: true, fieldOrder: availableIds };
 
-  const ordered = new Set(fieldOrder);
-  if (ordered.size !== fieldOrder.length) {
+  const canonical: string[] = [];
+  for (const raw of fieldOrder) {
+    if (isFieldDividerOrderId(raw)) {
+      canonical.push(raw);
+      continue;
+    }
+    const id = canonicalFieldId(raw);
+    if (!id) return { ok: false, message: 'The field order contains an unknown field.' };
+    canonical.push(id);
+  }
+
+  const ordered = new Set(canonical);
+  if (ordered.size !== canonical.length) {
     return { ok: false, message: 'The field order contains a duplicate field.' };
   }
 
   const dividerIds = new Set(dividers.map(fieldDividerOrderId));
-  if (fieldOrder.some(id => isFieldDividerOrderId(id) && !dividerIds.has(id))) {
+  if (canonical.some(id => isFieldDividerOrderId(id) && !dividerIds.has(id))) {
     return { ok: false, message: 'The field order contains an unknown page or field group.' };
   }
 
   const available = new Set(availableIds);
-  if (fieldOrder.some(id => !isFieldDividerOrderId(id) && !available.has(id))) {
+  if (canonical.some(id => !isFieldDividerOrderId(id) && !available.has(id))) {
     return { ok: false, message: 'The field order contains an unknown field.' };
   }
 
   return {
     ok: true,
-    fieldOrder: [...fieldOrder, ...availableIds.filter(id => !ordered.has(id))],
+    fieldOrder: [...canonical, ...availableIds.filter(id => !ordered.has(id))],
   };
+}
+
+export function canonicalizeStoredIds(ids: readonly string[] | null | undefined): string[] {
+  if (!ids) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of ids) {
+    const id = canonicalFieldId(raw);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
 }
