@@ -7,6 +7,7 @@ import {
   encodePage,
   lastPage,
   landSalesPageHref,
+  landSalesReturnQuery,
   pageRange,
   resultsRangeLabel,
 } from './pagination.ts';
@@ -75,5 +76,25 @@ describe('pageRange / resultsRangeLabel / href', () => {
   it('keeps filters in the pager href and drops page 1', () => {
     assert.equal(landSalesPageHref(emptyFilters, 1), '/land-sales');
     assert.equal(landSalesPageHref({ ...emptyFilters, state: 'TX' }, 2), '/land-sales?state=TX&page=2');
+  });
+
+  it('keeps a non-default sort in the pager href and omits newest-first Sale Date', () => {
+    assert.equal(
+      landSalesPageHref({ ...emptyFilters, state: 'TX' }, 2, { column: 'Sale Price', dir: 'desc' }),
+      '/land-sales?state=TX&page=2&sort=Sale+Price&dir=desc',
+    );
+    assert.equal(
+      landSalesPageHref(emptyFilters, 1, { column: 'Sale Date', dir: 'desc' }),
+      '/land-sales',
+    );
+  });
+
+  it('carries the current page and sort in the record return query', () => {
+    assert.equal(landSalesReturnQuery(emptyFilters, 1), '');
+    assert.equal(landSalesReturnQuery({ ...emptyFilters, state: 'TX' }, 3), 'state=TX&page=3');
+    assert.equal(
+      landSalesReturnQuery({ ...emptyFilters, state: 'TX' }, 3, { column: 'Sale Price', dir: 'asc' }),
+      'state=TX&page=3&sort=Sale+Price&dir=asc',
+    );
   });
 });

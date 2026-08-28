@@ -1,4 +1,5 @@
 import { encodeFilters, type LandSaleFilters } from './search-params';
+import { appendSortParams, DEFAULT_RESULTS_SORT, type ResultsSort } from './results-sort';
 
 export const PAGE_SIZE = 50;
 export const MAX_PAGE = 1_000_000;
@@ -46,10 +47,25 @@ export function resultsRangeLabel(
   return `showing ${start}–${end} of ${total}`;
 }
 
-export function landSalesPageHref(filters: LandSaleFilters, page: number): string {
+/** The query string a record page stashes as `from`, so "back to results"
+ * returns to the page and sort the record was opened from — not page 1. */
+export function landSalesReturnQuery(
+  filters: LandSaleFilters,
+  page: number,
+  sort: ResultsSort = DEFAULT_RESULTS_SORT,
+): string {
   const params = encodeFilters(filters);
   const encoded = encodePage(page);
   if (encoded) params.set('page', encoded);
-  const qs = params.toString();
+  appendSortParams(params, sort);
+  return params.toString();
+}
+
+export function landSalesPageHref(
+  filters: LandSaleFilters,
+  page: number,
+  sort: ResultsSort = DEFAULT_RESULTS_SORT,
+): string {
+  const qs = landSalesReturnQuery(filters, page, sort);
   return qs ? `/land-sales?${qs}` : '/land-sales';
 }
