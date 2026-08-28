@@ -15,6 +15,7 @@ import {
   landSaleDeleteDeniedMessage,
   landSaleWriteDeniedMessage,
 } from '@/lib/users/roles';
+import { chunkIds } from '@/lib/land-sales/export-ids';
 import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
 import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
 import { mergeVisibleUpdate, sanitizeVisibleCreate } from '@/lib/land-sales/visible-record-input';
@@ -128,8 +129,12 @@ export async function deleteLandSales(ids: string[]): Promise<DeleteFormState> {
   const unique = [...new Set(ids.filter(Boolean))];
   if (!unique.length) return { error: 'No records selected.' };
 
-  const { error } = await supabase.from('land_sales').delete().in('id', unique);
-  if (error) return { error: error.message };
+  // Same chunking as the export read path: a selection spanning several pages
+  // of uuids overflows PostgREST's URL limit when sent as one `in` filter.
+  for (const chunk of chunkIds(unique)) {
+    const { error } = await supabase.from('land_sales').delete().in('id', chunk);
+    if (error) return { error: error.message };
+  }
 
   await logAudit(
     supabase,
