@@ -172,6 +172,22 @@ Adding a catalog field must never require re-saving the arrangement and must nev
 
 Every mutation leaves an audit entry. Logging is **best-effort and must never block or fail the operation it describes** — `logAudit` swallows its own errors by design. Do not make it strict.
 
+### 3.6 DOCX merge
+
+README §6.7 is the rule; these are its mechanics.
+
+**Tags are derived, never listed.** `mergeTagName` in `lib/land-sales/merge-tags.ts` lowercases a catalog header and collapses non-alphanumeric runs to underscores — `Buyer (True) Company` → `{{ buyer_true_company }}`. The catalog's 277 distinct headers produce 277 distinct tags, asserted by a test. This is §3.1's "never hand-maintain a second list of field names" applied to templates: do not add a curated tag list, an alias, or a per-field formatting exception keyed by header name.
+
+**Merged values come from `formatCatalogValue`** — the same function the results table renders cells with, so a document reads as the screen it was selected from. The single deliberate divergence is the blank: a cell shows `—`, a merged tag shows nothing. Changing how a column formats is a `format.ts` change affecting both surfaces, never a merge-side special case.
+
+**The merge reads the full record.** `projectVisibleLandSale` strips hidden columns for the table; the merge route re-fetches by id through `fetchLandSalesByIds` so a hidden field still fills its tag. Display configuration never reaches storage or output (§3.1).
+
+**Word fragments tag text across runs.** A typed `{{ comp_id }}` routinely lands split over several `<w:r><w:t>` elements, so a plain string replace over `document.xml` finds nothing. `lib/land-sales/docx-xml.ts` works on each paragraph's concatenated text and writes each result back into the run where its tag opened, keeping that run's formatting and emptying the fragments the tag spilled into. Anything touching that file needs a test with a deliberately fragmented tag — the naive version passes a single-run test and fails on every real template.
+
+**Structure rules for the combined document.** The body-level `<w:sectPr>` is page setup and must survive exactly once, at the end; records are separated by a page-break paragraph; every other part of the package is repacked untouched. Headers and footers belong to the section rather than to a record, so they fill from the first selected record — a documented limitation, not a bug to route around.
+
+**Templates are Admin-managed and global.** Rows in `docx_templates`, files in the private `docx-templates` bucket keyed by row id so a rename never moves a file. That bucket restricts `allowed_mime_types` to the `.docx` type alone, so uploads must pass `contentType` explicitly — a browser reporting `application/octet-stream` is otherwise rejected.
+
 ---
 
 ## 4. Migrations

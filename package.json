@@ -12,6 +12,7 @@
   "dependencies": {
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
+    "jszip": "^3.10.1",
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",
