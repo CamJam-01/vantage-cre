@@ -9,7 +9,14 @@ export type ResultColumn = { key: string; label: string };
 const DEFAULT_RESULT_COLUMNS: readonly ResultColumn[] =
   costarColumnNames().map(name => ({ key: name, label: name }));
 
-export function resultColumns(): ResultColumn[] {
+export type ResultColumnsOptions = {
+  [option: string]: unknown;
+};
+
+/** Legacy option objects remain accepted for source compatibility. The closed
+ * CoStar catalog is now authoritative regardless of their contents. */
+export function resultColumns(options: ResultColumnsOptions = {}): ResultColumn[] {
+  void options;
   return [...DEFAULT_RESULT_COLUMNS];
 }
 

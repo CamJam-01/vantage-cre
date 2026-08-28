@@ -86,7 +86,8 @@ export function applyLandSaleFilters(
   let query = supabase
     .from('land_sales')
     .select('*', { count: 'exact', head })
-    .order('Sale Date', { ascending: false });
+    .order('Sale Date', { ascending: false })
+    .order('id', { ascending: true });
   for (const clause of landSaleFilterClauses(filters)) {
     switch (clause.op) {
       case 'eq':
@@ -117,7 +118,8 @@ export function applyLandSaleFilters(
 /** Unique non-empty "Secondary Type" values, used to populate the search page's type filters. */
 export async function getDistinctSecondaryTypes(supabase: SupabaseClient): Promise<string[]> {
   const { data, error } = await supabase.rpc('distinct_secondary_types');
-  if (error || !Array.isArray(data)) return [];
+  if (error) throw new Error(error.message);
+  if (!Array.isArray(data)) throw new Error('distinct_secondary_types returned an invalid response.');
   const values = data.filter((value): value is string => typeof value === 'string' && value.trim() !== '');
   return [...new Set(values.map(value => value.trim()))].sort((a, b) => a.localeCompare(b));
 }

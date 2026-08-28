@@ -9,7 +9,7 @@ returns text[]
 language plpgsql
 stable
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
   if not public.current_user_active() then

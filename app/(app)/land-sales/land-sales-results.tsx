@@ -1,9 +1,12 @@
+import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { ResultsTable } from '@/components/land-sales/results-table';
 import { applyLandSaleFilters, isUnsatisfiableRangeError } from '@/lib/land-sales/query';
 import { landSaleFromRow, projectVisibleLandSale } from '@/lib/land-sales/db';
-import { pageRange } from '@/lib/land-sales/pagination';
+import { landSalesPageHref, lastPage, pageRange } from '@/lib/land-sales/pagination';
 import type { LandSaleFilters } from '@/lib/land-sales/search-params';
 import type { LandSalesPageData } from '@/lib/land-sales/results-page';
+import type { ResultColumn } from '@/lib/land-sales/result-columns';
 
 export async function loadLandSalesPage(
   filters: LandSaleFilters,
@@ -28,4 +31,49 @@ export async function loadLandSalesPage(
     return record ? [projectVisibleLandSale(record, visible)] : [];
   });
   return { records, totalCount: count ?? 0 };
+}
+
+export function ResultsFallback() {
+  return (
+    <main style={{
+      flex: 1,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 'var(--space-8) var(--space-6)',
+      boxSizing: 'border-box',
+      background: 'var(--color-accent-2-100)',
+    }}>
+      <p style={{ color: 'var(--color-neutral-600)' }}>Loading results…</p>
+    </main>
+  );
+}
+
+/** Streams the data-dependent result region after the toolbar has painted.
+ * Hand-edited pages beyond the result set are canonicalized to the last page. */
+export async function LandSalesResults({
+  filters,
+  page,
+  columns,
+  canEdit,
+}: {
+  filters: LandSaleFilters;
+  page: number;
+  columns: ResultColumn[];
+  canEdit: boolean;
+}) {
+  const result = await loadLandSalesPage(filters, page, columns.map(column => column.key));
+  const finalPage = lastPage(result.totalCount);
+  if (page > finalPage) redirect(landSalesPageHref(filters, finalPage));
+
+  return (
+    <ResultsTable
+      records={result.records}
+      totalCount={result.totalCount}
+      page={page}
+      columns={columns}
+      canEdit={canEdit}
+      filters={filters}
+    />
+  );
 }

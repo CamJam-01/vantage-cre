@@ -1,8 +1,24 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  keyedRecords, pageSelectionState, selectedRecords, togglePageSelection, toggleSelection,
+  activateSelectionScope, keyedRecords, pageSelectionState, selectedRecords,
+  togglePageSelection, toggleSelection,
 } from './row-selection.ts';
+
+describe('activateSelectionScope', () => {
+  it('keeps cross-page selections for one filter and permanently clears them for another', () => {
+    const unfiltered = { filtersKey: '', selectedIds: new Set(['page-1', 'page-2']) };
+    assert.equal(activateSelectionScope(unfiltered, ''), unfiltered);
+
+    const filtered = activateSelectionScope(unfiltered, 'state=NC');
+    assert.equal(filtered.filtersKey, 'state=NC');
+    assert.equal(filtered.selectedIds.size, 0);
+
+    const returned = activateSelectionScope(filtered, '');
+    assert.equal(returned.filtersKey, '');
+    assert.equal(returned.selectedIds.size, 0);
+  });
+});
 
 describe('keyedRecords', () => {
   it('keys on uuid id so Comp ID collisions cannot alias two rows', () => {

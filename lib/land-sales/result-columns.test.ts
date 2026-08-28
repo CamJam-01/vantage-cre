@@ -19,6 +19,16 @@ describe('resultColumns', () => {
     assert.equal(market?.label, 'Market');
     assert.equal(resultColumns().every(c => c.key === c.label), true);
   });
+
+  it('preserves the parameterized API without letting records redefine the closed catalog', () => {
+    const columns = resultColumns({
+      catalogLabels: ['Prototype Label'],
+      records: [{ id: '1', columns: { prototype_field: 'ignored' } }],
+    });
+    assert.deepEqual(columns.map(column => column.key), costarColumnNames());
+    assert.equal(columns.some(column => column.key === 'prototype_field'), false);
+    assert.notEqual(columns, resultColumns());
+  });
 });
 
 describe('resultSortValue', () => {

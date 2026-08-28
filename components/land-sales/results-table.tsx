@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, use, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronUp, ChevronsUpDown, Eye, Pencil, TriangleAlert } from 'lucide-react';
@@ -10,7 +10,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { FiltersSidebar } from '@/components/land-sales/filters-sidebar';
 import { ResultsAddMenu } from '@/components/land-sales/results-add-menu';
 import { ResultsExportMenu } from '@/components/land-sales/results-export-menu';
-import { useResultsSelection } from '@/components/land-sales/results-selection';
+import { useActivateResultsSelection, useResultsSelection } from '@/components/land-sales/results-selection';
 import { deleteLandSales } from '@/app/(app)/land-sales/actions';
 import type { LandSale } from '@/lib/land-sales/schema';
 import { encodeFilters, type LandSaleFilters } from '@/lib/land-sales/search-params';
@@ -20,7 +20,6 @@ import { downloadCsv } from '@/lib/land-sales/csv';
 import { resultSortValue, type ResultColumn } from '@/lib/land-sales/result-columns';
 import { fieldVisibilityId } from '@/lib/land-sales/field-visibility';
 import { keyedRecords, pageSelectionState } from '@/lib/land-sales/row-selection';
-import type { LandSalesPageData } from '@/lib/land-sales/results-page';
 
 type Sort = { column: ResultColumn; dir: 'asc' | 'desc' };
 
@@ -86,17 +85,6 @@ function ResultCell({ record, column }: { record: LandSale; column: ResultColumn
   return formatCatalogValue(column.key, record.columns[column.key]);
 }
 
-function ResultsFallback() {
-  return (
-    <main style={{
-      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 'var(--space-8) var(--space-6)', boxSizing: 'border-box', background: 'var(--color-accent-2-100)',
-    }}>
-      <p style={{ fontSize: 14, color: 'var(--color-neutral-600)' }}>Loading…</p>
-    </main>
-  );
-}
-
 function exportFailureMessage(payload: unknown): string {
   if (payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string') {
     return payload.error;
@@ -104,38 +92,26 @@ function exportFailureMessage(payload: unknown): string {
   return 'Could not export the selected records.';
 }
 
-export function ResultsTable({
-  resultsPromise,
-  page,
+export function ResultsToolbar({
   columns,
   canEdit,
   canDelete = false,
   filters,
 }: {
-  resultsPromise: Promise<LandSalesPageData>;
-  page: number;
   columns: ResultColumn[];
   canEdit: boolean;
   canDelete?: boolean;
   filters: LandSaleFilters;
 }) {
-  const { selectedIds, selectedCount, toggleRow, togglePage, clear, syncFilters } = useResultsSelection();
+  const filtersKey = encodeFilters(filters).toString();
+  useActivateResultsSelection(filtersKey);
+  const { selectedIds, selectedCount, clear } = useResultsSelection(filtersKey);
   const router = useRouter();
-  const [sort, setSort] = useState<Sort | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-
-  const filtersKey = encodeFilters(filters).toString();
-  useEffect(() => {
-    syncFilters(filtersKey);
-  }, [filtersKey, syncFilters]);
-
-  function handleSort(column: ResultColumn) {
-    setSort(prev => (prev && sameColumn(prev.column, column) ? { column, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { column, dir: 'asc' }));
-  }
 
   async function exportCsv() {
     if (!selectedCount) return;
@@ -179,8 +155,6 @@ export function ResultsTable({
     ? 'No records selected'
     : `${selectedCount} record${selectedCount === 1 ? '' : 's'} selected`;
 
-  const searchQuery = filtersKey;
-
   return (
     <>
       <div style={{ width: '100%', boxSizing: 'border-box', padding: 'var(--space-6) var(--space-6) var(--space-4)', background: 'var(--color-accent-2-200)', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
@@ -191,9 +165,6 @@ export function ResultsTable({
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
             {selectionLabel}
           </p>
-          <Suspense fallback={<p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>Loading…</p>}>
-            <ResultsCount resultsPromise={resultsPromise} page={page} filters={filters} />
-          </Suspense>
           {(deleteError || exportError) && (
             <p className="record-error" style={{ margin: 0 }}>{deleteError ?? exportError}</p>
           )}
@@ -219,20 +190,6 @@ export function ResultsTable({
         />
       </div>
 
-      <Suspense fallback={<ResultsFallback />}>
-        <ResultsBody
-          resultsPromise={resultsPromise}
-          columns={columns}
-          canEdit={canEdit}
-          sort={sort}
-          onSort={handleSort}
-          selectedIds={selectedIds}
-          toggleRow={toggleRow}
-          togglePage={togglePage}
-          searchQuery={searchQuery}
-        />
-      </Suspense>
-
       <Dialog
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}
@@ -256,22 +213,66 @@ export function ResultsTable({
   );
 }
 
+export function ResultsTable({
+  records,
+  totalCount,
+  page,
+  columns,
+  canEdit,
+  filters,
+}: {
+  records: LandSale[];
+  totalCount: number;
+  page: number;
+  columns: ResultColumn[];
+  canEdit: boolean;
+  filters: LandSaleFilters;
+}) {
+  const filtersKey = encodeFilters(filters).toString();
+  const { selectedIds, toggleRow, togglePage } = useResultsSelection(filtersKey);
+  const [sort, setSort] = useState<Sort | null>(null);
+
+  function handleSort(column: ResultColumn) {
+    setSort(prev => (prev && sameColumn(prev.column, column)
+      ? { column, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { column, dir: 'asc' }));
+  }
+
+  return (
+    <>
+      <ResultsCount records={records} totalCount={totalCount} page={page} filters={filters} />
+      <ResultsBody
+        records={records}
+        columns={columns}
+        canEdit={canEdit}
+        sort={sort}
+        onSort={handleSort}
+        selectedIds={selectedIds}
+        toggleRow={toggleRow}
+        togglePage={togglePage}
+        searchQuery={filtersKey}
+      />
+    </>
+  );
+}
+
 function ResultsCount({
-  resultsPromise,
+  records,
+  totalCount,
   page,
   filters,
 }: {
-  resultsPromise: Promise<LandSalesPageData>;
+  records: LandSale[];
+  totalCount: number;
   page: number;
   filters: LandSaleFilters;
 }) {
-  const { records, totalCount } = use(resultsPromise);
   const lastPage = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const prevPage = page > lastPage ? lastPage : page - 1;
   const showPager = lastPage > 1 || page > 1;
 
   return (
-    <>
+    <div style={{ width: '100%', boxSizing: 'border-box', padding: '0 var(--space-6) var(--space-3)', background: 'var(--color-accent-2-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
       <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
         {resultsRangeLabel(page, totalCount, records.length)} matching your search criteria
       </p>
@@ -292,12 +293,12 @@ function ResultsCount({
           )}
         </nav>
       )}
-    </>
+    </div>
   );
 }
 
 function ResultsBody({
-  resultsPromise,
+  records,
   columns,
   canEdit,
   sort,
@@ -307,7 +308,7 @@ function ResultsBody({
   togglePage,
   searchQuery,
 }: {
-  resultsPromise: Promise<LandSalesPageData>;
+  records: LandSale[];
   columns: ResultColumn[];
   canEdit: boolean;
   sort: Sort | null;
@@ -317,7 +318,6 @@ function ResultsBody({
   togglePage: (pageIds: readonly string[]) => void;
   searchQuery: string;
 }) {
-  const { records } = use(resultsPromise);
   const router = useRouter();
   const keyed = useMemo(() => keyedRecords(records), [records]);
   const pageIds = useMemo(() => keyed.map(row => row.key), [keyed]);

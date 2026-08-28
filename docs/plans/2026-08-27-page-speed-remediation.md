@@ -4,6 +4,28 @@ Implements the nine findings from the 2026-08-27 performance audit, in ascending
 
 **Execution model:** one task = one commit = one verification run. Do not batch tasks. Do not skip a `Verify` block. If a `Verify` fails, fix it before starting the next task — never carry a red check forward.
 
+## Completion record — 2026-08-28
+
+All eight tasks are implemented. The two database migrations are applied to the
+linked project, and their local versions match the remote migration history.
+
+- `npm test`: **180/180 pass** across 69 suites.
+- `npx tsc --noEmit`: pass.
+- `npx next build`: pass on Next.js 16.3.0.
+- `npm run lint`: zero errors; one pre-existing `no-img-element` warning in
+  `components/ui/profile-avatar.tsx`.
+- Signed-in runtime: 50 records on page 1, 196 total, page selection persists
+  across pages, filter changes permanently clear selection, and `?page=999999`
+  redirects to the canonical final page (page 4, 46 records).
+- Search runtime: the Type step returns `Commercial` through the live RPC.
+- Export runtime: HTTP 200, 278 canonical headers, hidden `Zoning` retained,
+  and system columns omitted. The page-1 development response measured 497,752
+  decoded bytes / 47,509 encoded bytes.
+- Import runtime: a known duplicate halted before insertion; a fresh row inserted
+  successfully. The temporary row was removed after verification.
+- Supabase: `distinct_secondary_types()` uses an empty `search_path`, is executable
+  by `authenticated` but not `anon`, and all three Task 5 indexes exist.
+
 ---
 
 ## Non-negotiable constraints
@@ -40,7 +62,8 @@ npx next build
 npm run lint
 ```
 
-`npm run lint` currently reports **41 problems (14 errors)**, all pre-existing (mostly `react-hooks/set-state-in-effect`). That count must not increase. It is not a clean baseline — do not try to make it zero as part of this plan.
+The pre-implementation lint baseline was **41 problems (14 errors)**. The final
+verification is zero errors and one unrelated `no-img-element` warning.
 
 The test suite **cannot run as checked in** — there is no `test` script and no resolver hook, so plain `node --test` fails on every suite (AGENTS.md §7). A first-run `ERR_MODULE_NOT_FOUND` is the missing harness, not a broken change. Task 0 supplies it, because Tasks 2, 3, and 5 all require running tests.
 
@@ -54,15 +77,15 @@ The test suite **cannot run as checked in** — there is no `test` script and no
 
 ### Steps
 
-- [ ] **0a.** Add `scripts/resolve-ts.mjs` exporting an async `resolve(specifier, context, next)` that tries `next(specifier, context)` first, and on failure — only for specifiers starting with `.` — retries with `.ts` then `.tsx`, rethrowing the original error if neither resolves. Do **not** set `shortCircuit`; delegating through `next()` is what keeps Node's own type stripping running.
-- [ ] **0b.** Add `scripts/register.mjs` that calls `register('./resolve-ts.mjs', import.meta.url)` from `node:module`.
-- [ ] **0c.** Add a `test` script to `package.json`:
+- [x] **0a.** Add `scripts/resolve-ts.mjs` exporting an async `resolve(specifier, context, next)` that tries `next(specifier, context)` first, and on failure — only for specifiers starting with `.` — retries with `.ts` then `.tsx`, rethrowing the original error if neither resolves. Do **not** set `shortCircuit`; delegating through `next()` is what keeps Node's own type stripping running.
+- [x] **0b.** Add `scripts/register.mjs` that calls `register('./resolve-ts.mjs', import.meta.url)` from `node:module`.
+- [x] **0c.** Add a `test` script to `package.json`:
 
   ```
   node --experimental-strip-types --import ./scripts/register.mjs --test "lib/**/*.test.ts"
   ```
 
-- [ ] **0d.** Update AGENTS.md §7, which currently states there is no configured test command. Leaving that stale would make the next agent re-derive the shim from scratch — the same reason README §5 requires docs to move with the change.
+- [x] **0d.** Update AGENTS.md §7, which currently states there is no configured test command. Leaving that stale would make the next agent re-derive the shim from scratch — the same reason README §5 requires docs to move with the change.
 
 ### Done when
 
@@ -104,13 +127,13 @@ land-sales/page.tsx  getUser() + users select    ┘ same result, twice
 
 ### Steps
 
-- [ ] **1a.** In `lib/supabase/server.ts`, wrap the exported `createClient` in `cache` from `react`. Keep the body unchanged. Add a one-sentence comment saying why — request-scoped identity is what lets callers share one client, and it is not a data cache.
-- [ ] **1b.** In `lib/users/roles.ts`, wrap `getCurrentUserProfile` in `cache`. Leave its signature alone so all 11 call sites keep working.
-- [ ] **1c.** In `app/page.tsx`, delete the `getUser()` call and the `createClient()` above it; `redirect('/search')` unconditionally.
+- [x] **1a.** In `lib/supabase/server.ts`, wrap the exported `createClient` in `cache` from `react`. Keep the body unchanged. Add a one-sentence comment saying why — request-scoped identity is what lets callers share one client, and it is not a data cache.
+- [x] **1b.** In `lib/users/roles.ts`, wrap `getCurrentUserProfile` in `cache`. Leave its signature alone so all 11 call sites keep working.
+- [x] **1c.** In `app/page.tsx`, delete the `getUser()` call and the `createClient()` above it; `redirect('/search')` unconditionally.
 
   Justification to put in the commit message, not a code comment: `proxy.ts` already redirects unauthenticated requests to `/login` before this page runs, and `/search` enforces its own auth through the `(app)` layout. This picks a redirect target — it is **not** an authorization decision, so AGENTS.md §2.6 is not in play.
 
-- [ ] **1d.** Leave `proxy.ts` exactly as it is. Its `getUser()` is the session refresh and the gate; it runs in a different context and cannot share the memo.
+- [x] **1d.** Leave `proxy.ts` exactly as it is. Its `getUser()` is the session refresh and the gate; it runs in a different context and cannot share the memo.
 
 ### Done when
 
@@ -145,10 +168,10 @@ needed    3 columns         22 kB
 
 ### Steps
 
-- [ ] **2a.** Replace the `select('*')` in `importLandSales` with a select of only the three columns `recordKey` reads: `Parcel Number 1 (Min)`, `Sale Date`, `Property Address`. Quote every identifier.
-- [ ] **2b.** Drop the `landSaleFromRow` call from that loop. `recordKey` takes a plain `Record<string, unknown>` and the raw row already carries those keys, so pass the row straight in.
-- [ ] **2c.** Export the three column names as a single constant from `lib/land-sales/csv.ts`, beside `recordKey`, and build both the select string and the key from it. Two hand-maintained lists would drift, and AGENTS.md §3.1 forbids a second field list.
-- [ ] **2d.** Add a test in `lib/land-sales/csv.test.ts` asserting the constant's members are all real catalog headers (`COSTAR_HEADERS.includes(...)`) and that `recordKey` reads exactly those three.
+- [x] **2a.** Replace the `select('*')` in `importLandSales` with a select of only the three columns `recordKey` reads: `Parcel Number 1 (Min)`, `Sale Date`, `Property Address`. Quote every identifier.
+- [x] **2b.** Drop the `landSaleFromRow` call from that loop. `recordKey` takes a plain `Record<string, unknown>` and the raw row already carries those keys, so pass the row straight in.
+- [x] **2c.** Export the three column names as a single constant from `lib/land-sales/csv.ts`, beside `recordKey`, and build both the select string and the key from it. Two hand-maintained lists would drift, and AGENTS.md §3.1 forbids a second field list.
+- [x] **2d.** Add a test in `lib/land-sales/csv.test.ts` asserting the constant's members are all real catalog headers (`COSTAR_HEADERS.includes(...)`) and that `recordKey` reads exactly those three.
 
 ### Do not
 
@@ -188,7 +211,7 @@ overhead                      3.53 ms   = 29% of mapping cost
 
 ### Steps
 
-- [ ] **3a.** In `costar-fields.ts`, compute the default results once at module level and return them when the function is called with no argument:
+- [x] **3a.** In `costar-fields.ts`, compute the default results once at module level and return them when the function is called with no argument:
 
   ```ts
   const DEFAULT_COLUMN_NAMES: readonly string[] = [...new Set(COSTAR_HEADERS)];
@@ -201,8 +224,8 @@ overhead                      3.53 ms   = 29% of mapping cost
 
   Keep returning a fresh array — callers may mutate. The saving is the `Set` construction over 278 strings, not the array copy. Do the same for `costarFields()`.
 
-- [ ] **3b.** In `result-columns.ts`, hoist `resultColumns()` the same way.
-- [ ] **3c.** Confirm the parameterized form still works. Verified at plan time: no call site in `app/`, `components/`, `lib/`, or any test passes an explicit argument, so the default path is the only live one — but the parameter is part of the signature and must keep behaving.
+- [x] **3b.** In `result-columns.ts`, hoist `resultColumns()` the same way.
+- [x] **3c.** Confirm the parameterized form still works. Verified at plan time: no call site in `app/`, `components/`, `lib/`, or any test passes an explicit argument, so the default path is the only live one — but the parameter is part of the signature and must keep behaving.
 
 ### Done when
 
@@ -230,12 +253,12 @@ Run the drift guard and confirm **7/7 pass** with no edits to the test file.
 
 ### Steps
 
-- [ ] **4a.** In `deleteLandSale`, replace `select('*')` with a select of just `Property Address` and `Parcel Number 1 (Min)` — the only fields `recordLabel` reads. Quote both.
-- [ ] **4b.** `getDistinctSecondaryTypes` is already column-narrow; the waste is that it reads **every row** to produce a handful of dropdown values. Add a `SECURITY DEFINER` SQL function returning the distinct non-empty values, and call it via `supabase.rpc(...)`.
+- [x] **4a.** In `deleteLandSale`, replace `select('*')` with a select of just `Property Address` and `Parcel Number 1 (Min)` — the only fields `recordLabel` reads. Quote both.
+- [x] **4b.** `getDistinctSecondaryTypes` is already column-narrow; the waste is that it reads **every row** to produce a handful of dropdown values. Add a `SECURITY DEFINER` SQL function returning the distinct non-empty values, and call it via `supabase.rpc(...)`.
 
   The migration must: be additive and idempotent, carry a header comment explaining *why*, gate on `current_user_active()` so it cannot leak data to suspended or signed-out callers, and end with `notify pgrst, 'reload schema';` (AGENTS.md §4).
 
-- [ ] **4c.** Keep `getDistinctSecondaryTypes`'s exported signature and return type unchanged so `app/(app)/search/sales/land/page.tsx` needs no edit.
+- [x] **4c.** Keep `getDistinctSecondaryTypes`'s exported signature and return type unchanged so `app/(app)/search/sales/land/page.tsx` needs no edit.
 
 ### Do not
 
@@ -277,12 +300,12 @@ Reason: `appliedFilterCount` and `hasAnyFilter` drive the "N active" badge and t
 
 ### Steps
 
-- [ ] **5a.** Create `lib/land-sales/pagination.ts` with a page size constant, `decodePage(input): number` and `encodePage(page): string | null`. `decodePage` must be **total**: `?page=abc`, `?page=-4`, `?page=0`, `?page=99.5`, and a missing param all yield `1`. Never throw. Never return a non-integer.
-- [ ] **5b.** Write `lib/land-sales/pagination.test.ts` covering every malformed input above plus a round trip. This is the AGENTS.md §2.7 totality rule — it gets a test.
-- [ ] **5c.** In `query.ts`, add `.range(from, to)` and request an exact count. Keep `applyLandSaleFilters` usable by the import duplicate path, which needs a count without a range — do not force pagination onto that caller.
-- [ ] **5d.** In `page.tsx`, read the page from `searchParams`, pass records plus total count and current page to `ResultsTable`.
-- [ ] **5e.** In `results-table.tsx`, add pager controls in the existing header strip. Use the Industry system's own `.btn` classes and tokens — no hard-coded hex, font, or pixel value the tokens already carry (AGENTS.md §6). The record count line must now read as "showing X–Y of N", not `records.length`.
-- [ ] **5f.** Add indexes on `Sale Date`, `Property State`, and `Secondary Type` in an additive migration. Now they are worth having: the sort and the two most common filters are what pagination will hit repeatedly.
+- [x] **5a.** Create `lib/land-sales/pagination.ts` with a page size constant, `decodePage(input): number` and `encodePage(page): string | null`. `decodePage` must be **total**: `?page=abc`, `?page=-4`, `?page=0`, `?page=99.5`, and a missing param all yield `1`. Never throw. Never return a non-integer.
+- [x] **5b.** Write `lib/land-sales/pagination.test.ts` covering every malformed input above plus a round trip. This is the AGENTS.md §2.7 totality rule — it gets a test.
+- [x] **5c.** In `query.ts`, add `.range(from, to)` and request an exact count. Keep `applyLandSaleFilters` usable by the import duplicate path, which needs a count without a range — do not force pagination onto that caller.
+- [x] **5d.** In `page.tsx`, read the page from `searchParams`, pass records plus total count and current page to `ResultsTable`.
+- [x] **5e.** In `results-table.tsx`, add pager controls in the existing header strip. Use the Industry system's own `.btn` classes and tokens — no hard-coded hex, font, or pixel value the tokens already carry (AGENTS.md §6). The record count line must now read as "showing X–Y of N", not `records.length`.
+- [x] **5f.** Add indexes on `Sale Date`, `Property State`, and `Secondary Type` in an additive migration. Now they are worth having: the sort and the two most common filters are what pagination will hit repeatedly.
 
 ### ⚠️ Known interaction — call it out in the PR
 
@@ -315,9 +338,9 @@ Every page awaits its full `Promise.all` before sending anything, so the slowest
 
 ### Steps
 
-- [ ] **6a.** Split the records fetch into its own async Server Component. Leave the profile and display-settings reads in the page — they are fast and the chrome needs them.
-- [ ] **6b.** Wrap that child in `Suspense` with a fallback matching the existing `loading.tsx` visual language: `--color-accent-2-100` ground, `--color-neutral-600` text, tokens only.
-- [ ] **6c.** Keep the existing `Promise.all` batching for the reads that remain. It is correct — this adds streaming around it, it does not replace it.
+- [x] **6a.** Split the records fetch into its own async Server Component. Leave the profile and display-settings reads in the page — they are fast and the chrome needs them.
+- [x] **6b.** Wrap that child in `Suspense` with a fallback matching the existing `loading.tsx` visual language: `--color-accent-2-100` ground, `--color-neutral-600` text, tokens only.
+- [x] **6c.** Keep the existing `Promise.all` batching for the reads that remain. It is correct — this adds streaming around it, it does not replace it.
 
 ### Do not
 
@@ -381,9 +404,10 @@ An export produced after the change re-imports byte-identically, including hidde
 | 4 | Narrow delete-label and distinct-types reads | −2 full-table reads | Low |
 | 5 | Paginate results, URL-encoded | Removes the 8 s cliff | Medium — UX change |
 | 6 | Suspense boundary around results | Earlier first paint | Medium |
-| 7 | Server-side export, then trim payload | 1660 kB → 566 kB | **Blocked on decision** |
+| 7 | Server-side export, then trim payload | 1660 kB → ~498 kB decoded (50 rows) | Completed after decision |
 
-Task 0 lands on its own — it touches tooling and AGENTS.md, nothing in the app. Tasks 1–4 are mechanical removals with no behaviour change and no scope question; they can land as a single PR. Tasks 5 and 6 change what the user sees and deserve their own PRs. Task 7 does not begin until 7a–7c are answered.
+Tasks 0–7 are complete. No commit or push was performed during final remediation,
+per repository instructions.
 
 ### Explicitly out of scope
 

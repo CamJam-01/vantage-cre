@@ -1,4 +1,16 @@
 export type KeyedRecord<T> = { record: T; key: string };
+export type ScopedSelectionState = { filtersKey: string | null; selectedIds: Set<string> };
+
+/** A different search is a different selection scope. Once activated, it
+ * permanently discards the prior scope so revisiting old filters stays empty. */
+export function activateSelectionScope(
+  selection: ScopedSelectionState,
+  filtersKey: string,
+): ScopedSelectionState {
+  return selection.filtersKey === filtersKey
+    ? selection
+    : { filtersKey, selectedIds: new Set() };
+}
 
 /** Row identity is the uuid `id`. Comp ID is not unique and must never be the key. */
 export function keyedRecords<T extends { id: string }>(records: T[]): KeyedRecord<T>[] {

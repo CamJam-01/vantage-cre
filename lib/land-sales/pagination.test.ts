@@ -2,8 +2,10 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PAGE_SIZE,
+  MAX_PAGE,
   decodePage,
   encodePage,
+  lastPage,
   landSalesPageHref,
   pageRange,
   resultsRangeLabel,
@@ -22,6 +24,8 @@ describe('decodePage', () => {
     assert.equal(decodePage(0), 1);
     assert.equal(decodePage(99.5), 1);
     assert.equal(decodePage(['abc']), 1);
+    assert.equal(decodePage(String(MAX_PAGE + 1)), 1);
+    assert.equal(decodePage(Number.MAX_SAFE_INTEGER), 1);
   });
 
   it('accepts a positive integer, including as the first of several values', () => {
@@ -29,6 +33,7 @@ describe('decodePage', () => {
     assert.equal(decodePage('2'), 2);
     assert.equal(decodePage(4), 4);
     assert.equal(decodePage(['3', '9']), 3);
+    assert.equal(decodePage(String(MAX_PAGE)), MAX_PAGE);
   });
 });
 
@@ -38,6 +43,7 @@ describe('encodePage / round trip', () => {
     assert.equal(encodePage(2), '2');
     assert.equal(encodePage(0), null);
     assert.equal(encodePage(1.5), null);
+    assert.equal(encodePage(MAX_PAGE + 1), null);
     assert.equal(decodePage(encodePage(7)), 7);
     assert.equal(encodePage(decodePage('7')), '7');
     assert.equal(encodePage(decodePage('abc')), null);
@@ -48,6 +54,15 @@ describe('pageRange / resultsRangeLabel / href', () => {
   it('maps a page onto an inclusive PostgREST range', () => {
     assert.deepEqual(pageRange(1), { from: 0, to: PAGE_SIZE - 1 });
     assert.deepEqual(pageRange(2), { from: PAGE_SIZE, to: PAGE_SIZE * 2 - 1 });
+    assert.deepEqual(pageRange(MAX_PAGE + 1), { from: 0, to: PAGE_SIZE - 1 });
+  });
+
+  it('calculates a canonical final page', () => {
+    assert.equal(lastPage(0), 1);
+    assert.equal(lastPage(1), 1);
+    assert.equal(lastPage(50), 1);
+    assert.equal(lastPage(51), 2);
+    assert.equal(lastPage(196), 4);
   });
 
   it('describes the visible slice without using the page array length as the total', () => {
