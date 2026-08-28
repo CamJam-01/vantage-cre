@@ -26,5 +26,8 @@
     "eslint": "latest",
     "eslint-config-next": "latest",
     "typescript": "latest"
+  },
+  "allowScripts": {
+    "unrs-resolver@1.12.2": true
   }
 }

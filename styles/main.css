@@ -417,6 +417,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 /* — dialog — */
 .dialog-backdrop {
   position: fixed; inset: 0; display: grid; place-items: center;
+  z-index: 100;
   padding: var(--space-4);
   background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
 }
@@ -429,12 +430,13 @@ textarea.input { min-height: 90px; resize: vertical; }
   font-family: var(--font-heading); font-weight: var(--font-heading-weight);
   font-size: 20px;
 }
-.dialog-body { font-size: 14px; opacity: 0.85; }
+.dialog-body { font-size: 14px; color: var(--color-text); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
 
 /* — blueprint frame: components are wireframe objects (see .blueprint above) — square, transparent, hairline-bordered — */
 .card, .btn, .input, .tag, .seg, .dialog { border-radius: 0; }
-.card, .dialog { background: transparent; border: 1px solid var(--color-divider); }
+.card { background: transparent; border: 1px solid var(--color-divider); }
+.dialog { background: var(--color-paper); border: 1px solid var(--color-divider); }
 .btn { border: 1px solid var(--color-divider); }
 .btn-primary { border-color: var(--color-accent); }
 .btn-ghost { border-color: transparent; }
