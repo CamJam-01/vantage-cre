@@ -7,12 +7,10 @@ export function ResultsExportMenu({
   disabled,
   onExportCsv,
   onMergeDocx,
-  hasTemplates,
 }: {
   disabled: boolean;
   onExportCsv: () => void;
   onMergeDocx: () => void;
-  hasTemplates: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -71,11 +69,12 @@ export function ResultsExportMenu({
         >
           Export CSV
         </button>
+        {/* Gated on selection alone, like Export CSV. Whether any template
+            exists is the dialog's business — it explains an empty list and
+            points at Database Manager, which a disabled item here could not. */}
         <button
           type="button"
           role="menuitem"
-          disabled={!hasTemplates}
-          title={hasTemplates ? undefined : 'An admin needs to add a template in Database Manager first'}
           onClick={() => {
             onMergeDocx();
             setOpen(false);

@@ -198,7 +198,6 @@ export function ResultsToolbar({
           disabled={selectedCount < 1 || exporting}
           onExportCsv={() => { void exportCsv(); }}
           onMergeDocx={() => setMergeOpen(true)}
-          hasTemplates={mergeTemplates.length > 0}
         />
       </div>
 
