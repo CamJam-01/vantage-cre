@@ -4,13 +4,14 @@ import { useActionState, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { deleteLandSale, updateLandSale, type CreateFormState } from '@/app/(app)/land-sales/actions';
 import {
   columnInputValue,
   fieldInputId,
+  flaggedSaleDateRaw,
   toInputString,
   type LandSale,
 } from '@/lib/land-sales/schema';
@@ -187,13 +188,22 @@ function FieldControl({
   const id = fieldInputId(header);
   const kind = costarColumnType(header);
   if (!editing) {
+    const flagged = header === 'Sale Date' ? flaggedSaleDateRaw(record) : undefined;
     return (
-      <input
-        className="input"
-        readOnly
-        tabIndex={-1}
-        value={toInputString(record.columns[header]) || '—'}
-      />
+      <>
+        <input
+          className="input"
+          readOnly
+          tabIndex={-1}
+          value={columnInputValue(record, header) || '—'}
+        />
+        {flagged && (
+          <span className="record-flag" title={`Unrecognized date from import: "${flagged}". Flagged for review.`}>
+            <TriangleAlert size={14} strokeWidth={1.5} />
+            Unrecognized date from import
+          </span>
+        )}
+      </>
     );
   }
   if (kind === 'boolean') {

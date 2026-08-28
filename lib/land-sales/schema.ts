@@ -106,6 +106,16 @@ export function columnsFromFormData(formData: FormData, hidden: ReadonlySet<stri
   return input;
 }
 
+/** The original text of a `Sale Date` that ingest could not parse, or undefined
+ * when the typed column holds a date. Every surface that shows a Sale Date must
+ * flag this rather than render an empty value — the raw text is the only record
+ * of what the source file said. */
+export function flaggedSaleDateRaw(record: LandSale): string | undefined {
+  const typed = record.columns['Sale Date'];
+  if (typed != null && typed !== '') return undefined;
+  return record.saleDateRaw || undefined;
+}
+
 export function columnInputValue(record: LandSale, header: string): string {
   if (header === 'Sale Date') {
     const typed = record.columns['Sale Date'];

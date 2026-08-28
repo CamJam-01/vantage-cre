@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { coerceColumnValue, coerceLandSaleInput, columnsFromFormData, isSystemColumn } from './schema.ts';
+import { coerceColumnValue, coerceLandSaleInput, columnsFromFormData, flaggedSaleDateRaw, isSystemColumn } from './schema.ts';
 import { SALE_DATE_RAW_COLUMN } from './costar-fields.ts';
 
 describe('coerceColumnValue', () => {
@@ -50,6 +50,20 @@ describe('columnsFromFormData', () => {
     assert.equal(input.columns['Property Address'], '123 Main St');
     assert.equal('Zoning' in input.columns, false);
     assert.equal(input.saleDateRaw, 'not-a-date');
+  });
+});
+
+describe('flaggedSaleDateRaw', () => {
+  it('reports the raw text only when the typed column is empty', () => {
+    assert.equal(
+      flaggedSaleDateRaw({ id: '1', columns: { 'Sale Date': null }, saleDateRaw: 'spring-ish' }),
+      'spring-ish',
+    );
+    assert.equal(
+      flaggedSaleDateRaw({ id: '1', columns: { 'Sale Date': '2026-08-13' }, saleDateRaw: 'spring-ish' }),
+      undefined,
+    );
+    assert.equal(flaggedSaleDateRaw({ id: '1', columns: {} }), undefined);
   });
 });
 

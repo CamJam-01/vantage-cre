@@ -12,20 +12,15 @@ import { ResultsAddMenu } from '@/components/land-sales/results-add-menu';
 import { ResultsExportMenu } from '@/components/land-sales/results-export-menu';
 import { useActivateResultsSelection, useResultsSelection } from '@/components/land-sales/results-selection';
 import { deleteLandSales } from '@/app/(app)/land-sales/actions';
-import type { LandSale } from '@/lib/land-sales/schema';
+import { flaggedSaleDateRaw, type LandSale } from '@/lib/land-sales/schema';
 import { encodeFilters, type LandSaleFilters } from '@/lib/land-sales/search-params';
-import { PAGE_SIZE, landSalesPageHref, resultsRangeLabel } from '@/lib/land-sales/pagination';
+import { PAGE_SIZE, landSalesPageHref, landSalesReturnQuery, resultsRangeLabel } from '@/lib/land-sales/pagination';
 import { formatCatalogValue, formatDate } from '@/lib/land-sales/format';
 import { downloadCsv } from '@/lib/land-sales/csv';
-import { resultSortValue, type ResultColumn } from '@/lib/land-sales/result-columns';
+import type { ResultColumn } from '@/lib/land-sales/result-columns';
 import { fieldVisibilityId } from '@/lib/land-sales/field-visibility';
 import { keyedRecords, pageSelectionState } from '@/lib/land-sales/row-selection';
-
-type Sort = { column: ResultColumn; dir: 'asc' | 'desc' };
-
-function sameColumn(a: ResultColumn, b: ResultColumn): boolean {
-  return a.key === b.key;
-}
+import { toggleResultsSort, type ResultsSort } from '@/lib/land-sales/results-sort';
 
 const stickyHeaderCellStyle = {
   color: 'var(--color-bg)', background: 'var(--color-accent-2-500)', position: 'sticky' as const, top: 0, zIndex: 4,
@@ -44,40 +39,48 @@ function headerMinWidth(label: string): number {
   return Math.max(96, Math.ceil(Math.max(longest, twoLineChars) * pxPerChar + extra));
 }
 
-function SortableHeader({ column, sort, onSort }: { column: ResultColumn; sort: Sort | null; onSort: (column: ResultColumn) => void }) {
-  const active = sort ? sameColumn(sort.column, column) : false;
+function SortableHeader({
+  column,
+  sort,
+  href,
+}: {
+  column: ResultColumn;
+  sort: ResultsSort;
+  href: string;
+}) {
+  const active = sort.column === column.key;
   return (
     <th
-      style={{ ...stickyHeaderCellStyle, minWidth: headerMinWidth(column.label), cursor: 'pointer', userSelect: 'none' }}
-      onClick={() => onSort(column)}
+      style={{ ...stickyHeaderCellStyle, minWidth: headerMinWidth(column.label), padding: 0 }}
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
-      <span className="col-header">
+      <Link href={href} className="col-header">
         <span className="col-header-label">{column.label}</span>
-        {active && sort ? (
+        {active ? (
           sort.dir === 'asc' ? <ChevronUp size={14} strokeWidth={1.5} /> : <ChevronDown size={14} strokeWidth={1.5} />
         ) : (
           <ChevronsUpDown size={12} strokeWidth={1.5} style={{ opacity: 0.35 }} />
         )}
-      </span>
+      </Link>
     </th>
   );
 }
 
 function SaleDateCell({ record }: { record: LandSale }) {
-  const typed = record.columns['Sale Date'];
-  if (typed != null && typed !== '') return formatDate(String(typed));
-  if (record.saleDateRaw) {
-    return (
-      <span
-        className="record-flag"
-        title={`Unrecognized date from import: "${record.saleDateRaw}". Flagged for review.`}
-      >
-        <TriangleAlert size={14} strokeWidth={1.5} />
-        {record.saleDateRaw}
-      </span>
-    );
+  const flagged = flaggedSaleDateRaw(record);
+  if (!flagged) {
+    const typed = record.columns['Sale Date'];
+    return typed != null && typed !== '' ? formatDate(String(typed)) : '—';
   }
-  return '—';
+  return (
+    <span
+      className="record-flag"
+      title={`Unrecognized date from import: "${flagged}". Flagged for review.`}
+    >
+      <TriangleAlert size={14} strokeWidth={1.5} />
+      {flagged}
+    </span>
+  );
 }
 
 function ResultCell({ record, column }: { record: LandSale; column: ResultColumn }) {
@@ -97,11 +100,13 @@ export function ResultsToolbar({
   canEdit,
   canDelete = false,
   filters,
+  sort,
 }: {
   columns: ResultColumn[];
   canEdit: boolean;
   canDelete?: boolean;
   filters: LandSaleFilters;
+  sort: ResultsSort;
 }) {
   const filtersKey = encodeFilters(filters).toString();
   useActivateResultsSelection(filtersKey);
@@ -183,7 +188,7 @@ export function ResultsToolbar({
             Delete
           </Button>
         )}
-        <FiltersSidebar filters={filters} columns={columns} />
+        <FiltersSidebar filters={filters} columns={columns} sort={sort} />
         <ResultsExportMenu
           disabled={selectedCount < 1 || exporting}
           onExportCsv={() => { void exportCsv(); }}
@@ -220,6 +225,7 @@ export function ResultsTable({
   columns,
   canEdit,
   filters,
+  sort,
 }: {
   records: LandSale[];
   totalCount: number;
@@ -227,30 +233,24 @@ export function ResultsTable({
   columns: ResultColumn[];
   canEdit: boolean;
   filters: LandSaleFilters;
+  sort: ResultsSort;
 }) {
   const filtersKey = encodeFilters(filters).toString();
   const { selectedIds, toggleRow, togglePage } = useResultsSelection(filtersKey);
-  const [sort, setSort] = useState<Sort | null>(null);
-
-  function handleSort(column: ResultColumn) {
-    setSort(prev => (prev && sameColumn(prev.column, column)
-      ? { column, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-      : { column, dir: 'asc' }));
-  }
 
   return (
     <>
-      <ResultsCount records={records} totalCount={totalCount} page={page} filters={filters} />
+      <ResultsCount records={records} totalCount={totalCount} page={page} filters={filters} sort={sort} />
       <ResultsBody
         records={records}
         columns={columns}
         canEdit={canEdit}
         sort={sort}
-        onSort={handleSort}
+        filters={filters}
         selectedIds={selectedIds}
         toggleRow={toggleRow}
         togglePage={togglePage}
-        searchQuery={filtersKey}
+        searchQuery={landSalesReturnQuery(filters, page, sort)}
       />
     </>
   );
@@ -261,11 +261,13 @@ function ResultsCount({
   totalCount,
   page,
   filters,
+  sort,
 }: {
   records: LandSale[];
   totalCount: number;
   page: number;
   filters: LandSaleFilters;
+  sort: ResultsSort;
 }) {
   const lastPage = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const prevPage = page > lastPage ? lastPage : page - 1;
@@ -279,7 +281,7 @@ function ResultsCount({
       {showPager && (
         <nav aria-label="Results pages" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
           {page > 1 ? (
-            <Link href={landSalesPageHref(filters, prevPage)} className="btn btn-secondary">Previous</Link>
+            <Link href={landSalesPageHref(filters, prevPage, sort)} className="btn btn-secondary">Previous</Link>
           ) : (
             <span className="btn btn-secondary" aria-disabled="true" style={{ pointerEvents: 'none', opacity: 0.45 }}>Previous</span>
           )}
@@ -287,7 +289,7 @@ function ResultsCount({
             Page {page} of {lastPage}
           </span>
           {page < lastPage ? (
-            <Link href={landSalesPageHref(filters, page + 1)} className="btn btn-secondary">Next</Link>
+            <Link href={landSalesPageHref(filters, page + 1, sort)} className="btn btn-secondary">Next</Link>
           ) : (
             <span className="btn btn-secondary" aria-disabled="true" style={{ pointerEvents: 'none', opacity: 0.45 }}>Next</span>
           )}
@@ -302,7 +304,7 @@ function ResultsBody({
   columns,
   canEdit,
   sort,
-  onSort,
+  filters,
   selectedIds,
   toggleRow,
   togglePage,
@@ -311,8 +313,8 @@ function ResultsBody({
   records: LandSale[];
   columns: ResultColumn[];
   canEdit: boolean;
-  sort: Sort | null;
-  onSort: (column: ResultColumn) => void;
+  sort: ResultsSort;
+  filters: LandSaleFilters;
   selectedIds: Set<string>;
   toggleRow: (id: string) => void;
   togglePage: (pageIds: readonly string[]) => void;
@@ -322,21 +324,6 @@ function ResultsBody({
   const keyed = useMemo(() => keyedRecords(records), [records]);
   const pageIds = useMemo(() => keyed.map(row => row.key), [keyed]);
   const pageState = pageSelectionState(selectedIds, pageIds);
-
-  const sortedKeyed = useMemo(() => {
-    if (!sort) return keyed;
-    const { column, dir } = sort;
-    const factor = dir === 'asc' ? 1 : -1;
-    return [...keyed].sort((a, b) => {
-      const av = resultSortValue(a.record, column);
-      const bv = resultSortValue(b.record, column);
-      if (av == null && bv == null) return 0;
-      if (av == null) return 1;
-      if (bv == null) return -1;
-      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * factor;
-      return String(av).localeCompare(String(bv)) * factor;
-    });
-  }, [keyed, sort]);
 
   const tableMinWidth = useMemo(
     () => HEADER_GUTTER_PX + columns.reduce((sum, column) => sum + headerMinWidth(column.label), 0),
@@ -373,7 +360,14 @@ function ResultsBody({
                     />
                   </th>
                   <th style={{ ...stickyHeaderCellStyle, width: 52 }} />
-                  {columns.map(col => <SortableHeader key={fieldVisibilityId(col)} column={col} sort={sort} onSort={onSort} />)}
+                  {columns.map(col => (
+                    <SortableHeader
+                      key={fieldVisibilityId(col)}
+                      column={col}
+                      sort={sort}
+                      href={landSalesPageHref(filters, 1, toggleResultsSort(sort, col.key))}
+                    />
+                  ))}
                 </tr>
               </thead>
               <tbody style={{ background: 'var(--color-paper)' }}>
@@ -383,7 +377,7 @@ function ResultsBody({
                       No records match your search criteria.
                     </td>
                   </tr>
-                ) : sortedKeyed.map(({ record: r, key }) => {
+                ) : keyed.map(({ record: r, key }) => {
                   const isSelected = selectedIds.has(key);
                   const address = String(r.columns['Property Address'] ?? '').trim();
                   const parcel = String(r.columns['Parcel Number 1 (Min)'] ?? '').trim();
