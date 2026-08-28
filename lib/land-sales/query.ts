@@ -3,6 +3,7 @@ import type { LandSaleFilters } from './search-params';
 import { landSaleFromRow } from './db';
 import type { LandSale } from './schema';
 import { chunkIds } from './export-ids';
+import { DEFAULT_RESULTS_SORT, type ResultsSort } from './results-sort';
 
 function lastDurationToDate(duration: number, unit: 'months' | 'years'): string | null {
   if (!Number.isFinite(duration) || duration <= 0) return null;
@@ -76,17 +77,20 @@ export function isUnsatisfiableRangeError(error: { message?: string } | null): b
 
 /** Translates decoded URL filters into a Supabase query. Shared by the results page
  * (fetch) and the CSV-duplicate check during import (count-only). Pagination is
- * optional so a caller can still take a filtered count without a range. */
+ * optional so a caller can still take a filtered count without a range. Sort
+ * is applied before the range so a header click ranks the full match, not
+ * the current page. */
 export function applyLandSaleFilters(
   supabase: SupabaseClient,
   filters: LandSaleFilters,
   page?: LandSaleQueryPage,
+  sort: ResultsSort = DEFAULT_RESULTS_SORT,
 ) {
   const head = page !== undefined && 'head' in page && page.head;
   let query = supabase
     .from('land_sales')
     .select('*', { count: 'exact', head })
-    .order('Sale Date', { ascending: false })
+    .order(sort.column, { ascending: sort.dir === 'asc', nullsFirst: false })
     .order('id', { ascending: true });
   for (const clause of landSaleFilterClauses(filters)) {
     switch (clause.op) {

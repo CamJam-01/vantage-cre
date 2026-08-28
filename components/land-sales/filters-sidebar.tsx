@@ -19,6 +19,8 @@ import {
   encodeFilters,
   type LandSaleFilters,
 } from '@/lib/land-sales/search-params';
+import { landSalesPageHref } from '@/lib/land-sales/pagination';
+import { DEFAULT_RESULTS_SORT, type ResultsSort } from '@/lib/land-sales/results-sort';
 import { buildSearchFilterEntries, type SearchFilterEntry } from '@/lib/land-sales/search-filter-entries';
 import { US_STATES } from '@/lib/land-sales/constants';
 import type { ResultColumn } from '@/lib/land-sales/result-columns';
@@ -49,7 +51,15 @@ function computeMenuStyle(triggerRect: DOMRect): CSSProperties {
   };
 }
 
-export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters; columns: ResultColumn[] }) {
+export function FiltersSidebar({
+  filters,
+  columns,
+  sort = DEFAULT_RESULTS_SORT,
+}: {
+  filters: LandSaleFilters;
+  columns: ResultColumn[];
+  sort?: ResultsSort;
+}) {
   const router = useRouter();
   const filtersKey = encodeFilters(filters).toString();
   const [draft, setDraft] = useState<DraftFieldFilter[]>(() => appliedToDraft(filters.fieldFilters ?? []));
@@ -69,7 +79,7 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
 
   const activeCount = appliedFilterCount(filters);
   const applySearch = (next: LandSaleFilters) => {
-    router.replace(`/land-sales?${encodeFilters(next).toString()}`);
+    router.replace(landSalesPageHref(next, 1, sort));
   };
   const searchEntries = buildSearchFilterEntries(filters, applySearch);
   const dirty = draftsDiffer(draft, filters.fieldFilters ?? []);
@@ -166,7 +176,7 @@ export function FiltersSidebar({ filters, columns }: { filters: LandSaleFilters;
 
   function applyFilters() {
     const next: LandSaleFilters = { ...filters, fieldFilters: compactDraftFilters(draft) };
-    router.replace(`/land-sales?${encodeFilters(next).toString()}`);
+    applySearch(next);
     setAddMenuOpen(false);
     setOpen(false);
   }

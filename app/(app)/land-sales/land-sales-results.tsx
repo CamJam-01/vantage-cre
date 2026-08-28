@@ -7,20 +7,22 @@ import { landSalesPageHref, lastPage, pageRange } from '@/lib/land-sales/paginat
 import type { LandSaleFilters } from '@/lib/land-sales/search-params';
 import type { LandSalesPageData } from '@/lib/land-sales/results-page';
 import type { ResultColumn } from '@/lib/land-sales/result-columns';
+import type { ResultsSort } from '@/lib/land-sales/results-sort';
 
 export async function loadLandSalesPage(
   filters: LandSaleFilters,
   page: number,
   visibleKeys: readonly string[],
+  sort: ResultsSort,
 ): Promise<LandSalesPageData> {
   const supabase = await createClient();
   const { from, to } = pageRange(page);
-  const fetched = await applyLandSaleFilters(supabase, filters, { from, to });
+  const fetched = await applyLandSaleFilters(supabase, filters, { from, to }, sort);
   let data = fetched.data;
   let count = fetched.count;
   if (fetched.error) {
     if (!isUnsatisfiableRangeError(fetched.error)) throw new Error(fetched.error.message);
-    const counted = await applyLandSaleFilters(supabase, filters, { head: true });
+    const counted = await applyLandSaleFilters(supabase, filters, { head: true }, sort);
     if (counted.error) throw new Error(counted.error.message);
     data = [];
     count = counted.count ?? 0;
@@ -54,17 +56,19 @@ export function ResultsFallback() {
 export async function LandSalesResults({
   filters,
   page,
+  sort,
   columns,
   canEdit,
 }: {
   filters: LandSaleFilters;
   page: number;
+  sort: ResultsSort;
   columns: ResultColumn[];
   canEdit: boolean;
 }) {
-  const result = await loadLandSalesPage(filters, page, columns.map(column => column.key));
+  const result = await loadLandSalesPage(filters, page, columns.map(column => column.key), sort);
   const finalPage = lastPage(result.totalCount);
-  if (page > finalPage) redirect(landSalesPageHref(filters, finalPage));
+  if (page > finalPage) redirect(landSalesPageHref(filters, finalPage, sort));
 
   return (
     <ResultsTable
@@ -74,6 +78,7 @@ export async function LandSalesResults({
       columns={columns}
       canEdit={canEdit}
       filters={filters}
+      sort={sort}
     />
   );
 }

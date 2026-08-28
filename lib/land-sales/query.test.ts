@@ -20,12 +20,12 @@ describe('isUnsatisfiableRangeError', () => {
 });
 
 describe('applyLandSaleFilters', () => {
-  it('uses id as a deterministic tie-breaker after descending Sale Date', () => {
-    const orders: Array<{ column: string; ascending: boolean }> = [];
+  function captureOrders() {
+    const orders: Array<{ column: string; ascending: boolean; nullsFirst?: boolean }> = [];
     const builder = {
       select() { return builder; },
-      order(column: string, options: { ascending: boolean }) {
-        orders.push({ column, ascending: options.ascending });
+      order(column: string, options: { ascending: boolean; nullsFirst?: boolean }) {
+        orders.push({ column, ascending: options.ascending, nullsFirst: options.nullsFirst });
         return builder;
       },
       range() { return builder; },
@@ -36,11 +36,29 @@ describe('applyLandSaleFilters', () => {
         return builder;
       },
     } as unknown as SupabaseClient;
+    return { orders, supabase };
+  }
 
+  it('uses id as a deterministic tie-breaker after descending Sale Date', () => {
+    const { orders, supabase } = captureOrders();
     applyLandSaleFilters(supabase, emptyFilters, { from: 0, to: 49 });
     assert.deepEqual(orders, [
-      { column: 'Sale Date', ascending: false },
-      { column: 'id', ascending: true },
+      { column: 'Sale Date', ascending: false, nullsFirst: false },
+      { column: 'id', ascending: true, nullsFirst: undefined },
+    ]);
+  });
+
+  it('orders the filtered set by the requested catalog column before paging', () => {
+    const { orders, supabase } = captureOrders();
+    applyLandSaleFilters(
+      supabase,
+      emptyFilters,
+      { from: 0, to: 49 },
+      { column: 'Sale Price', dir: 'desc' },
+    );
+    assert.deepEqual(orders, [
+      { column: 'Sale Price', ascending: false, nullsFirst: false },
+      { column: 'id', ascending: true, nullsFirst: undefined },
     ]);
   });
 });
