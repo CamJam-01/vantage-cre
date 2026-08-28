@@ -496,6 +496,18 @@ textarea.input { min-height: 90px; resize: vertical; }
 }
 .results-add-badge:hover { background: var(--color-accent-600); }
 .results-add-badge:active { background: var(--color-accent-700); }
+.results-delete-badge {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background: var(--color-danger-500);
+  color: var(--color-paper);
+  border-color: var(--color-danger-500);
+  box-shadow: var(--shadow-md);
+}
+.results-delete-badge:hover { background: var(--color-danger-600); }
+.results-delete-badge:active { background: var(--color-danger-700); }
+.results-delete-badge:disabled:hover { background: var(--color-danger-500); }
 .results-add-dropdown {
   display: none;
   position: absolute;

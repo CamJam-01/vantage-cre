@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronUp, ChevronsUpDown, Eye, Pencil, TriangleAlert } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUpDown, Eye, Minus, Pencil, TriangleAlert } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -185,12 +185,14 @@ export function ResultsToolbar({
         {canEdit && <ResultsAddMenu />}
         {canDelete && (
           <Button
-            variant="secondary"
+            variant="icon"
+            className="results-delete-badge"
             onClick={() => setConfirmDelete(true)}
             disabled={selectedCount < 1}
+            aria-label="Delete selected records"
             title={selectedCount < 1 ? 'Select records to delete' : 'Delete selected records'}
           >
-            Delete
+            <Minus size={20} strokeWidth={1.5} aria-hidden />
           </Button>
         )}
         <FiltersSidebar filters={filters} columns={columns} sort={sort} />
