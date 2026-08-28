@@ -104,6 +104,18 @@ These terms have precise meanings here. Use them; do not invent synonyms.
   divider starts a new tab on the record screen; a **group** divider titles a
   section within a page.
 
+**Merge template**
+: A Word `.docx` file an Admin has uploaded and named, used to turn selected
+  records into a document. Templates are global, like the arrangement — there is
+  one shared set per database, not one per user.
+
+**Merge tag**
+: The placeholder a template writes to pull in a field's value, in the form
+  `{{ comp_id }}`. A tag names a field the only way fields are named — by its
+  catalog header — mechanically lowercased with non-alphanumeric runs collapsed
+  to underscores. The tag set is *derived* from the catalog and is never
+  written down separately (§6.1, §6.7).
+
 **The provider format**
 : The CoStar CSV export — a fixed, ordered header row. It is simultaneously the
   field catalog, the database columns, the import contract, and the export
@@ -204,6 +216,13 @@ Seven capabilities. A change either extends one of these or is out of scope.
    only. Export is a Viewer-level capability: reading and taking away what you
    read are the same permission.
 
+   The same selection can instead be **merged into a Word document**: the
+   Admin's chosen template is filled once per selected record and returned as a
+   single `.docx`, one record per section. Merge is the same Viewer-level
+   permission as CSV export and reads the full record, not just the visible
+   fields — but it is a *deliverable*, not the provider format, and does not
+   round-trip (§6.7).
+
 7. **Get records in.** Two paths, both Editor-level:
    - **Bulk import** of a provider-format CSV, whose header row must match the
      template exactly (§6.1).
@@ -225,14 +244,15 @@ prevent the operation it describes from succeeding.
 Authentication and roles · `Sales → Land` end to end · primary and per-field
 filtering · results table with sort, selection, and CSV export · record detail
 with in-place editing · CSV import with per-row validation · manual record
-entry · global field visibility, ordering, and dividers · user administration ·
-audit log · user profiles with avatars.
+entry · global field visibility, ordering, and dividers · **document (DOCX)
+merge from admin-managed Word templates** · user administration · audit log ·
+user profiles with avatars.
 
 ### Deliberately deferred
 
 Rentals, Expenses, and Costs databases · Improved and Ground Lease paths ·
-document (DOCX) export · live schema editing (adding, retyping, or removing
-fields from the database itself, as opposed to configuring their display).
+live schema editing (adding, retyping, or removing fields from the database
+itself, as opposed to configuring their display).
 
 **Deferred features are shown, disabled, and labeled "Coming in a later
 phase" — not hidden.** This is intentional and is a product decision, not an
@@ -383,6 +403,27 @@ plugin systems, or configuration surfaces in anticipation of the deferred
 features in §5 — build them when the feature is actually built, informed by
 `Sales → Land` as the worked example.
 
+### 6.7 A merged document is a deliverable, not an interchange format
+
+§6.1 makes the CSV round trip the system's central constraint: what this
+exports, this re-imports, unchanged. **DOCX merge is deliberately outside that
+rule**, and the distinction matters because both are reached from the same
+Export menu.
+
+A merged document is written for a person to read. Values are display-formatted
+exactly as the results table renders them, an empty field merges as nothing at
+all rather than a placeholder, and the whole thing is shaped by whatever the
+template author wrote. It is lossy by construction and **nothing ever imports
+it**. Do not add a DOCX import path, do not extend the round-trip test to cover
+it, and do not "fix" the merge to preserve raw values — the CSV export is where
+fidelity lives, and it is untouched by any of this.
+
+Two rules do carry over from §6.1. The tag set is **derived from
+`COSTAR_HEADER_ROW`**, so a header added to the catalog gets a merge tag with no
+further work and no second list to update. And a template is **user content, not
+code** — an unrecognized tag is left visibly in place rather than silently
+blanked, so the author can see their own typo.
+
 ---
 
 ## 7. Map of the codebase
@@ -399,6 +440,7 @@ Enough to orient; the details belong in `AGENTS.md`.
 | Filter encoding/decoding and query construction | `lib/land-sales/` (search-params, query, field-filters) |
 | The arrangement: visibility, ordering, dividers, page layout | `lib/land-sales/` (field-visibility, display-settings) |
 | Import/export, validation, duplicate detection | `lib/land-sales/` (csv, schema, dates) |
+| DOCX merge: tag derivation, WordprocessingML surgery, template metadata | `lib/land-sales/` (merge-tags, docx-xml, docx-merge, docx-templates) |
 | Roles, permissions, user profiles | `lib/users/` |
 | Admin descriptors and configuration handling | `lib/admin/` |
 | Audit logging | `lib/audit/` |
@@ -436,6 +478,8 @@ Match the request to its shape before writing anything.
 | "Field X should show as *Y* on screen" | **No.** A field's name is its header (§3A). Rename the *header* via the process above, or leave it. |
 | "Make field X filterable" | Confirm the column's Postgres type is classified correctly; the filter tier follows from that type. Nothing else is required — every catalog field is equally a field. |
 | "Only export the columns we're actually using" | **No.** Export is always all 278 positions in canonical order (§4.6, §3A). |
+| "Add a merge tag for field X" | **Nothing to do.** Every catalog field already has one, derived from its header (§3 *Merge tag*). If a tag seems missing, the header is not what you think it is. |
+| "Make the merged document keep raw values" / "import a DOCX" | **No.** A merged document is a deliverable, not an interchange format (§6.7). Fidelity lives in the CSV export. |
 | "Add a Rentals/Improved/… database" | **A new spine branch.** Substantial. Follow `Sales → Land` structurally; expect a new catalog, a new table, and a new arrangement, not a parameterized generalization of the existing one. |
 | "Change what import accepts" | Almost always wrong — re-read §6.1 and confirm the round trip survives before proceeding. |
 | "Let users customize their own view" | **Out of scope** as stated (§2, §5). Raise it rather than building it. |

@@ -10,6 +10,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { FiltersSidebar } from '@/components/land-sales/filters-sidebar';
 import { ResultsAddMenu } from '@/components/land-sales/results-add-menu';
 import { ResultsExportMenu } from '@/components/land-sales/results-export-menu';
+import { MergeDocxDialog } from '@/components/land-sales/merge-docx-dialog';
 import { useActivateResultsSelection, useResultsSelection } from '@/components/land-sales/results-selection';
 import { deleteLandSales } from '@/app/(app)/land-sales/actions';
 import { flaggedSaleDateRaw, type LandSale } from '@/lib/land-sales/schema';
@@ -21,6 +22,7 @@ import type { ResultColumn } from '@/lib/land-sales/result-columns';
 import { fieldVisibilityId } from '@/lib/land-sales/field-visibility';
 import { keyedRecords, pageSelectionState } from '@/lib/land-sales/row-selection';
 import { toggleResultsSort, type ResultsSort } from '@/lib/land-sales/results-sort';
+import type { DocxTemplate } from '@/lib/land-sales/docx-templates';
 
 const stickyHeaderCellStyle = {
   color: 'var(--color-bg)', background: 'var(--color-accent-2-500)', position: 'sticky' as const, top: 0, zIndex: 4,
@@ -101,12 +103,14 @@ export function ResultsToolbar({
   canDelete = false,
   filters,
   sort,
+  mergeTemplates,
 }: {
   columns: ResultColumn[];
   canEdit: boolean;
   canDelete?: boolean;
   filters: LandSaleFilters;
   sort: ResultsSort;
+  mergeTemplates: DocxTemplate[];
 }) {
   const filtersKey = encodeFilters(filters).toString();
   useActivateResultsSelection(filtersKey);
@@ -117,6 +121,7 @@ export function ResultsToolbar({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
 
   async function exportCsv() {
     if (!selectedCount) return;
@@ -192,6 +197,8 @@ export function ResultsToolbar({
         <ResultsExportMenu
           disabled={selectedCount < 1 || exporting}
           onExportCsv={() => { void exportCsv(); }}
+          onMergeDocx={() => setMergeOpen(true)}
+          hasTemplates={mergeTemplates.length > 0}
         />
       </div>
 
@@ -214,6 +221,13 @@ export function ResultsToolbar({
           This cannot be undone. The selected records are removed from the database.
         </p>
       </Dialog>
+
+      <MergeDocxDialog
+        open={mergeOpen}
+        onClose={() => setMergeOpen(false)}
+        templates={mergeTemplates}
+        recordIds={[...selectedIds]}
+      />
     </>
   );
 }

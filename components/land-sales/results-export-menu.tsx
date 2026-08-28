@@ -6,9 +6,13 @@ import { Download } from 'lucide-react';
 export function ResultsExportMenu({
   disabled,
   onExportCsv,
+  onMergeDocx,
+  hasTemplates,
 }: {
   disabled: boolean;
   onExportCsv: () => void;
+  onMergeDocx: () => void;
+  hasTemplates: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -67,7 +71,16 @@ export function ResultsExportMenu({
         >
           Export CSV
         </button>
-        <button type="button" role="menuitem" disabled title="Coming in a later phase">
+        <button
+          type="button"
+          role="menuitem"
+          disabled={!hasTemplates}
+          title={hasTemplates ? undefined : 'An admin needs to add a template in Database Manager first'}
+          onClick={() => {
+            onMergeDocx();
+            setOpen(false);
+          }}
+        >
           Merge to DOCX
         </button>
       </div>

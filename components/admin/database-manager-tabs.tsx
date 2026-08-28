@@ -103,9 +103,14 @@ export function DatabaseManagerTabs({
                   </div>
                 </div>
                 {db.available && (
-                  <Link href={`/admin/database-manager/fields?db=${db.key}`} className="btn btn-ghost">
-                    Field configuration
-                  </Link>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <Link href={`/admin/database-manager/fields?db=${db.key}`} className="btn btn-ghost">
+                      Field configuration
+                    </Link>
+                    <Link href={`/admin/database-manager/templates?db=${db.key}`} className="btn btn-ghost">
+                      Set templates
+                    </Link>
+                  </div>
                 )}
               </Blueprint>
             );
