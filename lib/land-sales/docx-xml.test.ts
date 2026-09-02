@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   combineMergedDocuments,
+  combineRoutedDocuments,
   DocxStructureError,
   escapeXmlText,
   PAGE_BREAK_PARAGRAPH,
@@ -175,5 +176,24 @@ describe('combineMergedDocuments', () => {
   it('preserves the XML declaration and document element', () => {
     const merged = combineMergedDocuments(template, [values]);
     assert.match(merged, /^<\?xml version="1\.0"\?><w:document xmlns:w="ns"><w:body>/);
+  });
+});
+
+describe('combineRoutedDocuments', () => {
+  it('uses each routed template body in order and the default package section properties', () => {
+    const sales = documentXml(paragraph(run('Sale {{ comp_number }}: {{ property_name }}')));
+    const listing = documentXml(paragraph(run('Listing {{ comp_number }}: {{ property_name }}')));
+    const merged = combineRoutedDocuments(sales, [
+      { xml: sales, values: { comp_number: '1', property_name: 'Riverbend' } },
+      { xml: listing, values: { comp_number: '2', property_name: 'Kestrel' } },
+      { xml: sales, values: { comp_number: '3', property_name: 'Cedar' } },
+    ]);
+
+    assert.match(merged, />Sale 1: Riverbend</);
+    assert.match(merged, />Listing 2: Kestrel</);
+    assert.match(merged, />Sale 3: Cedar</);
+    assert.equal(merged.indexOf('Riverbend') < merged.indexOf('Kestrel'), true);
+    assert.equal(merged.indexOf('Kestrel') < merged.indexOf('Cedar'), true);
+    assert.equal((merged.match(/<w:sectPr>/g) ?? []).length, 1);
   });
 });

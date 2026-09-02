@@ -7,6 +7,8 @@ import { listDocxTemplates } from '@/lib/land-sales/docx-template-store';
 import { mergeTagCatalog } from '@/lib/land-sales/merge-tags';
 import { DocxTemplatesManager } from '@/components/admin/docx-templates-manager';
 import type { DocxTemplate } from '@/lib/land-sales/docx-templates';
+import { listDocxOutputFlows } from '@/lib/land-sales/output-flow-store';
+import type { DocxOutputFlow } from '@/lib/land-sales/output-flows';
 
 type PageProps = { searchParams: Promise<{ db?: string }> };
 
@@ -20,12 +22,20 @@ export default async function DatabaseTemplatesPage({ searchParams }: PageProps)
   const category = DATABASE_CATEGORIES.find(c => c.key === db);
   if (!category || !category.available) redirect('/admin/database-manager');
 
-  const { templates, loadError } = await listDocxTemplates(supabase)
-    .then(loaded => ({ templates: loaded, loadError: undefined as string | undefined }))
-    .catch((error: unknown) => ({
-      templates: [] as DocxTemplate[],
-      loadError: error instanceof Error ? error.message : 'Could not load merge templates.',
-    }));
+  const [templateResult, flowResult] = await Promise.all([
+    listDocxTemplates(supabase)
+      .then(templates => ({ templates, loadError: undefined as string | undefined }))
+      .catch((error: unknown) => ({
+        templates: [] as DocxTemplate[],
+        loadError: error instanceof Error ? error.message : 'Could not load merge templates.',
+      })),
+    listDocxOutputFlows(supabase)
+      .then(flows => ({ flows, flowLoadError: undefined as string | undefined }))
+      .catch((error: unknown) => ({
+        flows: [] as DocxOutputFlow[],
+        flowLoadError: error instanceof Error ? error.message : 'Could not load output flows.',
+      })),
+  ]);
 
   return (
     <main style={{
@@ -40,11 +50,9 @@ export default async function DatabaseTemplatesPage({ searchParams }: PageProps)
             Merge templates
           </h1>
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 'var(--space-2) 0 0' }}>
-            Word templates for {category.name}, available to everyone in <strong>Merge to DOCX</strong> on
-            the results page.
-            Selecting records there fills one copy of the chosen template per record, all in a single
-            document with a page break between records. Tags in a header or footer belong to the
-            document as a whole, so they fill from the first selected record.
+            Word templates and Output Flows for {category.name}. Users choose one named output on the
+            results page; its router selects a template for each record and returns one document in
+            selection order. Package-wide headers and footers come from the flow&apos;s default template.
           </p>
           <Link
             href="/admin/database-manager"
@@ -56,9 +64,11 @@ export default async function DatabaseTemplatesPage({ searchParams }: PageProps)
         </div>
 
         <DocxTemplatesManager
-          templates={templates}
+          templates={templateResult.templates}
+          flows={flowResult.flows}
           tags={mergeTagCatalog()}
-          loadError={loadError}
+          loadError={templateResult.loadError}
+          flowLoadError={flowResult.flowLoadError}
         />
       </div>
     </main>

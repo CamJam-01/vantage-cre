@@ -1,5 +1,13 @@
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat('en-US');
+const IDENTIFIER_COLUMNS = new Set([
+  'Property Zip Code',
+  'Assessed Year',
+  'Document Number',
+  'Parcel Number 1 (Min)',
+  'Parcel Number 2 (Max)',
+  'PropertyID',
+]);
 
 export function formatCurrency(value: number | null | undefined): string {
   return value == null ? '—' : currency.format(value);
@@ -18,7 +26,34 @@ export function formatDate(value: string | null | undefined): string {
 }
 
 function isMoneyColumn(header: string): boolean {
-  return /price|payment|balance|tax|income|expense|down payment/i.test(header);
+  return header === 'Assessed Value'
+    || header === 'Assessed Land'
+    || /price|payment|balance|tax|income|expense|down payment/i.test(header);
+}
+
+/** Adds USD presentation without coercing through a number, preserving every
+ * fractional digit supplied by PostgREST for per-unit prices. */
+function formatPreciseCurrency(text: string): string {
+  const match = text.match(/^(-?)(\d+)(\.\d+)?$/);
+  if (!match) return text;
+  const [, sign, integer, fraction = ''] = match;
+  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${sign ? '-' : ''}$${grouped}${fraction}`;
+}
+
+/** Formats only recognizable North American numbers. Source text outside that
+ * shape survives unchanged rather than being guessed into a domestic number. */
+function formatPhoneNumber(text: string): string {
+  const extensionMatch = text.match(/\s*(?:ext\.?|x)\s*(\d+)$/i);
+  const extension = extensionMatch?.[1];
+  const base = extensionMatch?.index == null ? text : text.slice(0, extensionMatch.index);
+  const digits = base.replace(/\D/g, '');
+  const national = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+  if (national.length !== 10) return text;
+
+  const formatted = `(${national.slice(0, 3)}) ${national.slice(3, 6)}-${national.slice(6)}`;
+  const withCountryCode = digits.length === 11 ? `+1 ${formatted}` : formatted;
+  return extension ? `${withCountryCode} ext. ${extension}` : withCountryCode;
 }
 
 /** Display a catalog cell by the column's Postgres type. Empty is an em dash. */
@@ -29,6 +64,11 @@ export function formatCatalogValue(header: string, value: unknown): string {
   if (/^\d{4}-\d{2}-\d{2}/.test(text) && (header.includes('Date') || header === 'Sale Date')) {
     return formatDate(text);
   }
+  if (header.includes('Phone')) return formatPhoneNumber(text);
+  // These fields may be numeric in Postgres, but their digits identify or label
+  // something rather than count it, so grouping would misrepresent them.
+  if (IDENTIFIER_COLUMNS.has(header)) return text;
+  if (header === 'Price Per SF Land') return formatPreciseCurrency(text);
   if (typeof value === 'number' || /^-?\d+(\.\d+)?$/.test(text)) {
     const n = typeof value === 'number' ? value : Number(text);
     if (!Number.isFinite(n)) return text;

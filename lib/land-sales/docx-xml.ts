@@ -194,3 +194,22 @@ export function combineMergedDocuments(
   const sections = valuesPerRecord.map(values => replaceMergeTags(content, values));
   return head + sections.join(PAGE_BREAK_PARAGRAPH) + sectPr + tail;
 }
+
+export type RoutedDocumentSection = {
+  xml: string;
+  values: Readonly<Record<string, string>>;
+};
+
+/** Combines bodies from compatible templates while the default document owns
+ * package-wide section properties and supporting parts. */
+export function combineRoutedDocuments(
+  defaultXml: string,
+  sections: ReadonlyArray<RoutedDocumentSection>,
+): string {
+  const { head, sectPr, tail } = splitDocumentBody(defaultXml);
+  const bodies = sections.map(section => {
+    const source = splitDocumentBody(section.xml);
+    return replaceMergeTags(source.content, section.values);
+  });
+  return head + bodies.join(PAGE_BREAK_PARAGRAPH) + sectPr + tail;
+}

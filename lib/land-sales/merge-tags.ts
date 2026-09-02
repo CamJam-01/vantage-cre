@@ -21,24 +21,47 @@ export function mergeTag(header: string): string {
  * author typing `{{comp_id}}` still lands on the right field. */
 export const MERGE_TAG_PATTERN = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
 
-export type MergeTagDescriptor = {
+type MergeTagDescriptorBase = {
   /** The tag as an author writes it, e.g. `{{ comp_id }}`. */
   tag: string;
   /** The bare name inside the braces, e.g. `comp_id`. */
   name: string;
-  /** The catalog header it fills from, e.g. `Comp ID`. A field has no second name. */
+  /** The author-facing value name shown in the template catalog. */
   header: string;
-  type: CostarColumnType;
 };
 
-/** Every tag a template may use, in canonical catalog order. */
+export type MergeTagDescriptor = MergeTagDescriptorBase & (
+  | {
+      source: 'catalog';
+      type: CostarColumnType;
+    }
+  | {
+      source: 'merge';
+      type: 'sequence';
+    }
+);
+
+/** The sole merge-only tag. It numbers output sections without pretending the
+ * sequence is a stored field or allowing it into the closed CoStar catalog. */
+export const COMP_NUMBER_MERGE_TAG: MergeTagDescriptor = {
+  tag: '{{ comp_number }}',
+  name: 'comp_number',
+  header: 'Comp Number',
+  source: 'merge',
+  type: 'sequence',
+};
+
+/** Every tag a template may use. The merge-only sequence comes first for
+ * discoverability; database-field tags retain canonical catalog order. */
 export function mergeTagCatalog(): MergeTagDescriptor[] {
-  return costarColumnNames().map(header => ({
+  const catalogTags: MergeTagDescriptor[] = costarColumnNames().map(header => ({
     tag: mergeTag(header),
     name: mergeTagName(header),
     header,
+    source: 'catalog',
     type: costarColumnType(header),
   }));
+  return [COMP_NUMBER_MERGE_TAG, ...catalogTags];
 }
 
 /** One field's merged text. Formatting is `formatCatalogValue` — the same
@@ -62,4 +85,16 @@ export function mergeValuesFromColumns(
     values[mergeTagName(header)] = mergeValue(header, columns[header]);
   }
   return values;
+}
+
+/** Adds the output-only, 1-based comp sequence to one record's field values.
+ * The number is scoped to a single merge request and is never persisted. */
+export function mergeValuesForRecord(
+  columns: Readonly<Record<string, unknown>>,
+  compNumber: number,
+): Record<string, string> {
+  return {
+    ...mergeValuesFromColumns(columns),
+    [COMP_NUMBER_MERGE_TAG.name]: String(compNumber),
+  };
 }

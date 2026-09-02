@@ -4,10 +4,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { MERGE_RECORD_LIMIT, type DocxTemplate } from '@/lib/land-sales/docx-templates';
+import { MERGE_RECORD_LIMIT } from '@/lib/land-sales/docx-templates';
+import type { DocxOutputFlow } from '@/lib/land-sales/output-flows';
 
 /** Uses the filename the route handler chose, so the download is named after
- * the template rather than being renamed here. */
+ * the Output Flow rather than being renamed here. */
 function filenameFrom(disposition: string | null, fallback: string): string {
   const match = disposition ? /filename="([^"]+)"/.exec(disposition) : null;
   return match ? match[1] : fallback;
@@ -23,21 +24,21 @@ function mergeFailureMessage(payload: unknown): string {
 export function MergeDocxDialog({
   open,
   onClose,
-  templates,
+  outputFlows,
   recordIds,
 }: {
   open: boolean;
   onClose: () => void;
-  templates: DocxTemplate[];
+  outputFlows: DocxOutputFlow[];
   recordIds: string[];
 }) {
   const [chosenId, setChosenId] = useState('');
   const [merging, setMerging] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Derived rather than synced in an effect: a template deleted since this
+  // Derived rather than synced in an effect: a flow deleted since this
   // dialog last opened simply falls back to the first one still listed.
-  const templateId = templates.some(t => t.id === chosenId) ? chosenId : templates[0]?.id ?? '';
+  const flowId = outputFlows.some(flow => flow.id === chosenId) ? chosenId : outputFlows[0]?.id ?? '';
   const overLimit = recordIds.length > MERGE_RECORD_LIMIT;
 
   function close() {
@@ -52,7 +53,7 @@ export function MergeDocxDialog({
       const response = await fetch('/land-sales/merge-docx', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ templateId, ids: recordIds }),
+        body: JSON.stringify({ flowId, ids: recordIds }),
       });
       if (!response.ok) {
         const payload: unknown = await response.json().catch(() => null);
@@ -75,7 +76,7 @@ export function MergeDocxDialog({
     }
   }
 
-  const canMerge = Boolean(templateId) && recordIds.length > 0 && !overLimit && !merging;
+  const canMerge = Boolean(flowId) && recordIds.length > 0 && !overLimit && !merging;
 
   return (
     <Dialog
@@ -95,12 +96,12 @@ export function MergeDocxDialog({
     >
       <p style={{ fontSize: 14, color: 'var(--color-text)', margin: '0 0 var(--space-4)' }}>
         {recordIds.length} record{recordIds.length === 1 ? '' : 's'} selected. Each one fills its own
-        copy of the template, all in a single document.
+        routed template body, all in a single document and in this selection order.
       </p>
 
-      {templates.length === 0 ? (
+      {outputFlows.length === 0 ? (
         <p style={{ fontSize: 14, color: 'var(--color-text)', margin: 0 }}>
-          No templates have been set up yet. An admin can add one under{' '}
+          No Output Flows have been set up yet. An admin can create one under{' '}
           <Link href="/admin/database-manager/templates?db=sales" className="btn btn-ghost" style={{ padding: 0 }}>
             Database Manager → Set templates
           </Link>
@@ -108,17 +109,17 @@ export function MergeDocxDialog({
         </p>
       ) : (
         <div className="field">
-          <label htmlFor="mergeTemplate">Template</label>
+          <label htmlFor="mergeOutputFlow">Output</label>
           <select
-            id="mergeTemplate"
+            id="mergeOutputFlow"
             className="input"
-            value={templateId}
+            value={flowId}
             disabled={merging}
             onChange={event => setChosenId(event.target.value)}
             style={{ backgroundColor: 'var(--color-paper)', cursor: 'pointer' }}
           >
-            {templates.map(template => (
-              <option key={template.id} value={template.id}>{template.name}</option>
+            {outputFlows.map(flow => (
+              <option key={flow.id} value={flow.id}>{flow.name}</option>
             ))}
           </select>
         </div>

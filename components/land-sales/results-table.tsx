@@ -22,7 +22,7 @@ import type { ResultColumn } from '@/lib/land-sales/result-columns';
 import { fieldVisibilityId } from '@/lib/land-sales/field-visibility';
 import { keyedRecords, pageSelectionState } from '@/lib/land-sales/row-selection';
 import { toggleResultsSort, type ResultsSort } from '@/lib/land-sales/results-sort';
-import type { DocxTemplate } from '@/lib/land-sales/docx-templates';
+import type { DocxOutputFlow } from '@/lib/land-sales/output-flows';
 
 const stickyHeaderCellStyle = {
   color: 'var(--color-bg)', background: 'var(--color-accent-2-500)', position: 'sticky' as const, top: 0, zIndex: 4,
@@ -103,14 +103,14 @@ export function ResultsToolbar({
   canDelete = false,
   filters,
   sort,
-  mergeTemplates,
+  outputFlows,
 }: {
   columns: ResultColumn[];
   canEdit: boolean;
   canDelete?: boolean;
   filters: LandSaleFilters;
   sort: ResultsSort;
-  mergeTemplates: DocxTemplate[];
+  outputFlows: DocxOutputFlow[];
 }) {
   const filtersKey = encodeFilters(filters).toString();
   useActivateResultsSelection(filtersKey);
@@ -200,7 +200,7 @@ export function ResultsToolbar({
           disabled={selectedCount < 1 || exporting}
           onExportCsv={() => { void exportCsv(); }}
           onMergeDocx={() => setMergeOpen(true)}
-          hasTemplates={mergeTemplates.length > 0}
+          hasOutputFlows={outputFlows.length > 0}
         />
       </div>
 
@@ -227,7 +227,7 @@ export function ResultsToolbar({
       <MergeDocxDialog
         open={mergeOpen}
         onClose={() => setMergeOpen(false)}
-        templates={mergeTemplates}
+        outputFlows={outputFlows}
         recordIds={[...selectedIds]}
       />
     </>

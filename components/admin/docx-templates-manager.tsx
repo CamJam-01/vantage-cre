@@ -5,6 +5,7 @@ import { Check, Copy, Trash2, Upload } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
+import { OutputRouter } from '@/components/admin/output-router';
 import {
   deleteTemplateAction,
   renameTemplateAction,
@@ -13,6 +14,7 @@ import {
 } from '@/app/(app)/admin/database-manager/templates/actions';
 import type { DocxTemplate } from '@/lib/land-sales/docx-templates';
 import type { MergeTagDescriptor } from '@/lib/land-sales/merge-tags';
+import type { DocxOutputFlow } from '@/lib/land-sales/output-flows';
 
 const updatedFormat = new Intl.DateTimeFormat('en-US', {
   month: '2-digit', day: '2-digit', year: 'numeric',
@@ -143,7 +145,9 @@ function TagCatalog({ tags }: { tags: MergeTagDescriptor[] }) {
     const needle = query.trim().toLowerCase();
     if (!needle) return tags;
     return tags.filter(
-      tag => tag.header.toLowerCase().includes(needle) || tag.name.includes(needle),
+      tag => tag.header.toLowerCase().includes(needle)
+        || tag.name.includes(needle)
+        || (tag.source === 'merge' && 'merge sequence output only'.includes(needle)),
     );
   }, [tags, query]);
 
@@ -163,7 +167,7 @@ function TagCatalog({ tags }: { tags: MergeTagDescriptor[] }) {
         className="input"
         type="search"
         value={query}
-        placeholder="Search fields — e.g. sale price, buyer, zoning"
+        placeholder="Search tags — e.g. comp number, sale price, zoning"
         onChange={event => setQuery(event.target.value)}
         aria-label="Search merge tags"
         style={{ marginBottom: 'var(--space-3)' }}
@@ -180,7 +184,12 @@ function TagCatalog({ tags }: { tags: MergeTagDescriptor[] }) {
           <tbody>
             {matches.map(tag => (
               <tr key={tag.name}>
-                <td>{tag.header}</td>
+                <td>
+                  {tag.header}
+                  {tag.source === 'merge' && (
+                    <span className="tag" style={{ marginLeft: 'var(--space-2)' }}>Merge-only</span>
+                  )}
+                </td>
                 <td>
                   <code style={{ fontSize: 13 }}>{tag.tag}</code>
                 </td>
@@ -202,7 +211,7 @@ function TagCatalog({ tags }: { tags: MergeTagDescriptor[] }) {
             {matches.length === 0 && (
               <tr>
                 <td colSpan={3} style={{ textAlign: 'center', color: 'var(--color-neutral-600)', padding: 'var(--space-6)' }}>
-                  No field matches “{query}”.
+                  No merge tag matches “{query}”.
                 </td>
               </tr>
             )}
@@ -215,12 +224,16 @@ function TagCatalog({ tags }: { tags: MergeTagDescriptor[] }) {
 
 export function DocxTemplatesManager({
   templates,
+  flows,
   tags,
   loadError,
+  flowLoadError,
 }: {
   templates: DocxTemplate[];
+  flows: DocxOutputFlow[];
   tags: MergeTagDescriptor[];
   loadError?: string;
+  flowLoadError?: string;
 }) {
   const [uploadState, uploadAction, uploading] = useActionState(uploadTemplateAction, null);
   const [rowState, setRowState] = useState<TemplateActionState>(null);
@@ -294,7 +307,7 @@ export function DocxTemplatesManager({
               {templates.length === 0 ? (
                 <tr>
                   <td colSpan={3} style={{ textAlign: 'center', color: 'var(--color-neutral-600)', padding: 'var(--space-6)' }}>
-                    No templates yet. Upload one above to enable Merge to DOCX.
+                    No templates yet. Upload one above to use it in an Output Flow.
                   </td>
                 </tr>
               ) : templates.map(template => (
@@ -306,14 +319,22 @@ export function DocxTemplatesManager({
         <StatusNote state={rowState} />
       </Blueprint>
 
+      <OutputRouter
+        templates={templates}
+        flows={flows}
+        fields={tags.filter(tag => tag.source === 'catalog').map(tag => tag.header)}
+        loadError={flowLoadError}
+      />
+
       <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: 'var(--color-bg)' }}>
         <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)', marginBottom: 'var(--space-2)' }}>
           Merge tags
         </div>
         <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: '0 0 var(--space-4)' }}>
-          Every field in the Land Sales database has a tag. Paste one into your template and it is
-          replaced with that record&apos;s value; empty fields merge as nothing at all, and a tag
-          that matches no field is left in place so you can spot the typo.
+          Every field in the Land Sales database has a tag. The merge-only{' '}
+          <code>{'{{ comp_number }}'}</code> tag numbers selected comps from 1 in merge order without
+          storing that number in the database. Empty fields merge as nothing at all, and an unknown
+          tag stays visible so you can spot the typo.
         </p>
         <TagCatalog tags={tags} />
       </Blueprint>
