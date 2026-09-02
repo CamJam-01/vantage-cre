@@ -2,11 +2,13 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { costarColumnNames } from './costar-fields.ts';
 import {
+  COMP_NUMBER_MERGE_TAG,
   mergeTag,
   mergeTagCatalog,
   mergeTagName,
   mergeValue,
   mergeValuesFromColumns,
+  mergeValuesForRecord,
 } from './merge-tags.ts';
 
 describe('mergeTagName', () => {
@@ -27,19 +29,26 @@ describe('mergeTagName', () => {
 
 describe('mergeTagCatalog', () => {
   it('is derived from the closed catalog, in canonical order', () => {
-    const catalog = mergeTagCatalog();
+    const catalog = mergeTagCatalog().filter(tag => tag.source === 'catalog');
     assert.deepEqual(catalog.map(tag => tag.header), costarColumnNames());
   });
 
-  it('invents no field outside the catalog', () => {
+  it('keeps every database-field descriptor inside the catalog', () => {
     const headers = new Set(costarColumnNames());
-    assert.equal(mergeTagCatalog().every(tag => headers.has(tag.header)), true);
+    const fieldTags = mergeTagCatalog().filter(tag => tag.source === 'catalog');
+    assert.equal(fieldTags.every(tag => headers.has(tag.header)), true);
   });
 
-  it('gives every field a distinct tag, so no two headers can collide', () => {
+  it('advertises comp_number as the sole merge-only tag', () => {
+    const mergeOnly = mergeTagCatalog().filter(tag => tag.source === 'merge');
+    assert.deepEqual(mergeOnly, [COMP_NUMBER_MERGE_TAG]);
+    assert.equal(costarColumnNames().includes(COMP_NUMBER_MERGE_TAG.header), false);
+  });
+
+  it('gives every field and merge-only value a distinct tag', () => {
     const names = mergeTagCatalog().map(tag => tag.name);
     assert.equal(new Set(names).size, names.length);
-    assert.equal(names.length, costarColumnNames().length);
+    assert.equal(names.length, costarColumnNames().length + 1);
   });
 
   it('carries each column type from costarColumnType', () => {
@@ -55,6 +64,10 @@ describe('mergeValue', () => {
   it('formats exactly as the results table renders the cell', () => {
     assert.equal(mergeValue('Sale Price', 1250000), '$1,250,000');
     assert.equal(mergeValue('Land Area SF', 12500), '12,500');
+    assert.equal(mergeValue('Assessed Value', 2350950), '$2,350,950');
+    assert.equal(mergeValue('Price Per SF Land', '10.2500'), '$10.2500');
+    assert.equal(mergeValue('PropertyID', 9866427), '9866427');
+    assert.equal(mergeValue('Buyer (True) Phone', '9195762500'), '(919) 576-2500');
     assert.equal(mergeValue('Sale Date', '2025-08-14T00:00:00'), '08/14/2025');
     assert.equal(mergeValue('Property City', 'Austin'), 'Austin');
     assert.equal(mergeValue('Has Lab Space', true), 'Yes');
@@ -105,5 +118,18 @@ describe('mergeValuesFromColumns', () => {
     const values = mergeValuesFromColumns({ ...columns, id: 'uuid-here', _sale_date_raw: 'Aug 2025' });
     assert.equal('id' in values, false);
     assert.equal('_sale_date_raw' in values, false);
+    assert.equal(COMP_NUMBER_MERGE_TAG.name in values, false);
+  });
+});
+
+describe('mergeValuesForRecord', () => {
+  it('adds the requested 1-based output sequence without changing field values', () => {
+    const first = mergeValuesForRecord({ 'Property Name': 'Riverbend Tract' }, 1);
+    const second = mergeValuesForRecord({ 'Property Name': 'Kestrel Flats' }, 2);
+
+    assert.equal(first.comp_number, '1');
+    assert.equal(second.comp_number, '2');
+    assert.equal(first.property_name, 'Riverbend Tract');
+    assert.equal(second.property_name, 'Kestrel Flats');
   });
 });

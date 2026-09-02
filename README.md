@@ -113,8 +113,19 @@ These terms have precise meanings here. Use them; do not invent synonyms.
 : The placeholder a template writes to pull in a field's value, in the form
   `{{ comp_id }}`. A tag names a field the only way fields are named — by its
   catalog header — mechanically lowercased with non-alphanumeric runs collapsed
-  to underscores. The tag set is *derived* from the catalog and is never
+  to underscores. Field tags are *derived* from the catalog and are never
   written down separately (§6.1, §6.7).
+
+**Merge sequence tag**
+: `{{ comp_number }}`, the sole merge-only tag. It resolves to the selected
+  record's 1-based position in each generated document, resets for every merge,
+  and is never stored or presented as a database field (§6.1, §6.7).
+
+**Output Flow**
+: A named, Admin-owned DOCX output such as **Land Comps**. It has one required
+  default template and an ordered list of field conditions that may route each
+  selected record to another saved template. Users choose the Output Flow, not
+  its implementation templates (§6.7).
 
 **The provider format**
 : The CoStar CSV export — a fixed, ordered header row. It is simultaneously the
@@ -216,12 +227,14 @@ Seven capabilities. A change either extends one of these or is out of scope.
    only. Export is a Viewer-level capability: reading and taking away what you
    read are the same permission.
 
-   The same selection can instead be **merged into a Word document**: the
-   Admin's chosen template is filled once per selected record and returned as a
-   single `.docx`, one record per section. Merge is the same Viewer-level
-   permission as CSV export and reads the full record, not just the visible
-   fields — but it is a *deliverable*, not the provider format, and does not
-   round-trip (§6.7).
+   The same selection can instead be **merged into a Word document**. The user
+   chooses one Admin-defined Output Flow; its ordered conditions route each
+   full record to a saved template, then the records return as one `.docx` in
+   selected order. Merge is the same Viewer-level permission as CSV export and
+   reads the full record, not just visible fields — but it is a *deliverable*,
+   not the provider format, and does not round-trip (§6.7). A template may use
+   `{{ comp_number }}` to number the records continuously across template
+   changes.
 
 7. **Get records in.** Two paths, both Editor-level:
    - **Bulk import** of a provider-format CSV, whose header row must match the
@@ -245,8 +258,9 @@ Authentication and roles · `Sales → Land` end to end · primary and per-field
 filtering · results table with sort, selection, and CSV export · record detail
 with in-place editing · CSV import with per-row validation · manual record
 entry · global field visibility, ordering, and dividers · **document (DOCX)
-merge from admin-managed Word templates** · user administration · audit log ·
-user profiles with avatars.
+merge through admin-managed Output Flows, conditional template routing, and
+sequential comp numbering** · user administration · audit log · user profiles
+with avatars.
 
 ### Deliberately deferred
 
@@ -335,6 +349,11 @@ answer. Earlier versions of this project carried a hand-picked "core field"
 layer of renamed headers — it is a deprecated prototype relic, not a design, and
 any surviving trace of it is a defect to remove rather than a pattern to follow.
 
+The sole narrow exception is the merge-only `{{ comp_number }}` placeholder.
+It is output structure, not record data: the merge computes it from each
+selected record's 1-based position, resets it for every generated document, and
+never stores, imports, exports, filters, arranges, or presents it as a field.
+
 Changing the catalog is therefore not ordinary work: it changes the product's
 contract with CoStar and with every previously exported file. It requires an
 explicit decision under §5, and then a migration, a constant update, and an
@@ -418,11 +437,30 @@ it**. Do not add a DOCX import path, do not extend the round-trip test to cover
 it, and do not "fix" the merge to preserve raw values — the CSV export is where
 fidelity lives, and it is untouched by any of this.
 
-Two rules do carry over from §6.1. The tag set is **derived from
-`COSTAR_HEADER_ROW`**, so a header added to the catalog gets a merge tag with no
-further work and no second list to update. And a template is **user content, not
-code** — an unrecognized tag is left visibly in place rather than silently
-blanked, so the author can see their own typo.
+Two rules do carry over from §6.1. Every **field tag** is derived from
+`COSTAR_HEADER_ROW`, so a header added to the catalog gets a merge tag with no
+further work and no second field list to update. The one non-field tag is
+`{{ comp_number }}`: it is generated in memory as 1, 2, 3… in selected merge
+order and resets with each document; it never touches storage or the provider
+format. And a template is **user content, not code** — an unrecognized tag is
+left visibly in place rather than silently blanked, so the author can see their
+own typo.
+
+An Output Flow makes the user-facing output stable while templates vary. Every
+flow has a required default template, then zero or more conditions evaluated
+top-to-bottom against each record's stored catalog values. Comparisons are
+case-insensitive text comparisons; the first match wins and the default makes
+routing total. Routing always preserves the selected-record order, and
+`{{ comp_number }}` increments across the whole output rather than restarting
+when the template changes. Hidden fields remain eligible because routing reads
+the full record.
+
+One DOCX package can only have one coherent set of package-wide resources. The
+flow's default template therefore owns page setup, headers, footers, styles,
+numbering, themes, and fonts; alternate templates contribute body content and
+must be created from a compatible base document. A mismatch fails visibly
+rather than returning a corrupt Word file. A template referenced by any flow
+cannot be deleted until that flow is changed or removed.
 
 ---
 
@@ -440,7 +478,7 @@ Enough to orient; the details belong in `AGENTS.md`.
 | Filter encoding/decoding and query construction | `lib/land-sales/` (search-params, query, field-filters) |
 | The arrangement: visibility, ordering, dividers, page layout | `lib/land-sales/` (field-visibility, display-settings) |
 | Import/export, validation, duplicate detection | `lib/land-sales/` (csv, schema, dates) |
-| DOCX merge: tag derivation, WordprocessingML surgery, template metadata | `lib/land-sales/` (merge-tags, docx-xml, docx-merge, docx-templates) |
+| DOCX merge: tags, Output Flow routing, WordprocessingML surgery, template metadata | `lib/land-sales/` (merge-tags, output-flows, docx-xml, docx-merge, docx-templates) |
 | Roles, permissions, user profiles | `lib/users/` |
 | Admin descriptors and configuration handling | `lib/admin/` |
 | Audit logging | `lib/audit/` |
@@ -479,6 +517,8 @@ Match the request to its shape before writing anything.
 | "Make field X filterable" | Confirm the column's Postgres type is classified correctly; the filter tier follows from that type. Nothing else is required — every catalog field is equally a field. |
 | "Only export the columns we're actually using" | **No.** Export is always all 278 positions in canonical order (§4.6, §3A). |
 | "Add a merge tag for field X" | **Nothing to do.** Every catalog field already has one, derived from its header (§3 *Merge tag*). If a tag seems missing, the header is not what you think it is. |
+| "Add a computed/non-field merge tag" | **A scope decision.** `{{ comp_number }}` is the sole approved merge-only tag and must stay output-only; another requires the §5 process and must not silently create a second field model. |
+| "Route different records to different DOCX templates" | **Output Flow configuration.** Define a default and ordered conditions in the Admin Output Router; do not hard-code a field or template choice in the merge route (§6.7). |
 | "Make the merged document keep raw values" / "import a DOCX" | **No.** A merged document is a deliverable, not an interchange format (§6.7). Fidelity lives in the CSV export. |
 | "Add a Rentals/Improved/… database" | **A new spine branch.** Substantial. Follow `Sales → Land` structurally; expect a new catalog, a new table, and a new arrangement, not a parameterized generalization of the existing one. |
 | "Change what import accepts" | Almost always wrong — re-read §6.1 and confirm the round trip survives before proceeding. |

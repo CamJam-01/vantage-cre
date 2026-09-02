@@ -13,18 +13,28 @@ import {
   validateTemplateFile,
 } from '@/lib/land-sales/docx-templates';
 import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
+import {
+  outputFlowDraftError,
+  type OutputFlowDraft,
+} from '@/lib/land-sales/output-flows';
 
 export type TemplateActionState =
   | { status: 'success'; message: string }
   | { status: 'error'; message: string }
   | null;
 
-const DENIED = 'Only active Admin users can manage merge templates.';
+const DENIED = 'Only active Admin users can manage merge templates and Output Flows.';
 
 /** Postgres unique-violation on docx_templates_name_unique. */
 function duplicateNameMessage(message: string, name: string): string {
   return /duplicate key|unique constraint/i.test(message)
     ? `A template named “${name}” already exists.`
+    : message;
+}
+
+function duplicateFlowNameMessage(message: string, name: string): string {
+  return /duplicate key|unique constraint/i.test(message)
+    ? `An Output Flow named “${name}” already exists.`
     : message;
 }
 
@@ -141,7 +151,12 @@ export async function deleteTemplateAction(id: string): Promise<TemplateActionSt
     .maybeSingle();
 
   const { error } = await supabase.from('docx_templates').delete().eq('id', id);
-  if (error) return { status: 'error', message: `Could not delete the template: ${error.message}` };
+  if (error) {
+    const message = error.code === '23503'
+      ? 'This template is used by an Output Flow. Change or delete that flow first.'
+      : `Could not delete the template: ${error.message}`;
+    return { status: 'error', message };
+  }
 
   // Only after the row is gone — an orphaned file is harmless, a row pointing
   // at a deleted file breaks every merge that picks it.
@@ -152,4 +167,60 @@ export async function deleteTemplateAction(id: string): Promise<TemplateActionSt
   await logAudit(supabase, 'Deleted Merge Template', `Land Sales: ${existing?.name ?? id}`);
   refreshTemplateConsumers();
   return { status: 'success', message: `Deleted “${existing?.name ?? 'template'}”.` };
+}
+
+export async function saveOutputFlowAction(draft: OutputFlowDraft): Promise<TemplateActionState> {
+  const { supabase, profile } = await requireAdmin();
+  if (!profile) return { status: 'error', message: DENIED };
+
+  const { data: templates, error: templateError } = await supabase
+    .from('docx_templates')
+    .select('id')
+    .eq('database_key', SALES_DATABASE_KEY);
+  if (templateError) {
+    return { status: 'error', message: `Could not validate saved templates: ${templateError.message}` };
+  }
+
+  const templateIds = new Set((templates ?? []).map(template => String(template.id)));
+  const validationError = outputFlowDraftError(draft, templateIds);
+  if (validationError) return { status: 'error', message: validationError };
+
+  const { error } = await supabase.rpc('save_docx_output_flow', {
+    p_flow_id: draft.id,
+    p_database_key: SALES_DATABASE_KEY,
+    p_name: draft.name.trim(),
+    p_default_template_id: draft.defaultTemplateId,
+    p_conditions: draft.conditions,
+  });
+  if (error) {
+    return {
+      status: 'error',
+      message: duplicateFlowNameMessage(error.message, draft.name.trim()),
+    };
+  }
+
+  await logAudit(
+    supabase,
+    draft.id ? 'Updated DOCX Output Flow' : 'Added DOCX Output Flow',
+    `Land Sales: ${draft.name.trim()}`,
+  );
+  refreshTemplateConsumers();
+  return { status: 'success', message: `Saved output flow “${draft.name.trim()}”.` };
+}
+
+export async function deleteOutputFlowAction(id: string): Promise<TemplateActionState> {
+  const { supabase, profile } = await requireAdmin();
+  if (!profile) return { status: 'error', message: DENIED };
+
+  const { data: existing } = await supabase
+    .from('docx_output_flows')
+    .select('name')
+    .eq('id', id)
+    .maybeSingle();
+  const { error } = await supabase.from('docx_output_flows').delete().eq('id', id);
+  if (error) return { status: 'error', message: `Could not delete the output flow: ${error.message}` };
+
+  await logAudit(supabase, 'Deleted DOCX Output Flow', `Land Sales: ${existing?.name ?? id}`);
+  refreshTemplateConsumers();
+  return { status: 'success', message: `Deleted “${existing?.name ?? 'output flow'}”.` };
 }

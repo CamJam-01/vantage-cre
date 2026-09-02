@@ -1,6 +1,6 @@
 /** Shared shape and validation for the named .docx templates admins manage in
- * Database Manager and users pick from in the results page's Merge to DOCX
- * dialog. Pure — imported by both the server actions and the client form. */
+ * Database Manager and Output Flows reference during Merge to DOCX. Pure —
+ * imported by both the server actions and the client form. */
 
 export const DOCX_TEMPLATE_BUCKET = 'docx-templates';
 
@@ -72,9 +72,8 @@ export function templateObjectPath(id: string): string {
   return `${id}.docx`;
 }
 
-/** Filename for the merged download. Built from the template name so a user
- * with several templates can tell the outputs apart, stripped of anything a
- * Content-Disposition header or a filesystem would object to. */
+/** Filename for the merged download. Built from the user-facing output name,
+ * stripped of anything a Content-Disposition header or filesystem objects to. */
 export function mergedFileName(templateName: string, recordCount: number): string {
   const base = templateName
     .normalize('NFKD')

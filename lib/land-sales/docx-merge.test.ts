@@ -1,8 +1,8 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
-import { DocxTemplateError, mergeDocx } from './docx-merge.ts';
-import { mergeValuesFromColumns } from './merge-tags.ts';
+import { DocxTemplateError, mergeDocx, mergeRoutedDocx } from './docx-merge.ts';
+import { mergeValuesForRecord } from './merge-tags.ts';
 
 /** Round-trips a real .docx package — zip in, zip out — so the parts that only
  * show up once XML meets OPC packaging are covered too. */
@@ -26,6 +26,7 @@ const RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 const DOCUMENT = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document ${W}><w:body>
 <w:p><w:r w:rsidR="a"><w:t>Comp </w:t></w:r><w:r w:rsidR="b"><w:t>{{ prop</w:t></w:r><w:r w:rsidR="c"><w:t>erty_na</w:t></w:r><w:r w:rsidR="d"><w:t>me }}</w:t></w:r></w:p>
+<w:p><w:r><w:t>Sequence </w:t></w:r><w:r><w:t>{{ comp_</w:t></w:r><w:r><w:t>number }}</w:t></w:r></w:p>
 <w:p><w:r><w:t xml:space="preserve">Sold for {{ sale_price }} on {{ sale_date }} in {{ property_city }}.</w:t></w:r></w:p>
 <w:p><w:r><w:t>Zoning: {{ zoning }} / Buyer: {{ buyer_true_company }}.</w:t></w:r></w:p>
 <w:tbl><w:tr><w:tc><w:p><w:r><w:t>{{ comp_id }}</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
@@ -43,6 +44,19 @@ async function buildTemplate(): Promise<Uint8Array> {
   zip.file('word/document.xml', DOCUMENT);
   zip.file('word/header1.xml', HEADER);
   zip.file('word/styles.xml', `<?xml version="1.0"?><w:styles ${W}/>`);
+  return zip.generateAsync({ type: 'uint8array' });
+}
+
+async function buildRoutedTemplate(label: string, styles = '<w:style w:type="paragraph" w:styleId="Shared"/>'): Promise<Uint8Array> {
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', CONTENT_TYPES);
+  zip.file('_rels/.rels', RELS);
+  zip.file('word/document.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document ${W}><w:body>
+<w:p><w:pPr><w:pStyle w:val="Shared"/></w:pPr><w:r><w:t>${label} {{ comp_number }}: {{ property_name }}</w:t></w:r></w:p>
+<w:sectPr><w:pgSz w:w="12240" w:h="15840"/></w:sectPr>
+</w:body></w:document>`);
+  zip.file('word/styles.xml', `<?xml version="1.0"?><w:styles ${W}>${styles}</w:styles>`);
   return zip.generateAsync({ type: 'uint8array' });
 }
 
@@ -77,7 +91,10 @@ describe('mergeDocx', () => {
   let bodyText: string;
 
   before(async () => {
-    const bytes = await mergeDocx(await buildTemplate(), records.map(mergeValuesFromColumns));
+    const bytes = await mergeDocx(
+      await buildTemplate(),
+      records.map((record, index) => mergeValuesForRecord(record, index + 1)),
+    );
     merged = await JSZip.loadAsync(bytes);
     documentXml = await merged.file('word/document.xml')!.async('string');
     bodyText = documentXml.replace(/<[^>]+>/g, '');
@@ -102,6 +119,12 @@ describe('mergeDocx', () => {
     assert.equal(bodyText.indexOf('Riverbend Tract') < bodyText.indexOf('Kestrel Flats'), true);
     assert.match(bodyText, /Sold for \$1,250,000 on 08\/14\/2025 in Austin\./);
     assert.match(bodyText, /Sold for \$980,000 on 03\/02\/2024 in Round Rock\./);
+  });
+
+  it('numbers merged comps sequentially in merge order', () => {
+    assert.equal((bodyText.match(/Sequence 1/g) ?? []).length, 1);
+    assert.equal((bodyText.match(/Sequence 2/g) ?? []).length, 1);
+    assert.equal(bodyText.indexOf('Sequence 1') < bodyText.indexOf('Sequence 2'), true);
   });
 
   it('fills tags inside table cells', () => {
@@ -155,5 +178,37 @@ describe('mergeDocx', () => {
   it('rejects a merge with no records', async () => {
     const template = await buildTemplate();
     await assert.rejects(() => mergeDocx(template, []), DocxTemplateError);
+  });
+});
+
+describe('mergeRoutedDocx', () => {
+  it('switches template bodies per record while preserving record order and sequence', async () => {
+    const sales = await buildRoutedTemplate('Sale');
+    const listings = await buildRoutedTemplate('Listing');
+    const bytes = await mergeRoutedDocx(sales, [
+      { templateBytes: sales, values: mergeValuesForRecord({ 'Property Name': 'Riverbend' }, 1) },
+      { templateBytes: listings, values: mergeValuesForRecord({ 'Property Name': 'Kestrel' }, 2) },
+      { templateBytes: sales, values: mergeValuesForRecord({ 'Property Name': 'Cedar' }, 3) },
+    ]);
+    const zip = await JSZip.loadAsync(bytes);
+    const text = (await zip.file('word/document.xml')!.async('string')).replace(/<[^>]+>/g, '');
+
+    assert.match(text, /Sale 1: Riverbend/);
+    assert.match(text, /Listing 2: Kestrel/);
+    assert.match(text, /Sale 3: Cedar/);
+    assert.equal(text.indexOf('Riverbend') < text.indexOf('Kestrel'), true);
+    assert.equal(text.indexOf('Kestrel') < text.indexOf('Cedar'), true);
+  });
+
+  it('rejects alternate templates whose shared Word styles differ', async () => {
+    const sales = await buildRoutedTemplate('Sale');
+    const incompatible = await buildRoutedTemplate(
+      'Listing',
+      '<w:style w:type="paragraph" w:styleId="Different"/>',
+    );
+    await assert.rejects(
+      () => mergeRoutedDocx(sales, [{ templateBytes: incompatible, values: {} }]),
+      /must share Word styles/,
+    );
   });
 });

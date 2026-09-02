@@ -7,8 +7,8 @@ import { resultColumns } from '@/lib/land-sales/result-columns';
 import { loadDisplaySettings } from '@/lib/land-sales/display-settings';
 import { filterVisibleColumns, orderColumns, SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
 import { canDelete, canEdit, getCurrentUserProfile } from '@/lib/users/roles';
-import { listDocxTemplates } from '@/lib/land-sales/docx-template-store';
-import type { DocxTemplate } from '@/lib/land-sales/docx-templates';
+import { listDocxOutputFlows } from '@/lib/land-sales/output-flow-store';
+import type { DocxOutputFlow } from '@/lib/land-sales/output-flows';
 import { ResultsToolbar } from '@/components/land-sales/results-table';
 import { LandSalesResults, ResultsFallback } from './land-sales-results';
 
@@ -23,12 +23,12 @@ export default async function LandSalesPage({ searchParams }: PageProps) {
   const sort = decodeSort(params.sort, params.dir);
 
   const supabase = await createClient();
-  const [profile, display, mergeTemplates] = await Promise.all([
+  const [profile, display, outputFlows] = await Promise.all([
     getCurrentUserProfile(supabase),
     loadDisplaySettings(supabase, SALES_DATABASE_KEY),
     // Only the Merge to DOCX action depends on this, so a failure to read it
     // must not take the results page down with it.
-    listDocxTemplates(supabase).catch(() => [] as DocxTemplate[]),
+    listDocxOutputFlows(supabase).catch(() => [] as DocxOutputFlow[]),
   ]);
   const columns = orderColumns(resultColumns(), display.fieldOrder);
   const visibleColumns = filterVisibleColumns(columns, display.hidden);
@@ -43,7 +43,7 @@ export default async function LandSalesPage({ searchParams }: PageProps) {
         canDelete={active && canDelete(role)}
         filters={filters}
         sort={sort}
-        mergeTemplates={mergeTemplates}
+        outputFlows={outputFlows}
       />
       <Suspense fallback={<ResultsFallback />}>
         <LandSalesResults

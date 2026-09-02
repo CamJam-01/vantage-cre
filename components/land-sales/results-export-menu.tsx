@@ -7,12 +7,12 @@ export function ResultsExportMenu({
   disabled,
   onExportCsv,
   onMergeDocx,
-  hasTemplates,
+  hasOutputFlows,
 }: {
   disabled: boolean;
   onExportCsv: () => void;
   onMergeDocx: () => void;
-  hasTemplates: boolean;
+  hasOutputFlows: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -74,8 +74,8 @@ export function ResultsExportMenu({
         <button
           type="button"
           role="menuitem"
-          disabled={!hasTemplates}
-          title={hasTemplates ? undefined : 'An admin needs to add a template in Database Manager first'}
+          disabled={!hasOutputFlows}
+          title={hasOutputFlows ? undefined : 'An admin needs to create an Output Flow in Database Manager first'}
           onClick={() => {
             onMergeDocx();
             setOpen(false);
