@@ -81,9 +81,10 @@ These terms have precise meanings here. Use them; do not invent synonyms.
 
 **Property-type path**
 : Within Sales, a further split by what was transacted: **Land**, **Improved**,
-  **Ground Leases**. Only *Land* is built. `Sales → Land` is therefore the one
-  path that works end to end, and is the reference implementation for every
-  path added later.
+  **Ground Leases**. Land and Improved are built; they share the CoStar sales
+  catalog and keep separate tables and arrangements. Ground Leases is still
+  deferred. `Sales → Land` remains the reference implementation for paths whose
+  catalog is not yet known.
 
 **Field**
 : One named attribute of a record. **A field *is* a CoStar header string** —
@@ -138,10 +139,11 @@ These terms have precise meanings here. Use them; do not invent synonyms.
 ## 3A. The field catalog — closed and canonical
 
 **One header set governs everything.** The CoStar header row in Appendix A is
-the field catalog, the `land_sales` column set, the CSV import template, and
-the CSV export format — **all four are the same list, in the same order, with
+the field catalog, the `land_sales` and `improved_sales` columns, the CSV import template, and
+the CSV export format — **the same list, in the same order, with
 the same spelling**. There is no mapping layer, no alias, no renamed subset, no
-app-specific field identifier.
+app-specific field identifier. Land and Improved are separate tables (and
+separate arrangements); they are not separate catalogs.
 
 **The catalog is closed.** No header may be added, removed, renamed, reordered,
 aliased, or given a display synonym — not in the database, not in the template,
@@ -175,7 +177,8 @@ Any future non-catalog storage column joins this table or it does not exist.
 
 As of this writing the four representations agree exactly: the canonical list in
 Appendix A, the `COSTAR_HEADER_ROW` constant in `lib/land-sales/costar-fields.ts`,
-the header list in the creating migration, and the live `land_sales` columns
+the header list in the creating migration, and the live `land_sales` /
+`improved_sales` columns
 (277 catalog columns in canonical order, plus `id` and `_sale_date_raw`). **Appendix A is the
 contract; the code constant is its executable copy.** A test must assert they
 remain byte-identical — that test is what makes the single-source claim real
@@ -255,7 +258,7 @@ prevent the operation it describes from succeeding.
 
 ### Built and load-bearing
 
-Authentication and roles · `Sales → Land` end to end · primary and per-field
+Authentication and roles · `Sales → Land` and `Sales → Improved` end to end · primary and per-field
 filtering · results table with sort, selection, and CSV export · record detail
 with in-place editing · CSV import with per-row validation · manual record
 entry · global field visibility, ordering, and dividers · **document (DOCX)
@@ -265,7 +268,7 @@ with avatars.
 
 ### Deliberately deferred
 
-Rentals, Expenses, and Costs databases · Improved and Ground Lease paths ·
+Rentals, Expenses, and Costs databases · Ground Lease path ·
 live schema editing (adding, retyping, or removing fields from the database
 itself, as opposed to configuring their display).
 
@@ -421,7 +424,8 @@ This is a small, single-tenant internal tool with a handful of users. Favor the
 direct implementation over the general one. Do not introduce abstraction layers,
 plugin systems, or configuration surfaces in anticipation of the deferred
 features in §5 — build them when the feature is actually built, informed by
-`Sales → Land` as the worked example.
+`Sales → Land` as the worked example. Improved shares that catalog on a second
+table and arrangement; a path with a *different* catalog is still a new spine.
 
 ### 6.7 A merged document is a deliverable, not an interchange format
 
@@ -521,7 +525,7 @@ Match the request to its shape before writing anything.
 | "Add a computed/non-field merge tag" | **A scope decision.** `{{ comp_number }}` is the sole approved merge-only tag and must stay output-only; another requires the §5 process and must not silently create a second field model. |
 | "Route different records to different DOCX templates" | **Output Flow configuration.** Define a default and ordered conditions in the Admin Output Router; do not hard-code a field or template choice in the merge route (§6.7). |
 | "Make the merged document keep raw values" / "import a DOCX" | **No.** A merged document is a deliverable, not an interchange format (§6.7). Fidelity lives in the CSV export. |
-| "Add a Rentals/Improved/… database" | **A new spine branch.** Substantial. Follow `Sales → Land` structurally; expect a new catalog, a new table, and a new arrangement, not a parameterized generalization of the existing one. |
+| "Add a Rentals/Ground Lease/… database" | **A new spine branch.** Substantial. Follow `Sales → Land` structurally; expect a new catalog, a new table, and a new arrangement, not a parameterized generalization of the existing one. Improved is already built: same catalog as Land, separate table and arrangement. |
 | "Change what import accepts" | Almost always wrong — re-read §6.1 and confirm the round trip survives before proceeding. |
 | "Let users customize their own view" | **Out of scope** as stated (§2, §5). Raise it rather than building it. |
 | "Change a color/spacing/border" | Through design-system tokens only (§6.5). |
@@ -560,7 +564,7 @@ you may expect.
 (`Sprinklers` appears at positions 259 and 260). It defines, identically and
 simultaneously:
 
-- the `public.land_sales` columns (these 277 names, plus the `id` and
+- the `public.land_sales` and `public.improved_sales` columns (these 277 names, plus the `id` and
   `_sale_date_raw` carve-outs);
 - the CSV **import** template header row;
 - the CSV **export** header row;

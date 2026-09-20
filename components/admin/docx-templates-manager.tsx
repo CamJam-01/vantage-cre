@@ -15,6 +15,7 @@ import {
 import type { DocxTemplate } from '@/lib/land-sales/docx-templates';
 import type { MergeTagDescriptor } from '@/lib/land-sales/merge-tags';
 import type { DocxOutputFlow } from '@/lib/land-sales/output-flows';
+import type { DatabaseKey } from '@/lib/land-sales/field-visibility';
 
 const updatedFormat = new Intl.DateTimeFormat('en-US', {
   month: '2-digit', day: '2-digit', year: 'numeric',
@@ -223,12 +224,16 @@ function TagCatalog({ tags }: { tags: MergeTagDescriptor[] }) {
 }
 
 export function DocxTemplatesManager({
+  databaseKey,
+  label,
   templates,
   flows,
   tags,
   loadError,
   flowLoadError,
 }: {
+  databaseKey: DatabaseKey;
+  label: string;
   templates: DocxTemplate[];
   flows: DocxOutputFlow[];
   tags: MergeTagDescriptor[];
@@ -257,6 +262,7 @@ export function DocxTemplatesManager({
         </p>
 
         <form ref={formRef} action={uploadAction} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+          <input type="hidden" name="database_key" value={databaseKey} />
           <div className="field">
             <label htmlFor="templateName">Template name</label>
             <input
@@ -320,6 +326,7 @@ export function DocxTemplatesManager({
       </Blueprint>
 
       <OutputRouter
+        databaseKey={databaseKey}
         templates={templates}
         flows={flows}
         fields={tags.filter(tag => tag.source === 'catalog').map(tag => tag.header)}
@@ -331,7 +338,7 @@ export function DocxTemplatesManager({
           Merge tags
         </div>
         <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: '0 0 var(--space-4)' }}>
-          Every field in the Land Sales database has a tag. The merge-only{' '}
+          Every field in the {label} database has a tag. The merge-only{' '}
           <code>{'{{ comp_number }}'}</code> tag numbers selected comps from 1 in merge order without
           storing that number in the database. Empty fields merge as nothing at all, and an unknown
           tag stays visible so you can spot the typo.

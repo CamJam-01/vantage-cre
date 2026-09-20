@@ -123,9 +123,9 @@ The technical expression of README §6. Everything here is testable, and everyth
 
 **README Appendix A is the contract.** `COSTAR_HEADER_ROW` in `lib/land-sales/costar-fields.ts` is its executable copy and must stay byte-identical to it: **278 header positions, 277 distinct names** (`Sprinklers` at positions 259 and 260; Postgres cannot hold two columns of one name, so both positions share one column).
 
-One header set is the catalog, the `land_sales` columns, the import template, and the export format — see README §3A. There is no mapping layer, no alias, no app-specific field identifier, and no subset with its own names or types. A field *is* a header string.
+One header set is the catalog, the `land_sales` and `improved_sales` columns, the import template, and the export format — see README §3A. There is no mapping layer, no alias, no app-specific field identifier, and no subset with its own names or types. A field *is* a header string.
 
-`land_sales` column names are those header strings **verbatim**, spaces, parentheses and all. Consequences:
+`land_sales` and `improved_sales` column names are those header strings **verbatim**, spaces, parentheses and all. Consequences:
 
 - Always quote identifiers in queries: `.select('"Secondary Type"')`, `.eq('Property State', v)`.
 - Derive every field list from `COSTAR_HEADER_ROW`. Never hand-maintain a second list of field names anywhere.
@@ -144,7 +144,7 @@ Any new non-catalog storage column joins that table in README §3A, or it is not
 
 **Display never affects storage.** Field visibility and ordering are admin presentation configuration. Hiding a field never drops a column; reordering never reorders the CSV. Export always emits all 278 positions in canonical order, whatever the arrangement says.
 
-**Required drift guard.** A test must assert that README Appendix A, `COSTAR_HEADER_ROW`, and the live `land_sales` columns (277 catalog names in order, plus `id` and `_sale_date_raw`) agree, and that `costar-column-types.ts` matches the live Postgres types. Without it, "single source of truth" is aspirational.
+**Required drift guard.** A test must assert that README Appendix A, `COSTAR_HEADER_ROW`, and the live `land_sales` / `improved_sales` columns (277 catalog names in order, plus `id` and `_sale_date_raw`) agree, and that `costar-column-types.ts` matches the live Postgres types. Without it, "single source of truth" is aspirational.
 
 ### 3.2 Validation
 

@@ -2,16 +2,18 @@
  *
  * README Appendix A is the contract; `COSTAR_HEADER_ROW` is its executable
  * copy. Four representations must agree — the README, this constant, the
- * creating migration, and the live `land_sales` columns — and nothing else
+ * creating migration, and the live `land_sales` / `improved_sales` columns — and nothing else
  * enforces it. These tests cover the two that live in the repository.
  *
  * The live database is checked out-of-band, since a unit test has no
  * credentials. Run this and expect 277 catalog names in canonical order plus
- * the documented carve-outs (`id`, `_sale_date_raw`), and nothing else:
+ * the documented carve-outs (`id`, `_sale_date_raw`), and nothing else, on
+ * both sales tables:
  *
  *   select json_agg(column_name order by ordinal_position)
  *   from information_schema.columns
- *   where table_schema = 'public' and table_name = 'land_sales';
+ *   where table_schema = 'public' and table_name in ('land_sales', 'improved_sales')
+ *   group by table_name;
  */
 
 import { describe, it } from 'node:test';
@@ -177,5 +179,19 @@ describe('system-column carve-out migrations', () => {
     );
     assert.match(sql, new RegExp(`add column if not exists ${SALE_DATE_RAW_COLUMN} text`));
     assert.equal(COSTAR_HEADERS.includes(SALE_DATE_RAW_COLUMN), false);
+  });
+});
+
+describe('improved_sales clone', () => {
+  it('creates improved_sales from land_sales without copying colliding index names', () => {
+    const sql = readFileSync(
+      fileURLToPath(new URL('../../supabase/migrations/20260920120000_create_improved_sales.sql', import.meta.url)),
+      'utf8',
+    );
+    assert.match(sql, /create table public\.improved_sales/);
+    assert.match(sql, /like public\.land_sales including defaults including generated/);
+    assert.match(sql, /improved_sales_id_pkey/);
+    assert.match(sql, /improved_sales_sale_date_idx/);
+    assert.equal(sql.includes('including all'), false);
   });
 });

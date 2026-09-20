@@ -6,6 +6,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { MERGE_RECORD_LIMIT } from '@/lib/land-sales/docx-templates';
 import type { DocxOutputFlow } from '@/lib/land-sales/output-flows';
+import type { SalesPath } from '@/lib/land-sales/sales-path';
 
 /** Uses the filename the route handler chose, so the download is named after
  * the Output Flow rather than being renamed here. */
@@ -24,11 +25,13 @@ function mergeFailureMessage(payload: unknown): string {
 export function MergeDocxDialog({
   open,
   onClose,
+  path,
   outputFlows,
   recordIds,
 }: {
   open: boolean;
   onClose: () => void;
+  path: SalesPath;
   outputFlows: DocxOutputFlow[];
   recordIds: string[];
 }) {
@@ -50,7 +53,7 @@ export function MergeDocxDialog({
     setMerging(true);
     setError(null);
     try {
-      const response = await fetch('/land-sales/merge-docx', {
+      const response = await fetch(`${path.basePath}/merge-docx`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ flowId, ids: recordIds }),

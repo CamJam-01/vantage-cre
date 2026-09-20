@@ -9,8 +9,9 @@ import {
   makeCsvTemplate, parseCsv, validateDataRows, type ImportRowResult,
 } from '@/lib/land-sales/csv';
 import { importLandSales, type ImportOutcome } from '@/app/(app)/land-sales/actions';
+import type { SalesPath } from '@/lib/land-sales/sales-path';
 
-export function ImportLandSalesClient() {
+export function ImportLandSalesClient({ path }: { path: SalesPath }) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [csvText, setCsvText] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -59,7 +60,7 @@ export function ImportLandSalesClient() {
   async function handleImport(importNonDuplicates = false) {
     if (!csvText) return;
     setImporting(true);
-    const result = await importLandSales(csvText, importNonDuplicates ? { importNonDuplicates: true } : undefined);
+    const result = await importLandSales(path.id, csvText, importNonDuplicates ? { importNonDuplicates: true } : undefined);
     setImporting(false);
     setOutcome(result);
   }
@@ -86,7 +87,7 @@ export function ImportLandSalesClient() {
     }}>
       <div style={{ width: '100%', maxWidth: 760 }}>
         <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: '0 0 var(--space-2)' }}>
-          Import Land Sales CSV
+          Import {path.label} CSV
         </h1>
         <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: '0 0 var(--space-2)' }}>
           Use the template headers exactly. Table columns can only be added in Supabase, not from this import.
@@ -95,7 +96,7 @@ export function ImportLandSalesClient() {
           type="button"
           className="btn btn-ghost"
           style={{ padding: 0, marginBottom: 'var(--space-6)' }}
-          onClick={() => downloadCsv('land-sales-import-template.csv', makeCsvTemplate())}
+          onClick={() => downloadCsv(path.importTemplateFilename, makeCsvTemplate())}
         >
           Download CSV template
         </button>
@@ -207,7 +208,7 @@ export function ImportLandSalesClient() {
                   </ul>
                 </div>
               )}
-              <Link href="/land-sales" className="btn btn-primary">Back to results</Link>
+              <Link href={path.basePath} className="btn btn-primary">Back to results</Link>
             </div>
           )}
         </Blueprint>

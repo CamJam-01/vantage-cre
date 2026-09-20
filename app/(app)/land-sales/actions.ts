@@ -17,8 +17,8 @@ import {
 } from '@/lib/users/roles';
 import { chunkIds } from '@/lib/land-sales/export-ids';
 import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
-import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
 import { mergeVisibleUpdate, sanitizeVisibleCreate } from '@/lib/land-sales/visible-record-input';
+import { salesPathFromId, type SalesPath, type SalesPathId } from '@/lib/land-sales/sales-path';
 
 export async function signOutAction() {
   const supabase = await createClient();
@@ -27,6 +27,8 @@ export async function signOutAction() {
 }
 
 export type CreateFormState = { errors?: Record<string, string>; message?: string } | null;
+
+const UNKNOWN_PATH = 'This sales path is not available.';
 
 function recordLabel(columns: Record<string, unknown>, fallback: string): string {
   const address = columns['Property Address'];
@@ -44,12 +46,29 @@ function safeNextPath(value: FormDataEntryValue | null): string | null {
   return value;
 }
 
-export async function createLandSale(_prevState: CreateFormState, formData: FormData): Promise<CreateFormState> {
+function requireSalesPath(pathId: SalesPathId | string): SalesPath | null {
+  return salesPathFromId(pathId);
+}
+
+function revalidateSalesPath(path: SalesPath) {
+  revalidatePath(path.basePath);
+  revalidatePath(`${path.basePath}/new`);
+  revalidatePath(`${path.basePath}/[id]`, 'page');
+}
+
+export async function createLandSale(
+  pathId: SalesPathId,
+  _prevState: CreateFormState,
+  formData: FormData,
+): Promise<CreateFormState> {
+  const path = requireSalesPath(pathId);
+  if (!path) return { message: UNKNOWN_PATH };
+
   const supabase = await createClient();
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { message: denied };
 
-  const settings = await loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
+  const settings = await loadHiddenFieldIds(supabase, path.databaseKey)
     .then(hidden => ({ hidden, error: null as string | null }))
     .catch((error: unknown) => ({
       hidden: new Set<string>(),
@@ -64,25 +83,33 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
   const sanitized = sanitizeVisibleCreate(submitted, settings.hidden);
 
   const { error } = await supabase
-    .from('land_sales')
+    .from(path.table)
     .insert(landSaleToRow(sanitized));
 
   if (error) return { message: error.message };
   await logAudit(supabase, 'Created Record', `${recordLabel(sanitized.columns, 'record')} added`);
-  redirect(next ?? '/land-sales');
+  redirect(next ?? path.basePath);
 }
 
-/** Bound to the record id via `updateLandSale.bind(null, id)` when wired into
+/** Bound via `updateLandSale.bind(null, path.id, id)` when wired into
  * useActionState. Editing a visible date supersedes its raw import flag;
  * hiding the date preserves both stored date fields untouched. */
-export async function updateLandSale(id: string, _prevState: CreateFormState, formData: FormData): Promise<CreateFormState> {
+export async function updateLandSale(
+  pathId: SalesPathId,
+  id: string,
+  _prevState: CreateFormState,
+  formData: FormData,
+): Promise<CreateFormState> {
+  const path = requireSalesPath(pathId);
+  if (!path) return { message: UNKNOWN_PATH };
+
   const supabase = await createClient();
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { message: denied };
 
   const [existingResult, settings] = await Promise.all([
-    supabase.from('land_sales').select('*').eq('id', id).maybeSingle(),
-    loadHiddenFieldIds(supabase, SALES_DATABASE_KEY)
+    supabase.from(path.table).select('*').eq('id', id).maybeSingle(),
+    loadHiddenFieldIds(supabase, path.databaseKey)
       .then(hidden => ({ hidden, error: null as string | null }))
       .catch((error: unknown) => ({
         hidden: new Set<string>(),
@@ -104,38 +131,44 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
   const submitted = columnsFromFormData(formData, settings.hidden);
   const merged = mergeVisibleUpdate(existing, submitted, settings.hidden);
   const { error } = await supabase
-    .from('land_sales')
+    .from(path.table)
     .update(landSaleToRow(merged))
     .eq('id', id);
 
   if (error) return { message: error.message };
   await logAudit(supabase, 'Updated Record', `${recordLabel(merged.columns, id)} updated`);
   if (next) redirect(next);
-  redirect(from ? `/land-sales/${id}?from=${encodeURIComponent(String(from))}` : `/land-sales/${id}`);
+  redirect(from ? `${path.basePath}/${id}?from=${encodeURIComponent(String(from))}` : `${path.basePath}/${id}`);
 }
 
 export type DeleteFormState = { error?: string } | null;
 
-export async function deleteLandSale(id: string): Promise<DeleteFormState> {
+export async function deleteLandSale(pathId: SalesPathId, id: string): Promise<DeleteFormState> {
+  const path = requireSalesPath(pathId);
+  if (!path) return { error: UNKNOWN_PATH };
+
   const supabase = await createClient();
   const denied = await landSaleDeleteDeniedMessage(supabase);
   if (denied) return { error: denied };
 
   const { data: existing } = await supabase
-    .from('land_sales')
+    .from(path.table)
     .select('"Property Address","Parcel Number 1 (Min)"')
     .eq('id', id)
     .maybeSingle();
 
-  const { error } = await supabase.from('land_sales').delete().eq('id', id);
+  const { error } = await supabase.from(path.table).delete().eq('id', id);
   if (error) return { error: error.message };
 
   await logAudit(supabase, 'Deleted Record', `${existing ? recordLabel(existing as Record<string, unknown>, id) : id} deleted`);
-  revalidatePath('/land-sales');
-  redirect('/land-sales');
+  revalidateSalesPath(path);
+  redirect(path.basePath);
 }
 
-export async function deleteLandSales(ids: string[]): Promise<DeleteFormState> {
+export async function deleteLandSales(pathId: SalesPathId, ids: string[]): Promise<DeleteFormState> {
+  const path = requireSalesPath(pathId);
+  if (!path) return { error: UNKNOWN_PATH };
+
   const supabase = await createClient();
   const denied = await landSaleDeleteDeniedMessage(supabase);
   if (denied) return { error: denied };
@@ -146,7 +179,7 @@ export async function deleteLandSales(ids: string[]): Promise<DeleteFormState> {
   // Same chunking as the export read path: a selection spanning several pages
   // of uuids overflows PostgREST's URL limit when sent as one `in` filter.
   for (const chunk of chunkIds(unique)) {
-    const { error } = await supabase.from('land_sales').delete().in('id', chunk);
+    const { error } = await supabase.from(path.table).delete().in('id', chunk);
     if (error) return { error: error.message };
   }
 
@@ -155,7 +188,7 @@ export async function deleteLandSales(ids: string[]): Promise<DeleteFormState> {
     'Deleted Records',
     `${unique.length} record${unique.length === 1 ? '' : 's'} deleted`,
   );
-  revalidatePath('/land-sales');
+  revalidateSalesPath(path);
   return null;
 }
 
@@ -174,9 +207,13 @@ export type ImportOutcome = {
  * are rejected rather than mapped or stored as new fields. Duplicates halt
  * the import until the caller explicitly chooses to import the rest. */
 export async function importLandSales(
+  pathId: SalesPathId,
   csvText: string,
   options?: { importNonDuplicates?: boolean },
 ): Promise<ImportOutcome> {
+  const path = requireSalesPath(pathId);
+  if (!path) return { rowErrors: [UNKNOWN_PATH] };
+
   const supabase = await createClient();
   const denied = await landSaleWriteDeniedMessage(supabase);
   if (denied) return { rowErrors: [denied] };
@@ -207,7 +244,7 @@ export async function importLandSales(
   const warnings = results.flatMap(r => (r.ok ? r.warnings ?? [] : []));
 
   const { data: existing } = await supabase
-    .from('land_sales')
+    .from(path.table)
     .select(RECORD_KEY_COLUMNS.map(name => `"${name}"`).join(','));
   const existingRows = Array.isArray(existing) ? existing : [];
   const existingKeys = new Set(
@@ -233,7 +270,7 @@ export async function importLandSales(
   const chunkSize = 500;
   for (let i = 0; i < fresh.length; i += chunkSize) {
     const chunk = fresh.slice(i, i + chunkSize);
-    const { error, count } = await supabase.from('land_sales').insert(chunk, { count: 'exact' });
+    const { error, count } = await supabase.from(path.table).insert(chunk, { count: 'exact' });
     if (error) return { rowErrors: [error.message], duplicates, inserted };
     inserted += count ?? chunk.length;
   }

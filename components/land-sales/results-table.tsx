@@ -23,6 +23,7 @@ import { fieldVisibilityId } from '@/lib/land-sales/field-visibility';
 import { keyedRecords, pageSelectionState } from '@/lib/land-sales/row-selection';
 import { toggleResultsSort, type ResultsSort } from '@/lib/land-sales/results-sort';
 import type { DocxOutputFlow } from '@/lib/land-sales/output-flows';
+import { selectionFiltersKey, type SalesPath } from '@/lib/land-sales/sales-path';
 
 const stickyHeaderCellStyle = {
   color: 'var(--color-bg)', background: 'var(--color-accent-2-500)', position: 'sticky' as const, top: 0, zIndex: 4,
@@ -100,6 +101,7 @@ function exportFailureMessage(payload: unknown): string {
 }
 
 export function ResultsToolbar({
+  path,
   columns,
   canEdit,
   canDelete = false,
@@ -107,6 +109,7 @@ export function ResultsToolbar({
   sort,
   outputFlows,
 }: {
+  path: SalesPath;
   columns: ResultColumn[];
   canEdit: boolean;
   canDelete?: boolean;
@@ -114,7 +117,7 @@ export function ResultsToolbar({
   sort: ResultsSort;
   outputFlows: DocxOutputFlow[];
 }) {
-  const filtersKey = encodeFilters(filters).toString();
+  const filtersKey = selectionFiltersKey(path, encodeFilters(filters).toString());
   useActivateResultsSelection(filtersKey);
   const { selectedIds, selectedCount, clear } = useResultsSelection(filtersKey);
   const router = useRouter();
@@ -130,7 +133,7 @@ export function ResultsToolbar({
     setExporting(true);
     setExportError(null);
     try {
-      const response = await fetch('/land-sales/export', {
+      const response = await fetch(`${path.basePath}/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: [...selectedIds] }),
@@ -141,7 +144,7 @@ export function ResultsToolbar({
         setExportError(message);
         return;
       }
-      downloadCsv('land-sales-export.csv', await response.text());
+      downloadCsv(path.exportFilename, await response.text());
     } catch {
       setExportError('Could not export the selected records.');
     } finally {
@@ -152,7 +155,7 @@ export function ResultsToolbar({
   async function handleDelete() {
     setDeleting(true);
     setDeleteError(null);
-    const result = await deleteLandSales([...selectedIds]);
+    const result = await deleteLandSales(path.id, [...selectedIds]);
     setDeleting(false);
     if (result?.error) {
       setDeleteError(result.error);
@@ -172,7 +175,7 @@ export function ResultsToolbar({
       <div style={{ width: '100%', boxSizing: 'border-box', padding: 'var(--space-6) var(--space-6) var(--space-4)', background: 'var(--color-accent-2-200)', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
           <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: 0 }}>
-            Land Sales Results
+            {path.label} Results
           </h1>
           <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
             {selectionLabel}
@@ -184,7 +187,7 @@ export function ResultsToolbar({
       </div>
 
       <div className="results-fab-dock">
-        {canEdit && <ResultsAddMenu />}
+        {canEdit && <ResultsAddMenu path={path} />}
         {canDelete && (
           <Button
             variant="icon"
@@ -197,7 +200,7 @@ export function ResultsToolbar({
             <Minus size={20} strokeWidth={1.5} aria-hidden />
           </Button>
         )}
-        <FiltersSidebar filters={filters} columns={columns} sort={sort} />
+        <FiltersSidebar path={path} filters={filters} columns={columns} sort={sort} />
         <ResultsExportMenu
           disabled={selectedCount < 1 || exporting}
           onExportCsv={() => { void exportCsv(); }}
@@ -229,6 +232,7 @@ export function ResultsToolbar({
       <MergeDocxDialog
         open={mergeOpen}
         onClose={() => setMergeOpen(false)}
+        path={path}
         outputFlows={outputFlows}
         recordIds={[...selectedIds]}
       />
@@ -237,6 +241,7 @@ export function ResultsToolbar({
 }
 
 export function ResultsTable({
+  path,
   records,
   totalCount,
   page,
@@ -244,6 +249,7 @@ export function ResultsTable({
   filters,
   sort,
 }: {
+  path: SalesPath;
   records: LandSale[];
   totalCount: number;
   page: number;
@@ -252,13 +258,14 @@ export function ResultsTable({
   filters: LandSaleFilters;
   sort: ResultsSort;
 }) {
-  const filtersKey = encodeFilters(filters).toString();
+  const filtersKey = selectionFiltersKey(path, encodeFilters(filters).toString());
   const { selectedIds, toggleRow, togglePage } = useResultsSelection(filtersKey);
 
   return (
     <>
-      <ResultsCount records={records} totalCount={totalCount} page={page} filters={filters} sort={sort} />
+      <ResultsCount path={path} records={records} totalCount={totalCount} page={page} filters={filters} sort={sort} />
       <ResultsBody
+        path={path}
         records={records}
         columns={columns}
         sort={sort}
@@ -273,12 +280,14 @@ export function ResultsTable({
 }
 
 function ResultsCount({
+  path,
   records,
   totalCount,
   page,
   filters,
   sort,
 }: {
+  path: SalesPath;
   records: LandSale[];
   totalCount: number;
   page: number;
@@ -297,7 +306,7 @@ function ResultsCount({
       {showPager && (
         <nav aria-label="Results pages" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
           {page > 1 ? (
-            <Link href={landSalesPageHref(filters, prevPage, sort)} className="btn btn-secondary">Previous</Link>
+            <Link href={landSalesPageHref(filters, prevPage, sort, path.basePath)} className="btn btn-secondary">Previous</Link>
           ) : (
             <span className="btn btn-secondary" aria-disabled="true" style={{ pointerEvents: 'none', opacity: 0.45 }}>Previous</span>
           )}
@@ -305,7 +314,7 @@ function ResultsCount({
             Page {page} of {lastPage}
           </span>
           {page < lastPage ? (
-            <Link href={landSalesPageHref(filters, page + 1, sort)} className="btn btn-secondary">Next</Link>
+            <Link href={landSalesPageHref(filters, page + 1, sort, path.basePath)} className="btn btn-secondary">Next</Link>
           ) : (
             <span className="btn btn-secondary" aria-disabled="true" style={{ pointerEvents: 'none', opacity: 0.45 }}>Next</span>
           )}
@@ -316,6 +325,7 @@ function ResultsCount({
 }
 
 function ResultsBody({
+  path,
   records,
   columns,
   sort,
@@ -325,6 +335,7 @@ function ResultsBody({
   togglePage,
   searchQuery,
 }: {
+  path: SalesPath;
   records: LandSale[];
   columns: ResultColumn[];
   sort: ResultsSort;
@@ -345,7 +356,7 @@ function ResultsBody({
   );
 
   function viewDetails(id: string) {
-    router.push(searchQuery ? `/land-sales/${id}?from=${encodeURIComponent(searchQuery)}` : `/land-sales/${id}`);
+    router.push(searchQuery ? `${path.basePath}/${id}?from=${encodeURIComponent(searchQuery)}` : `${path.basePath}/${id}`);
   }
 
   return (
@@ -374,7 +385,7 @@ function ResultsBody({
                       key={fieldVisibilityId(col)}
                       column={col}
                       sort={sort}
-                      href={landSalesPageHref(filters, 1, toggleResultsSort(sort, col.key))}
+                      href={landSalesPageHref(filters, 1, toggleResultsSort(sort, col.key), path.basePath)}
                     />
                   ))}
                 </tr>

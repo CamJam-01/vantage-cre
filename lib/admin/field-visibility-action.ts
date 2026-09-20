@@ -4,7 +4,7 @@ import {
   DEFAULT_FIELD_DIVIDER_LABELS,
   FIELD_DIVIDER_LABEL_MAX_LENGTH,
   fieldDividerOrderId,
-  SALES_DATABASE_KEY,
+  isDatabaseKey,
   validateFieldOrder,
   validateVisibleFieldIds,
   type DatabaseKey,
@@ -65,7 +65,8 @@ export function parseVisibilitySubmission(
   formData: FormData,
   availableColumns: ResultColumn[],
 ): VisibilitySubmission {
-  if (formData.get('database_key') !== SALES_DATABASE_KEY) {
+  const databaseKey = formData.get('database_key');
+  if (!isDatabaseKey(databaseKey)) {
     return {
       ok: false,
       message: 'This database is not available for field visibility settings.',
@@ -91,7 +92,7 @@ export function parseVisibilitySubmission(
   const placed = new Set(order.fieldOrder);
   return {
     ok: true,
-    databaseKey: SALES_DATABASE_KEY,
+    databaseKey,
     hiddenFieldIds: validation.hiddenFieldIds,
     fieldOrder: order.fieldOrder,
     fieldDividers: dividers.fieldDividers.filter(

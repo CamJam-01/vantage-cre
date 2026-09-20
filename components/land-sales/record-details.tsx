@@ -23,6 +23,7 @@ import {
 } from '@/lib/land-sales/field-visibility';
 import { costarColumnType } from '@/lib/land-sales/costar-column-types';
 import { formatCatalogValue } from '@/lib/land-sales/format';
+import type { SalesPath } from '@/lib/land-sales/sales-path';
 
 const initialState: CreateFormState = null;
 
@@ -56,8 +57,8 @@ function FaAngleRightIcon() {
   );
 }
 
-function recordDetailsHref(id: string, from?: string) {
-  return from ? `/land-sales/${id}?from=${encodeURIComponent(from)}` : `/land-sales/${id}`;
+function recordDetailsHref(path: SalesPath, id: string, from?: string) {
+  return from ? `${path.basePath}/${id}?from=${encodeURIComponent(from)}` : `${path.basePath}/${id}`;
 }
 
 function OptionalForm({
@@ -81,6 +82,7 @@ function OptionalForm({
 }
 
 export function RecordDetails({
+  path,
   record,
   from,
   canEdit,
@@ -93,6 +95,7 @@ export function RecordDetails({
   fieldOrder = [],
   fieldDividers = [],
 }: {
+  path: SalesPath;
   record: LandSale;
   from?: string;
   canEdit: boolean;
@@ -108,6 +111,7 @@ export function RecordDetails({
   if (!canEdit) {
     return (
       <RecordDetailsForm
+        path={path}
         record={record}
         from={from}
         canEdit={false}
@@ -125,6 +129,7 @@ export function RecordDetails({
   return (
     <BoundRecordDetailsForm
       key={record.id}
+      path={path}
       record={record}
       from={from}
       canDelete={canDelete}
@@ -140,6 +145,7 @@ export function RecordDetails({
 }
 
 function BoundRecordDetailsForm({
+  path,
   record,
   from,
   canDelete,
@@ -151,6 +157,7 @@ function BoundRecordDetailsForm({
   fieldOrder,
   fieldDividers,
 }: {
+  path: SalesPath;
   record: LandSale;
   from?: string;
   canDelete: boolean;
@@ -162,9 +169,10 @@ function BoundRecordDetailsForm({
   fieldOrder: string[];
   fieldDividers: FieldDivider[];
 }) {
-  const [state, formAction, pending] = useActionState(updateLandSale.bind(null, record.id), initialState);
+  const [state, formAction, pending] = useActionState(updateLandSale.bind(null, path.id, record.id), initialState);
   return (
     <RecordDetailsForm
+      path={path}
       record={record}
       from={from}
       canEdit
@@ -254,6 +262,7 @@ function samePagePath(href: string): boolean {
 }
 
 export function RecordDetailsForm({
+  path,
   record,
   from,
   canEdit,
@@ -270,6 +279,7 @@ export function RecordDetailsForm({
   fieldOrder = [],
   fieldDividers = [],
 }: {
+  path: SalesPath;
   record: LandSale;
   from?: string;
   canEdit: boolean;
@@ -301,7 +311,7 @@ export function RecordDetailsForm({
   const [nextHref, setNextHref] = useState<string | null>(null);
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
-  const backToSearchHref = from ? `/land-sales?${from}` : '/land-sales';
+  const backToSearchHref = from ? `${path.basePath}?${from}` : path.basePath;
 
   const address = visibleField('Property Address', hidden)
     ? toInputString(record.columns['Property Address'])
@@ -396,7 +406,7 @@ export function RecordDetailsForm({
   async function handleDelete() {
     setDeleting(true);
     setDeleteError(null);
-    const result = await deleteLandSale(record.id);
+    const result = await deleteLandSale(path.id, record.id);
     setDeleting(false);
     if (result?.error) {
       setDeleteError(result.error);
@@ -410,12 +420,12 @@ export function RecordDetailsForm({
         {editing ? (
           <button type="button" className="record-bar-back" onClick={() => attemptLeave(backToSearchHref)}>
             <FaArrowLeftIcon />
-            Land Sales
+            {path.label}
           </button>
         ) : (
           <Link href={backToSearchHref} className="record-bar-back">
             <FaArrowLeftIcon />
-            Land Sales
+            {path.label}
           </Link>
         )}
         <div className="record-bar-nav" role="navigation" aria-label="Adjacent records">
@@ -425,7 +435,7 @@ export function RecordDetailsForm({
                 type="button"
                 className="record-bar-nav-btn"
                 disabled={!prevId}
-                onClick={() => prevId && attemptLeave(recordDetailsHref(prevId, from))}
+                onClick={() => prevId && attemptLeave(recordDetailsHref(path, prevId, from))}
               >
                 <FaChevronLeftIcon />
                 Previous
@@ -439,7 +449,7 @@ export function RecordDetailsForm({
                 type="button"
                 className="record-bar-nav-btn"
                 disabled={!nextId}
-                onClick={() => nextId && attemptLeave(recordDetailsHref(nextId, from))}
+                onClick={() => nextId && attemptLeave(recordDetailsHref(path, nextId, from))}
               >
                 Next
                 <FaAngleRightIcon />
@@ -451,7 +461,7 @@ export function RecordDetailsForm({
           {editing && (
             <>
               {createMode && (
-                <Button type="button" variant="secondary" onClick={() => attemptLeave('/land-sales')} disabled={pending}>
+                <Button type="button" variant="secondary" onClick={() => attemptLeave(path.basePath)} disabled={pending}>
                   Cancel
                 </Button>
               )}

@@ -65,7 +65,8 @@ export function landSalesPageHref(
   filters: LandSaleFilters,
   page: number,
   sort: ResultsSort = DEFAULT_RESULTS_SORT,
+  basePath: string = '/land-sales',
 ): string {
   const qs = landSalesReturnQuery(filters, page, sort);
-  return qs ? `/land-sales?${qs}` : '/land-sales';
+  return qs ? `${basePath}?${qs}` : basePath;
 }

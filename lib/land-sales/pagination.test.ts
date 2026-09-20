@@ -76,6 +76,10 @@ describe('pageRange / resultsRangeLabel / href', () => {
   it('keeps filters in the pager href and drops page 1', () => {
     assert.equal(landSalesPageHref(emptyFilters, 1), '/land-sales');
     assert.equal(landSalesPageHref({ ...emptyFilters, state: 'TX' }, 2), '/land-sales?state=TX&page=2');
+    assert.equal(
+      landSalesPageHref({ ...emptyFilters, state: 'TX' }, 2, undefined, '/improved-sales'),
+      '/improved-sales?state=TX&page=2',
+    );
   });
 
   it('keeps a non-default sort in the pager href and omits newest-first Sale Date', () => {

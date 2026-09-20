@@ -7,6 +7,7 @@ import { logAudit } from '@/lib/audit/log';
 import { resultColumns } from '@/lib/land-sales/result-columns';
 import type { FieldDivider } from '@/lib/land-sales/field-visibility';
 import { parseVisibilitySubmission } from '@/lib/admin/field-visibility-action';
+import { salesPathFromDatabaseKey } from '@/lib/land-sales/sales-path';
 
 export type FieldVisibilityActionState =
   | {
@@ -46,16 +47,19 @@ export async function saveFieldVisibilityAction(
   if (error) return { status: 'error', message: `Could not save field visibility: ${error.message}` };
 
   const visibleCount = columns.length - submission.hiddenFieldIds.length;
+  const path = salesPathFromDatabaseKey(submission.databaseKey);
   await logAudit(
     supabase,
     'Updated Field Visibility',
-    `Sales: ${visibleCount} of ${columns.length} fields visible, ${submission.fieldDividers.length} pages and field groups`,
+    `${path?.label ?? 'Sales'}: ${visibleCount} of ${columns.length} fields visible, ${submission.fieldDividers.length} pages and field groups`,
   );
 
   revalidatePath('/admin/database-manager/fields');
-  revalidatePath('/land-sales');
-  revalidatePath('/land-sales/new');
-  revalidatePath('/land-sales/[id]', 'page');
+  if (path) {
+    revalidatePath(path.basePath);
+    revalidatePath(`${path.basePath}/new`);
+    revalidatePath(`${path.basePath}/[id]`, 'page');
+  }
 
   return {
     status: 'success',

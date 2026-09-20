@@ -5,6 +5,7 @@ import type { LandSale } from './schema';
 import { chunkIds } from './export-ids';
 import { uniqueProposedUseLabels } from './proposed-use';
 import { DEFAULT_RESULTS_SORT, type ResultsSort } from './results-sort';
+import { LAND_SALES_PATH, type SalesTable } from './sales-path';
 
 function lastDurationToDate(duration: number, unit: 'months' | 'years'): string | null {
   if (!Number.isFinite(duration) || duration <= 0) return null;
@@ -130,10 +131,11 @@ export function applyLandSaleFilters(
   filters: LandSaleFilters,
   page?: LandSaleQueryPage,
   sort: ResultsSort = DEFAULT_RESULTS_SORT,
+  table: SalesTable = LAND_SALES_PATH.table,
 ) {
   const head = page !== undefined && 'head' in page && page.head;
   let query = supabase
-    .from('land_sales')
+    .from(table)
     .select('*', { count: 'exact', head })
     .order(sort.column, { ascending: sort.dir === 'asc', nullsFirst: false })
     .order('id', { ascending: true });
@@ -207,11 +209,12 @@ async function fetchNeighborLandSaleId(
   currentId: string,
   currentSortValue: unknown,
   direction: 'prev' | 'next',
+  table: SalesTable,
 ): Promise<string | null> {
   const ascending = sort.dir === 'asc';
   const forward = direction === 'next';
 
-  let query = supabase.from('land_sales').select('id');
+  let query = supabase.from(table).select('id');
   query = withLandSaleFilters(query, filters);
   query = withNeighborKeyset(query, sort, currentId, currentSortValue, direction);
 
@@ -234,8 +237,9 @@ async function fetchNeighborLandSaleId(
 async function countFilteredLandSales(
   supabase: SupabaseClient,
   filters: LandSaleFilters,
+  table: SalesTable,
 ): Promise<number> {
-  const { count, error } = await applyLandSaleFilters(supabase, filters, { head: true });
+  const { count, error } = await applyLandSaleFilters(supabase, filters, { head: true }, DEFAULT_RESULTS_SORT, table);
   if (error) throw new Error(error.message);
   return count ?? 0;
 }
@@ -247,9 +251,10 @@ async function countPrecedingLandSales(
   sort: ResultsSort,
   currentId: string,
   currentSortValue: unknown,
+  table: SalesTable,
 ): Promise<number> {
   let query = supabase
-    .from('land_sales')
+    .from(table)
     .select('id', { count: 'exact', head: true });
   query = withLandSaleFilters(query, filters);
   query = withNeighborKeyset(query, sort, currentId, currentSortValue, 'prev');
@@ -262,9 +267,10 @@ async function landSaleMatchesFilters(
   supabase: SupabaseClient,
   filters: LandSaleFilters,
   currentId: string,
+  table: SalesTable,
 ): Promise<boolean> {
   let query = supabase
-    .from('land_sales')
+    .from(table)
     .select('id', { count: 'exact', head: true })
     .eq('id', currentId);
   query = withLandSaleFilters(query, filters);
@@ -282,6 +288,7 @@ export async function fetchAdjacentLandSaleIds(
   sort: ResultsSort,
   currentId: string,
   currentSortValue: unknown,
+  table: SalesTable = LAND_SALES_PATH.table,
 ): Promise<{
   prevId: string | null;
   nextId: string | null;
@@ -289,11 +296,11 @@ export async function fetchAdjacentLandSaleIds(
   total: number;
 }> {
   const [prevId, nextId, total, preceding, inSet] = await Promise.all([
-    fetchNeighborLandSaleId(supabase, filters, sort, currentId, currentSortValue, 'prev'),
-    fetchNeighborLandSaleId(supabase, filters, sort, currentId, currentSortValue, 'next'),
-    countFilteredLandSales(supabase, filters),
-    countPrecedingLandSales(supabase, filters, sort, currentId, currentSortValue),
-    landSaleMatchesFilters(supabase, filters, currentId),
+    fetchNeighborLandSaleId(supabase, filters, sort, currentId, currentSortValue, 'prev', table),
+    fetchNeighborLandSaleId(supabase, filters, sort, currentId, currentSortValue, 'next', table),
+    countFilteredLandSales(supabase, filters, table),
+    countPrecedingLandSales(supabase, filters, sort, currentId, currentSortValue, table),
+    landSaleMatchesFilters(supabase, filters, currentId, table),
   ]);
   return {
     prevId,
@@ -304,8 +311,13 @@ export async function fetchAdjacentLandSaleIds(
 }
 
 /** Unique non-empty "Secondary Type" values, used to populate the search page's type filters. */
-export async function getDistinctSecondaryTypes(supabase: SupabaseClient): Promise<string[]> {
-  const { data, error } = await supabase.rpc('distinct_secondary_types');
+export async function getDistinctSecondaryTypes(
+  supabase: SupabaseClient,
+  table: SalesTable = LAND_SALES_PATH.table,
+): Promise<string[]> {
+  const { data, error } = table === LAND_SALES_PATH.table
+    ? await supabase.rpc('distinct_secondary_types')
+    : await supabase.rpc('distinct_secondary_types', { p_table: table });
   if (error) throw new Error(error.message);
   if (!Array.isArray(data)) throw new Error('distinct_secondary_types returned an invalid response.');
   const values = data.filter((value): value is string => typeof value === 'string' && value.trim() !== '');
@@ -313,8 +325,13 @@ export async function getDistinctSecondaryTypes(supabase: SupabaseClient): Promi
 }
 
 /** Unique Proposed Use tokens after splitting combined cells, for the search chips. */
-export async function getDistinctProposedUses(supabase: SupabaseClient): Promise<string[]> {
-  const { data, error } = await supabase.rpc('distinct_proposed_uses');
+export async function getDistinctProposedUses(
+  supabase: SupabaseClient,
+  table: SalesTable = LAND_SALES_PATH.table,
+): Promise<string[]> {
+  const { data, error } = table === LAND_SALES_PATH.table
+    ? await supabase.rpc('distinct_proposed_uses')
+    : await supabase.rpc('distinct_proposed_uses', { p_table: table });
   if (error) throw new Error(error.message);
   if (!Array.isArray(data)) throw new Error('distinct_proposed_uses returned an invalid response.');
   const values = data.filter((value): value is string => typeof value === 'string' && value.trim() !== '');
@@ -326,12 +343,13 @@ export async function getDistinctProposedUses(supabase: SupabaseClient): Promise
 export async function fetchLandSalesByIds(
   supabase: SupabaseClient,
   ids: readonly string[],
+  table: SalesTable = LAND_SALES_PATH.table,
 ): Promise<{ records: LandSale[]; error: string | null }> {
   const records: LandSale[] = [];
   const byId = new Map<string, LandSale>();
   for (const chunk of chunkIds(ids)) {
     if (!chunk.length) continue;
-    const { data, error } = await supabase.from('land_sales').select('*').in('id', chunk);
+    const { data, error } = await supabase.from(table).select('*').in('id', chunk);
     if (error) return { records: [], error: error.message };
     for (const row of data ?? []) {
       const record = landSaleFromRow(row as Record<string, unknown>);

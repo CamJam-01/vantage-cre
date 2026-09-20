@@ -6,7 +6,8 @@ import { FieldVisibilityForm } from '@/components/admin/field-visibility-form';
 import { DATABASE_CATEGORIES } from '@/lib/admin/database-descriptor';
 import { resultColumns } from '@/lib/land-sales/result-columns';
 import { loadDisplaySettings } from '@/lib/land-sales/display-settings';
-import { SALES_DATABASE_KEY, type FieldDivider } from '@/lib/land-sales/field-visibility';
+import { isDatabaseKey, type FieldDivider } from '@/lib/land-sales/field-visibility';
+import { salesPathFromDatabaseKey } from '@/lib/land-sales/sales-path';
 
 type PageProps = { searchParams: Promise<{ db?: string }> };
 
@@ -18,9 +19,11 @@ export default async function DatabaseFieldsPage({ searchParams }: PageProps) {
 
   const { db } = await searchParams;
   const category = DATABASE_CATEGORIES.find(c => c.key === db);
-  if (!category || !category.available) redirect('/admin/database-manager');
+  if (!category || !category.available || !isDatabaseKey(category.key)) redirect('/admin/database-manager');
+  const path = salesPathFromDatabaseKey(category.key);
+  if (!path) redirect('/admin/database-manager');
 
-  const settings = await loadDisplaySettings(supabase, SALES_DATABASE_KEY)
+  const settings = await loadDisplaySettings(supabase, path.databaseKey)
     .then(loaded => ({ ...loaded, error: null as string | null }))
     .catch((error: unknown) => ({
       hidden: new Set<string>(),
@@ -58,7 +61,7 @@ export default async function DatabaseFieldsPage({ searchParams }: PageProps) {
             This is one global display configuration for the selected table. Hidden fields keep their data and remain available to CSV workflows.
           </p>
           <FieldVisibilityForm
-            databaseKey={SALES_DATABASE_KEY}
+            databaseKey={path.databaseKey}
             columns={columns}
             initialHiddenFieldIds={[...settings.hidden]}
             initialFieldOrder={settings.fieldOrder}

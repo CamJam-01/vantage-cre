@@ -11,6 +11,7 @@ import { Tag } from '@/components/ui/tag';
 import { US_STATES } from '@/lib/land-sales/constants';
 import { encodeFilters, type LandSaleFilters, type TimeFilter } from '@/lib/land-sales/search-params';
 import { parseFormattedNumber } from '@/lib/land-sales/format';
+import type { SalesPath } from '@/lib/land-sales/sales-path';
 
 type Tab = 'location' | 'type' | 'size' | 'time';
 
@@ -64,10 +65,12 @@ function FilterTagGrid({
 }
 
 export function LandSalesSearchClient({
+  path,
   secondaryTypes,
   proposedUses: proposedUseOptions,
   initial,
 }: {
+  path: SalesPath;
   secondaryTypes: string[];
   proposedUses: string[];
   initial: LandSaleFilters;
@@ -126,7 +129,7 @@ export function LandSalesSearchClient({
       acMax: sizeMode === 'ac' ? parseFormattedNumber(acMax) : undefined,
       time,
     };
-    router.push(`/land-sales?${encodeFilters(filters).toString()}`);
+    router.push(`${path.basePath}?${encodeFilters(filters).toString()}`);
   }
 
   return (
@@ -137,7 +140,7 @@ export function LandSalesSearchClient({
     }}>
       <div style={{ textAlign: 'center', maxWidth: 520 }}>
         <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 36, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: '0 0 var(--space-2)' }}>
-          Land Sales Search
+          {path.label} Search
         </h1>
         <p style={{ fontSize: 15, color: 'var(--color-neutral-700)', margin: 0 }}>Refine your search using the criteria below.</p>
       </div>
