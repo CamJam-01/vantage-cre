@@ -626,7 +626,10 @@ textarea.input { min-height: 90px; resize: vertical; }
    reachable however far down the sheet the user has scrolled. */
 .record-bar {
   position: sticky; top: var(--app-header-height); z-index: 9;
-  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--space-4);
   box-sizing: border-box;
   padding: var(--space-3) var(--space-6);
   background: var(--color-paper);
@@ -635,13 +638,48 @@ textarea.input { min-height: 90px; resize: vertical; }
 }
 .record-bar-back {
   display: inline-flex; align-items: center; gap: 5px;
+  justify-self: start;
   font-size: 13px; font-weight: 500; text-decoration: none;
   color: var(--color-neutral-700);
   padding: 0; border: 0; background: transparent; cursor: pointer;
   font-family: inherit;
 }
 .record-bar-back:hover { color: var(--color-text); }
-.record-bar-actions { display: flex; align-items: center; gap: var(--space-3); flex-shrink: 0; }
+.record-bar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+.record-bar-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.record-bar-nav-btn:hover:not(:disabled) { color: var(--color-accent); }
+.record-bar-nav-btn:disabled {
+  color: var(--color-neutral-400);
+  cursor: not-allowed;
+}
+.record-bar-nav-btn svg,
+.record-bar-back svg {
+  display: block;
+  flex-shrink: 0;
+}
+.record-bar-actions {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: var(--space-3);
+}
 .record-bar .btn-primary {
   background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg);
 }
@@ -660,15 +698,9 @@ textarea.input { min-height: 90px; resize: vertical; }
 
 /* Masthead — reads directly off the ground, no panel behind it. */
 .record-head { margin-bottom: var(--space-6); }
-.record-head-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-.record-head-title h1 { flex: 1; min-width: 0; }
 .record-delete {
-  flex-shrink: 0;
+  display: block;
+  margin-top: 2rem;
   padding: 0;
   border: 0;
   background: transparent;
@@ -679,6 +711,7 @@ textarea.input { min-height: 90px; resize: vertical; }
   text-decoration: underline;
   text-underline-offset: 2px;
   cursor: pointer;
+  text-align: left;
 }
 .record-delete:hover { color: var(--color-danger-700); }
 .record-head .tags {

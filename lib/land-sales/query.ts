@@ -65,6 +65,44 @@ export function landSaleFilterClauses(filters: LandSaleFilters): FilterClause[] 
   return clauses;
 }
 
+type FilterableQuery = {
+  eq: (column: string, value: string | number | boolean) => FilterableQuery;
+  ilike: (column: string, value: string) => FilterableQuery;
+  in: (column: string, value: string[]) => FilterableQuery;
+  gte: (column: string, value: string | number) => FilterableQuery;
+  lte: (column: string, value: string | number) => FilterableQuery;
+};
+
+/** Apply decoded filter clauses without dragging Supabase's builder generics
+ * into a deep instantiation (those explode under recursive `.eq().ilike()…`). */
+function withLandSaleFilters<T>(query: T, filters: LandSaleFilters): T {
+  let next = query as unknown as FilterableQuery;
+  for (const clause of landSaleFilterClauses(filters)) {
+    switch (clause.op) {
+      case 'eq':
+        next = next.eq(clause.column, clause.value);
+        break;
+      case 'ilike':
+        next = next.ilike(clause.column, clause.value);
+        break;
+      case 'in':
+        next = next.in(clause.column, clause.value);
+        break;
+      case 'gte':
+        next = next.gte(clause.column, clause.value);
+        break;
+      case 'lte':
+        next = next.lte(clause.column, clause.value);
+        break;
+      default: {
+        const _exhaustive: never = clause;
+        void _exhaustive;
+      }
+    }
+  }
+  return next as T;
+}
+
 export type LandSaleQueryPage =
   | { from: number; to: number }
   | { head: true };
@@ -92,31 +130,92 @@ export function applyLandSaleFilters(
     .select('*', { count: 'exact', head })
     .order(sort.column, { ascending: sort.dir === 'asc', nullsFirst: false })
     .order('id', { ascending: true });
-  for (const clause of landSaleFilterClauses(filters)) {
-    switch (clause.op) {
-      case 'eq':
-        query = query.eq(clause.column, clause.value);
-        break;
-      case 'ilike':
-        query = query.ilike(clause.column, clause.value);
-        break;
-      case 'in':
-        query = query.in(clause.column, clause.value);
-        break;
-      case 'gte':
-        query = query.gte(clause.column, clause.value);
-        break;
-      case 'lte':
-        query = query.lte(clause.column, clause.value);
-        break;
-      default: {
-        const _exhaustive: never = clause;
-        void _exhaustive;
-      }
-    }
-  }
+  query = withLandSaleFilters(query, filters);
   if (page && 'from' in page) query = query.range(page.from, page.to);
   return query;
+}
+
+function formatOrColumn(column: string): string {
+  return `"${column.replace(/"/g, '""')}"`;
+}
+
+function formatOrValue(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  const text = String(value);
+  return `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function isMissingSortValue(value: unknown): boolean {
+  return value == null || value === '';
+}
+
+/** One step earlier/later in the same filtered + sorted result order as
+ * `applyLandSaleFilters` (sort column, then `id` ascending, nulls last). */
+async function fetchNeighborLandSaleId(
+  supabase: SupabaseClient,
+  filters: LandSaleFilters,
+  sort: ResultsSort,
+  currentId: string,
+  currentSortValue: unknown,
+  direction: 'prev' | 'next',
+): Promise<string | null> {
+  const ascending = sort.dir === 'asc';
+  const forward = direction === 'next';
+  const col = formatOrColumn(sort.column);
+  const idOp = forward ? 'gt' : 'lt';
+  const wantGreaterSort = forward ? ascending : !ascending;
+  const primaryOp = wantGreaterSort ? 'gt' : 'lt';
+
+  let query = supabase.from('land_sales').select('id');
+  query = withLandSaleFilters(query, filters);
+
+  if (isMissingSortValue(currentSortValue)) {
+    if (forward) {
+      query = query.is(sort.column, null).filter('id', idOp, currentId);
+    } else {
+      query = query.or(`${col}.not.is.null,and(${col}.is.null,id.${idOp}.${currentId})`);
+    }
+  } else {
+    const value = formatOrValue(currentSortValue);
+    let orFilter =
+      `${col}.${primaryOp}.${value},and(${col}.eq.${value},id.${idOp}.${currentId})`;
+    // Nulls sort last in both directions; they only follow a non-null current row.
+    if (forward) orFilter += `,${col}.is.null`;
+    query = query.or(orFilter);
+  }
+
+  if (forward) {
+    query = query
+      .order(sort.column, { ascending, nullsFirst: false })
+      .order('id', { ascending: true });
+  } else {
+    query = query
+      .order(sort.column, { ascending: !ascending, nullsFirst: true })
+      .order('id', { ascending: false });
+  }
+
+  const { data, error } = await query.limit(1);
+  if (error) throw new Error(error.message);
+  const id = data?.[0]?.id;
+  return typeof id === 'string' && id ? id : null;
+}
+
+/** Previous/next record ids in the filtered result set the details page was
+ * opened from. Missing `from` (empty filters + default sort) still walks the
+ * full catalog order. */
+export async function fetchAdjacentLandSaleIds(
+  supabase: SupabaseClient,
+  filters: LandSaleFilters,
+  sort: ResultsSort,
+  currentId: string,
+  currentSortValue: unknown,
+): Promise<{ prevId: string | null; nextId: string | null }> {
+  const [prevId, nextId] = await Promise.all([
+    fetchNeighborLandSaleId(supabase, filters, sort, currentId, currentSortValue, 'prev'),
+    fetchNeighborLandSaleId(supabase, filters, sort, currentId, currentSortValue, 'next'),
+  ]);
+  return { prevId, nextId };
 }
 
 /** Unique non-empty "Secondary Type" values, used to populate the search page's type filters. */

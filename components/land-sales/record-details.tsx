@@ -4,7 +4,7 @@ import { useActionState, useEffect, useRef, useState, type ReactNode } from 'rea
 import { flushSync } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { deleteLandSale, updateLandSale, type CreateFormState } from '@/app/(app)/land-sales/actions';
@@ -29,6 +29,36 @@ const initialState: CreateFormState = null;
 /** The Save controls live in the sticky action bar, outside the form, so
  * the form needs a stable id for their `form=` association. */
 const FORM_ID = 'record-form';
+
+/** Font Awesome Classic Solid paths (free). */
+function FaArrowLeftIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="12" height="12" fill="currentColor" aria-hidden="true" focusable="false">
+      {/* Font Awesome Free v7.3.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free Copyright 2026 Fonticons, Inc. */}
+      <path d="M9.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 288 480 288c17.7 0 32-14.3 32-32s-14.3-32-32-32l-370.7 0 105.4-105.4c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z" />
+    </svg>
+  );
+}
+
+function FaChevronLeftIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 320 512" width="11" height="11" fill="currentColor" focusable="false">
+      <path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z" />
+    </svg>
+  );
+}
+
+function FaAngleRightIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 320 512" width="11" height="11" fill="currentColor" focusable="false">
+      <path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z" />
+    </svg>
+  );
+}
+
+function recordDetailsHref(id: string, from?: string) {
+  return from ? `/land-sales/${id}?from=${encodeURIComponent(from)}` : `/land-sales/${id}`;
+}
 
 function OptionalForm({
   action,
@@ -55,6 +85,8 @@ export function RecordDetails({
   from,
   canEdit,
   canDelete = false,
+  prevId = null,
+  nextId = null,
   hiddenFieldIds = [],
   fieldOrder = [],
   fieldDividers = [],
@@ -63,6 +95,8 @@ export function RecordDetails({
   from?: string;
   canEdit: boolean;
   canDelete?: boolean;
+  prevId?: string | null;
+  nextId?: string | null;
   hiddenFieldIds?: string[];
   fieldOrder?: string[];
   fieldDividers?: FieldDivider[];
@@ -74,6 +108,8 @@ export function RecordDetails({
         from={from}
         canEdit={false}
         canDelete={canDelete}
+        prevId={prevId}
+        nextId={nextId}
         hiddenFieldIds={hiddenFieldIds}
         fieldOrder={fieldOrder}
         fieldDividers={fieldDividers}
@@ -86,6 +122,8 @@ export function RecordDetails({
       record={record}
       from={from}
       canDelete={canDelete}
+      prevId={prevId}
+      nextId={nextId}
       hiddenFieldIds={hiddenFieldIds}
       fieldOrder={fieldOrder}
       fieldDividers={fieldDividers}
@@ -97,6 +135,8 @@ function BoundRecordDetailsForm({
   record,
   from,
   canDelete,
+  prevId,
+  nextId,
   hiddenFieldIds,
   fieldOrder,
   fieldDividers,
@@ -104,6 +144,8 @@ function BoundRecordDetailsForm({
   record: LandSale;
   from?: string;
   canDelete: boolean;
+  prevId: string | null;
+  nextId: string | null;
   hiddenFieldIds: string[];
   fieldOrder: string[];
   fieldDividers: FieldDivider[];
@@ -115,6 +157,8 @@ function BoundRecordDetailsForm({
       from={from}
       canEdit
       canDelete={canDelete}
+      prevId={prevId}
+      nextId={nextId}
       state={state}
       formAction={formAction}
       pending={pending}
@@ -195,6 +239,8 @@ export function RecordDetailsForm({
   canEdit,
   canDelete = false,
   createMode = false,
+  prevId = null,
+  nextId = null,
   state = null,
   formAction,
   pending = false,
@@ -207,6 +253,8 @@ export function RecordDetailsForm({
   canEdit: boolean;
   canDelete?: boolean;
   createMode?: boolean;
+  prevId?: string | null;
+  nextId?: string | null;
   state?: CreateFormState;
   formAction?: (formData: FormData) => void;
   pending?: boolean;
@@ -337,15 +385,39 @@ export function RecordDetailsForm({
       <div className="record-bar">
         {editing ? (
           <button type="button" className="record-bar-back" onClick={() => attemptLeave(backToSearchHref)}>
-            <ArrowLeft size={15} strokeWidth={1.5} />
+            <FaArrowLeftIcon />
             Land Sales
           </button>
         ) : (
           <Link href={backToSearchHref} className="record-bar-back">
-            <ArrowLeft size={15} strokeWidth={1.5} />
+            <FaArrowLeftIcon />
             Land Sales
           </Link>
         )}
+        <div className="record-bar-nav" role="navigation" aria-label="Adjacent records">
+          {!createMode && (
+            <>
+              <button
+                type="button"
+                className="record-bar-nav-btn"
+                disabled={!prevId}
+                onClick={() => prevId && attemptLeave(recordDetailsHref(prevId, from))}
+              >
+                <FaChevronLeftIcon />
+                Previous
+              </button>
+              <button
+                type="button"
+                className="record-bar-nav-btn"
+                disabled={!nextId}
+                onClick={() => nextId && attemptLeave(recordDetailsHref(nextId, from))}
+              >
+                Next
+                <FaAngleRightIcon />
+              </button>
+            </>
+          )}
+        </div>
         <div className="record-bar-actions">
           {editing && (
             <>
@@ -385,14 +457,7 @@ export function RecordDetailsForm({
                 </>
               ) : (
                 <>
-                  <div className="record-head-title">
-                    <h1>{address || location || 'Land Sale Record'}</h1>
-                    {canDelete && (
-                      <button type="button" className="record-delete" onClick={() => setConfirmDelete(true)}>
-                        Delete Record
-                      </button>
-                    )}
-                  </div>
+                  <h1>{address || location || 'Land Sale Record'}</h1>
                   {subtitle && <p className="sub">{subtitle}</p>}
                 </>
               )}
@@ -463,6 +528,11 @@ export function RecordDetailsForm({
             )}
 
           </OptionalForm>
+          {canDelete && !createMode && (
+            <button type="button" className="record-delete" onClick={() => setConfirmDelete(true)}>
+              Delete Record
+            </button>
+          )}
         </div>
       </main>
 
