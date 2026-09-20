@@ -23,7 +23,6 @@ export function LandSaleForm({
     <RecordDetailsForm
       record={emptyLandSale()}
       canEdit
-      startEditing
       createMode
       state={state}
       formAction={formAction}

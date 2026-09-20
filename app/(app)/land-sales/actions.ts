@@ -36,6 +36,14 @@ function recordLabel(columns: Record<string, unknown>, fallback: string): string
   return fallback;
 }
 
+/** Same-origin relative paths only. Rejects protocol-relative (`//`) and absolute URLs. */
+function safeNextPath(value: FormDataEntryValue | null): string | null {
+  if (typeof value !== 'string') return null;
+  if (!value.startsWith('/') || value.startsWith('//')) return null;
+  if (value.includes('://') || value.includes('\\')) return null;
+  return value;
+}
+
 export async function createLandSale(_prevState: CreateFormState, formData: FormData): Promise<CreateFormState> {
   const supabase = await createClient();
   const denied = await landSaleWriteDeniedMessage(supabase);
@@ -49,6 +57,9 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
     }));
   if (settings.error) return { message: settings.error };
 
+  const next = safeNextPath(formData.get('next'));
+  formData.delete('next');
+
   const submitted = columnsFromFormData(formData, settings.hidden);
   const sanitized = sanitizeVisibleCreate(submitted, settings.hidden);
 
@@ -58,7 +69,7 @@ export async function createLandSale(_prevState: CreateFormState, formData: Form
 
   if (error) return { message: error.message };
   await logAudit(supabase, 'Created Record', `${recordLabel(sanitized.columns, 'record')} added`);
-  redirect('/land-sales');
+  redirect(next ?? '/land-sales');
 }
 
 /** Bound to the record id via `updateLandSale.bind(null, id)` when wired into
@@ -85,6 +96,8 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
   const existing = landSaleFromRow(existingResult.data as Record<string, unknown>);
   if (!existing) return { message: 'This record is missing its identity and cannot be updated.' };
 
+  const next = safeNextPath(formData.get('next'));
+  formData.delete('next');
   const from = formData.get('from');
   formData.delete('from');
 
@@ -97,6 +110,7 @@ export async function updateLandSale(id: string, _prevState: CreateFormState, fo
 
   if (error) return { message: error.message };
   await logAudit(supabase, 'Updated Record', `${recordLabel(merged.columns, id)} updated`);
+  if (next) redirect(next);
   redirect(from ? `/land-sales/${id}?from=${encodeURIComponent(String(from))}` : `/land-sales/${id}`);
 }
 

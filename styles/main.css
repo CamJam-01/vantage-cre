@@ -602,6 +602,8 @@ textarea.input { min-height: 90px; resize: vertical; }
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 13px; font-weight: 500; text-decoration: none;
   color: var(--color-accent-200);
+  padding: 0; border: 0; background: transparent; cursor: pointer;
+  font-family: inherit;
 }
 .record-bar-back:hover { color: var(--color-paper); }
 .record-bar-actions { display: flex; align-items: center; gap: var(--space-3); flex-shrink: 0; }
@@ -617,6 +619,14 @@ textarea.input { min-height: 90px; resize: vertical; }
 
 /* Masthead — reads directly off the ground, no panel behind it. */
 .record-head { margin-bottom: var(--space-6); }
+.record-head-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.record-head-title h1 { flex: 1; min-width: 0; }
+.record-head-title .btn { flex-shrink: 0; }
 .record-head .tags {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
   margin-bottom: var(--space-3);

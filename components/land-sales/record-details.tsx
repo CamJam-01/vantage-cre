@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useState, type ReactNode } from 'react';
+import { useActionState, useEffect, useRef, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -22,34 +22,32 @@ import {
   visibleField,
   type FieldDivider,
 } from '@/lib/land-sales/field-visibility';
-import {
-  CURRENT_ACTION_STATE,
-  visibleActionState,
-} from '@/lib/land-sales/visible-action-state';
 import { costarColumnType } from '@/lib/land-sales/costar-column-types';
 
 const initialState: CreateFormState = null;
 
-function detailsHref(id: string, from?: string) {
-  const params = new URLSearchParams();
-  if (from) params.set('from', from);
-  const qs = params.toString();
-  return qs ? `/land-sales/${id}?${qs}` : `/land-sales/${id}`;
-}
-
-/** The Save/Cancel controls live in the sticky action bar, outside the form, so
+/** The Save controls live in the sticky action bar, outside the form, so
  * the form needs a stable id for their `form=` association. */
 const FORM_ID = 'record-form';
 
 function OptionalForm({
   action,
+  nextHref,
+  onDirty,
   children,
 }: {
   action?: (formData: FormData) => void;
+  nextHref?: string | null;
+  onDirty?: () => void;
   children: ReactNode;
 }) {
   if (!action) return children;
-  return <form id={FORM_ID} action={action}>{children}</form>;
+  return (
+    <form id={FORM_ID} action={action} onInput={onDirty} onChange={onDirty}>
+      {nextHref ? <input type="hidden" name="next" value={nextHref} /> : null}
+      {children}
+    </form>
+  );
 }
 
 export function RecordDetails({
@@ -57,7 +55,6 @@ export function RecordDetails({
   from,
   canEdit,
   canDelete = false,
-  startEditing = false,
   hiddenFieldIds = [],
   fieldOrder = [],
   fieldDividers = [],
@@ -66,7 +63,6 @@ export function RecordDetails({
   from?: string;
   canEdit: boolean;
   canDelete?: boolean;
-  startEditing?: boolean;
   hiddenFieldIds?: string[];
   fieldOrder?: string[];
   fieldDividers?: FieldDivider[];
@@ -85,51 +81,10 @@ export function RecordDetails({
     );
   }
   return (
-    <RecordDetailsEditor
+    <BoundRecordDetailsForm
       key={record.id}
       record={record}
       from={from}
-      startEditing={startEditing}
-      canDelete={canDelete}
-      hiddenFieldIds={hiddenFieldIds}
-      fieldOrder={fieldOrder}
-      fieldDividers={fieldDividers}
-    />
-  );
-}
-
-function RecordDetailsEditor({
-  record,
-  from,
-  startEditing = false,
-  canDelete,
-  hiddenFieldIds,
-  fieldOrder,
-  fieldDividers,
-}: {
-  record: LandSale;
-  from?: string;
-  startEditing?: boolean;
-  canDelete: boolean;
-  hiddenFieldIds: string[];
-  fieldOrder: string[];
-  fieldDividers: FieldDivider[];
-}) {
-  const router = useRouter();
-  const [resetKey, setResetKey] = useState(0);
-
-  function handleCancel() {
-    setResetKey(k => k + 1);
-    router.replace(detailsHref(record.id, from));
-  }
-
-  return (
-    <BoundRecordDetailsForm
-      key={resetKey}
-      record={record}
-      from={from}
-      startEditing={resetKey === 0 && startEditing}
-      onCancel={handleCancel}
       canDelete={canDelete}
       hiddenFieldIds={hiddenFieldIds}
       fieldOrder={fieldOrder}
@@ -141,8 +96,6 @@ function RecordDetailsEditor({
 function BoundRecordDetailsForm({
   record,
   from,
-  startEditing,
-  onCancel,
   canDelete,
   hiddenFieldIds,
   fieldOrder,
@@ -150,8 +103,6 @@ function BoundRecordDetailsForm({
 }: {
   record: LandSale;
   from?: string;
-  startEditing: boolean;
-  onCancel: () => void;
   canDelete: boolean;
   hiddenFieldIds: string[];
   fieldOrder: string[];
@@ -164,11 +115,9 @@ function BoundRecordDetailsForm({
       from={from}
       canEdit
       canDelete={canDelete}
-      startEditing={startEditing}
       state={state}
       formAction={formAction}
       pending={pending}
-      onCancel={onCancel}
       hiddenFieldIds={hiddenFieldIds}
       fieldOrder={fieldOrder}
       fieldDividers={fieldDividers}
@@ -229,17 +178,26 @@ function FieldControl({
   );
 }
 
+function samePagePath(href: string): boolean {
+  try {
+    const url = new URL(href, window.location.origin);
+    const next = url.pathname + url.search + url.hash;
+    const current = window.location.pathname + window.location.search + window.location.hash;
+    return next === current;
+  } catch {
+    return true;
+  }
+}
+
 export function RecordDetailsForm({
   record,
   from,
   canEdit,
   canDelete = false,
-  startEditing = false,
   createMode = false,
   state = null,
   formAction,
   pending = false,
-  onCancel,
   hiddenFieldIds = [],
   fieldOrder = [],
   fieldDividers = [],
@@ -248,29 +206,29 @@ export function RecordDetailsForm({
   from?: string;
   canEdit: boolean;
   canDelete?: boolean;
-  startEditing?: boolean;
   createMode?: boolean;
   state?: CreateFormState;
   formAction?: (formData: FormData) => void;
   pending?: boolean;
-  onCancel?: () => void;
   hiddenFieldIds?: string[];
   fieldOrder?: string[];
   fieldDividers?: FieldDivider[];
 }) {
+  const router = useRouter();
   const hidden = new Set(hiddenFieldIds);
   const rows = fieldDisplayRows(resultColumns(), fieldOrder, fieldDividers);
   const pages = buildRecordDisplayPages(rows, hidden);
   const tabbedPages = pages.filter(page => page.title !== null);
-  const [editing, setEditing] = useState(canEdit && (startEditing || createMode));
+  const editing = canEdit || createMode;
   const [activePage, setActivePage] = useState(tabbedPages[0]?.id ?? '');
-  const [actionBaseline, setActionBaseline] = useState<CreateFormState | typeof CURRENT_ACTION_STATE>(
-    startEditing ? CURRENT_ACTION_STATE : state,
-  );
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const displayState = visibleActionState(state, actionBaseline);
+  const [dirty, setDirty] = useState(false);
+  const [leavePrompt, setLeavePrompt] = useState<string | null>(null);
+  const [nextHref, setNextHref] = useState<string | null>(null);
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
   const backToSearchHref = from ? `/land-sales?${from}` : '/land-sales';
 
   const address = visibleField('Property Address', hidden)
@@ -290,6 +248,79 @@ export function RecordDetailsForm({
     .filter(Boolean)
     .join(' · ');
 
+  useEffect(() => {
+    if (!editing) return;
+
+    function onBeforeUnload(event: BeforeUnloadEvent) {
+      if (!dirtyRef.current) return;
+      event.preventDefault();
+      event.returnValue = '';
+    }
+
+    function onDocumentClick(event: MouseEvent) {
+      if (!dirtyRef.current) return;
+      if (event.defaultPrevented) return;
+      if (event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const anchor = target.closest('a[href]');
+      if (!(anchor instanceof HTMLAnchorElement)) return;
+      if (anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+
+      const href = anchor.getAttribute('href');
+      if (!href || href.startsWith('#')) return;
+
+      let url: URL;
+      try {
+        url = new URL(href, window.location.origin);
+      } catch {
+        return;
+      }
+      if (url.origin !== window.location.origin) return;
+
+      const next = url.pathname + url.search + url.hash;
+      if (samePagePath(next)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      setLeavePrompt(next);
+    }
+
+    window.addEventListener('beforeunload', onBeforeUnload);
+    document.addEventListener('click', onDocumentClick, true);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      document.removeEventListener('click', onDocumentClick, true);
+    };
+  }, [editing]);
+
+  function attemptLeave(href: string) {
+    if (!editing || !dirty) {
+      router.push(href);
+      return;
+    }
+    setLeavePrompt(href);
+  }
+
+  function handleLeaveDiscard() {
+    const href = leavePrompt;
+    setLeavePrompt(null);
+    setDirty(false);
+    if (href) router.push(href);
+  }
+
+  function handleLeaveSave() {
+    if (!leavePrompt || !formAction) return;
+    flushSync(() => {
+      setNextHref(leavePrompt);
+      setLeavePrompt(null);
+    });
+    const form = document.getElementById(FORM_ID);
+    if (form instanceof HTMLFormElement) form.requestSubmit();
+  }
+
   async function handleDelete() {
     setDeleting(true);
     setDeleteError(null);
@@ -304,51 +335,46 @@ export function RecordDetailsForm({
   return (
     <>
       <div className="record-bar">
-        <Link href={backToSearchHref} className="record-bar-back">
-          <ArrowLeft size={15} strokeWidth={1.5} />
-          Land Sales
-        </Link>
+        {editing ? (
+          <button type="button" className="record-bar-back" onClick={() => attemptLeave(backToSearchHref)}>
+            <ArrowLeft size={15} strokeWidth={1.5} />
+            Land Sales
+          </button>
+        ) : (
+          <Link href={backToSearchHref} className="record-bar-back">
+            <ArrowLeft size={15} strokeWidth={1.5} />
+            Land Sales
+          </Link>
+        )}
         <div className="record-bar-actions">
-          {canDelete && !createMode && !editing && (
-            <Button type="button" variant="secondary" onClick={() => setConfirmDelete(true)}>
-              Delete
-            </Button>
-          )}
-          {canEdit && (
-            editing ? (
-              <>
-                {createMode ? (
-                  <Link href="/land-sales" className="btn btn-secondary">
-                    Cancel
-                  </Link>
-                ) : (
-                  <Button type="button" variant="secondary" onClick={onCancel} disabled={pending}>
-                    Cancel
-                  </Button>
-                )}
-                <Button type="submit" variant="primary" form={FORM_ID} disabled={pending}>
-                  {pending ? 'Saving…' : 'Save Record'}
+          {editing && (
+            <>
+              {createMode && (
+                <Button type="button" variant="secondary" onClick={() => attemptLeave('/land-sales')} disabled={pending}>
+                  Cancel
                 </Button>
-              </>
-            ) : (
+              )}
               <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setActionBaseline(state);
-                  setEditing(true);
-                }}
+                type="submit"
+                variant="primary"
+                form={FORM_ID}
+                disabled={pending}
+                onClick={() => setNextHref(null)}
               >
-                Edit Record
+                {pending ? 'Saving…' : 'Save'}
               </Button>
-            )
+            </>
           )}
         </div>
       </div>
 
       <main className="record-page">
         <div className="record-col">
-          <OptionalForm action={formAction}>
+          <OptionalForm
+            action={formAction}
+            nextHref={nextHref}
+            onDirty={editing ? () => setDirty(true) : undefined}
+          >
             {from && <input type="hidden" name="from" value={from} />}
 
             <div className="record-head">
@@ -359,7 +385,14 @@ export function RecordDetailsForm({
                 </>
               ) : (
                 <>
-                  <h1>{address || location || 'Land Sale Record'}</h1>
+                  <div className="record-head-title">
+                    <h1>{address || location || 'Land Sale Record'}</h1>
+                    {canDelete && (
+                      <Button type="button" variant="secondary" onClick={() => setConfirmDelete(true)}>
+                        Delete
+                      </Button>
+                    )}
+                  </div>
                   {subtitle && <p className="sub">{subtitle}</p>}
                 </>
               )}
@@ -422,8 +455,8 @@ export function RecordDetailsForm({
               </section>
             ))}
 
-            {editing && displayState?.message && (
-              <div className="record-error" style={{ marginBottom: 'var(--space-4)' }}>{displayState.message}</div>
+            {editing && state?.message && (
+              <div className="record-error" style={{ marginBottom: 'var(--space-4)' }}>{state.message}</div>
             )}
             {deleteError && (
               <div className="record-error" style={{ marginBottom: 'var(--space-4)' }}>{deleteError}</div>
@@ -432,6 +465,26 @@ export function RecordDetailsForm({
           </OptionalForm>
         </div>
       </main>
+
+      <Dialog
+        open={leavePrompt !== null}
+        onClose={() => setLeavePrompt(null)}
+        title="Unsaved changes"
+        actions={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={handleLeaveDiscard} disabled={pending}>
+              Discard
+            </button>
+            <Button variant="primary" onClick={handleLeaveSave} disabled={pending}>
+              {pending ? 'Saving…' : 'Save'}
+            </Button>
+          </>
+        }
+      >
+        <p style={{ fontSize: 14, color: 'var(--color-text)', margin: 0 }}>
+          You have unsaved changes. Would you like to save them?
+        </p>
+      </Dialog>
 
       <Dialog
         open={confirmDelete}
