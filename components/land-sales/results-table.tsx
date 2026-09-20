@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronUp, ChevronsUpDown, Eye, Minus, Pencil, TriangleAlert } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUpDown, Minus, TriangleAlert } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -28,7 +28,9 @@ const stickyHeaderCellStyle = {
   color: 'var(--color-bg)', background: 'var(--color-accent-2-500)', position: 'sticky' as const, top: 0, zIndex: 4,
 };
 
-const HEADER_GUTTER_PX = 92;
+const ROW_NUMBER_WIDTH_PX = 32;
+const CHECKBOX_WIDTH_PX = 40;
+const HEADER_GUTTER_PX = ROW_NUMBER_WIDTH_PX + CHECKBOX_WIDTH_PX;
 
 /** Keep a header to at most two lines: size to the longer of the longest
  * token and half the full label, plus sort icon and cell padding. */
@@ -260,7 +262,6 @@ export function ResultsTable({
       <ResultsBody
         records={records}
         columns={columns}
-        canEdit={canEdit}
         sort={sort}
         filters={filters}
         selectedIds={selectedIds}
@@ -318,7 +319,6 @@ function ResultsCount({
 function ResultsBody({
   records,
   columns,
-  canEdit,
   sort,
   filters,
   selectedIds,
@@ -328,7 +328,6 @@ function ResultsBody({
 }: {
   records: LandSale[];
   columns: ResultColumn[];
-  canEdit: boolean;
   sort: ResultsSort;
   filters: LandSaleFilters;
   selectedIds: Set<string>;
@@ -350,12 +349,6 @@ function ResultsBody({
     router.push(searchQuery ? `/land-sales/${id}?from=${encodeURIComponent(searchQuery)}` : `/land-sales/${id}`);
   }
 
-  function editDetails(id: string) {
-    const params = new URLSearchParams({ edit: '1' });
-    if (searchQuery) params.set('from', searchQuery);
-    router.push(`/land-sales/${id}?${params.toString()}`);
-  }
-
   return (
     <div className="results-shell" style={{ flex: 1, display: 'flex', gap: 'var(--space-6)', boxSizing: 'border-box', background: 'var(--color-accent-2-200)' }}>
       <main style={{ flex: 1, minWidth: 0, paddingTop: 0, boxSizing: 'border-box' }}>
@@ -364,7 +357,8 @@ function ResultsBody({
             <table className="table results-table" style={{ width: '100%', minWidth: tableMinWidth }}>
               <thead>
                 <tr>
-                  <th style={{ ...stickyHeaderCellStyle, width: 40 }}>
+                  <th style={{ ...stickyHeaderCellStyle, width: ROW_NUMBER_WIDTH_PX }} />
+                  <th style={{ ...stickyHeaderCellStyle, width: CHECKBOX_WIDTH_PX }}>
                     <input
                       type="checkbox"
                       checked={pageState === 'all'}
@@ -375,7 +369,6 @@ function ResultsBody({
                       aria-label="Select all rows on this page"
                     />
                   </th>
-                  <th style={{ ...stickyHeaderCellStyle, width: 52 }} />
                   {columns.map(col => (
                     <SortableHeader
                       key={fieldVisibilityId(col)}
@@ -393,42 +386,21 @@ function ResultsBody({
                       No records match your search criteria.
                     </td>
                   </tr>
-                ) : keyed.map(({ record: r, key }) => {
+                ) : keyed.map(({ record: r, key }, index) => {
                   const isSelected = selectedIds.has(key);
                   const address = String(r.columns['Property Address'] ?? '').trim();
                   const parcel = String(r.columns['Parcel Number 1 (Min)'] ?? '').trim();
                   return (
                     <tr
                       key={key}
-                      onClick={() => toggleRow(key)}
+                      onClick={() => viewDetails(r.id)}
                       style={{ background: isSelected ? 'var(--color-accent-100)' : undefined, cursor: 'pointer' }}
                     >
+                      <td style={{ width: ROW_NUMBER_WIDTH_PX, textAlign: 'right', color: 'var(--color-neutral-600)', fontVariantNumeric: 'tabular-nums' }}>
+                        {index + 1}
+                      </td>
                       <td onClick={e => e.stopPropagation()}>
                         <input type="checkbox" checked={isSelected} onChange={() => toggleRow(key)} aria-label={`Select ${parcel || address || r.id}`} />
-                      </td>
-                      <td onClick={e => e.stopPropagation()} style={{ padding: 4, width: 52 }}>
-                        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                          <button
-                            type="button"
-                            className="row-action-btn"
-                            onClick={() => viewDetails(r.id)}
-                            title="View Details"
-                            aria-label="View Details"
-                          >
-                            <Eye size={12} strokeWidth={1.5} />
-                          </button>
-                          {canEdit && (
-                            <button
-                              type="button"
-                              className="row-action-btn"
-                              onClick={() => editDetails(r.id)}
-                              title="Edit Details"
-                              aria-label="Edit Details"
-                            >
-                              <Pencil size={12} strokeWidth={1.5} />
-                            </button>
-                          )}
-                        </div>
                       </td>
                       {columns.map(col => (
                         <td key={fieldVisibilityId(col)}>
