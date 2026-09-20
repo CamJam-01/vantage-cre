@@ -13,8 +13,9 @@ export default async function DatabaseManagerPage() {
   if (!profile) redirect('/login');
   if (profile.role !== 'Admin') redirect('/search');
 
-  const [{ count: salesCount }, { data: auditRows }, users] = await Promise.all([
+  const [{ count: salesCount }, { count: improvedCount }, { data: auditRows }, users] = await Promise.all([
     supabase.from('land_sales').select('"Comp ID"', { count: 'exact', head: true }),
+    supabase.from('improved_sales').select('"Comp ID"', { count: 'exact', head: true }),
     supabase.from('audit_log').select('actor_name, action, detail, created_at').order('created_at', { ascending: false }).limit(25),
     listUserProfiles(supabase),
   ]);
@@ -41,7 +42,7 @@ export default async function DatabaseManagerPage() {
         </div>
 
         <DatabaseManagerTabs
-          salesCount={salesCount ?? 0}
+          recordCounts={{ sales: salesCount ?? 0, 'improved-sales': improvedCount ?? 0 }}
           auditLog={auditLog}
           users={users}
           currentUserId={profile.id}

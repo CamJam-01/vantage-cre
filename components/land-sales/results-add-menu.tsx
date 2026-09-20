@@ -3,8 +3,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
+import type { SalesPath } from '@/lib/land-sales/sales-path';
 
-export function ResultsAddMenu() {
+export function ResultsAddMenu({ path }: { path: SalesPath }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -51,8 +52,8 @@ export function ResultsAddMenu() {
         <Plus size={20} strokeWidth={1.5} aria-hidden />
       </button>
       <div id={menuId} className="results-add-dropdown" role="menu">
-        <Link href="/land-sales/new" role="menuitem">Add Record</Link>
-        <Link href="/land-sales/import" role="menuitem">Import CSV</Link>
+        <Link href={`${path.basePath}/new`} role="menuitem">Add Record</Link>
+        <Link href={`${path.basePath}/import`} role="menuitem">Import CSV</Link>
       </div>
     </div>
   );

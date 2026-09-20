@@ -29,6 +29,17 @@ describe('parseVisibilitySubmission', () => {
     );
   });
 
+  it('accepts improved-sales as its own arrangement', () => {
+    const result = parseVisibilitySubmission(formData([
+      ['database_key', 'improved-sales'],
+      ['visible_field_id', 'Property City'],
+    ]), columns);
+
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.databaseKey, 'improved-sales');
+  });
+
   it('rejects unavailable database keys', () => {
     assert.deepEqual(
       parseVisibilitySubmission(formData([

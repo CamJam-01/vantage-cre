@@ -9,6 +9,8 @@ import { DocxTemplatesManager } from '@/components/admin/docx-templates-manager'
 import type { DocxTemplate } from '@/lib/land-sales/docx-templates';
 import { listDocxOutputFlows } from '@/lib/land-sales/output-flow-store';
 import type { DocxOutputFlow } from '@/lib/land-sales/output-flows';
+import { isDatabaseKey } from '@/lib/land-sales/field-visibility';
+import { salesPathFromDatabaseKey } from '@/lib/land-sales/sales-path';
 
 type PageProps = { searchParams: Promise<{ db?: string }> };
 
@@ -20,16 +22,18 @@ export default async function DatabaseTemplatesPage({ searchParams }: PageProps)
 
   const { db } = await searchParams;
   const category = DATABASE_CATEGORIES.find(c => c.key === db);
-  if (!category || !category.available) redirect('/admin/database-manager');
+  if (!category || !category.available || !isDatabaseKey(category.key)) redirect('/admin/database-manager');
+  const path = salesPathFromDatabaseKey(category.key);
+  if (!path) redirect('/admin/database-manager');
 
   const [templateResult, flowResult] = await Promise.all([
-    listDocxTemplates(supabase)
+    listDocxTemplates(supabase, path.databaseKey)
       .then(templates => ({ templates, loadError: undefined as string | undefined }))
       .catch((error: unknown) => ({
         templates: [] as DocxTemplate[],
         loadError: error instanceof Error ? error.message : 'Could not load merge templates.',
       })),
-    listDocxOutputFlows(supabase)
+    listDocxOutputFlows(supabase, path.databaseKey)
       .then(flows => ({ flows, flowLoadError: undefined as string | undefined }))
       .catch((error: unknown) => ({
         flows: [] as DocxOutputFlow[],
@@ -64,6 +68,8 @@ export default async function DatabaseTemplatesPage({ searchParams }: PageProps)
         </div>
 
         <DocxTemplatesManager
+          databaseKey={path.databaseKey}
+          label={path.label}
           templates={templateResult.templates}
           flows={flowResult.flows}
           tags={mergeTagCatalog()}

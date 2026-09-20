@@ -1,59 +1,10 @@
-import { Suspense } from 'react';
-import { createClient } from '@/lib/supabase/server';
-import { decodeFilters } from '@/lib/land-sales/search-params';
-import { decodePage } from '@/lib/land-sales/pagination';
-import { decodeSort } from '@/lib/land-sales/results-sort';
-import { resultColumns } from '@/lib/land-sales/result-columns';
-import { loadDisplaySettings } from '@/lib/land-sales/display-settings';
-import { filterVisibleColumns, orderColumns, SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
-import { canDelete, canEdit, getCurrentUserProfile } from '@/lib/users/roles';
-import { listDocxOutputFlows } from '@/lib/land-sales/output-flow-store';
-import type { DocxOutputFlow } from '@/lib/land-sales/output-flows';
-import { ResultsToolbar } from '@/components/land-sales/results-table';
-import { LandSalesResults, ResultsFallback } from './land-sales-results';
+import { LAND_SALES_PATH } from '@/lib/land-sales/sales-path';
+import { SalesResultsPage } from './land-sales-results';
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function LandSalesPage({ searchParams }: PageProps) {
-  const params = await searchParams;
-  const filters = decodeFilters(params);
-  const page = decodePage(params.page);
-  const sort = decodeSort(params.sort, params.dir);
-
-  const supabase = await createClient();
-  const [profile, display, outputFlows] = await Promise.all([
-    getCurrentUserProfile(supabase),
-    loadDisplaySettings(supabase, SALES_DATABASE_KEY),
-    // Only the Merge to DOCX action depends on this, so a failure to read it
-    // must not take the results page down with it.
-    listDocxOutputFlows(supabase).catch(() => [] as DocxOutputFlow[]),
-  ]);
-  const columns = orderColumns(resultColumns(), display.fieldOrder);
-  const visibleColumns = filterVisibleColumns(columns, display.hidden);
-  const role = profile?.role ?? 'Viewer';
-  const active = Boolean(profile && !profile.is_suspended);
-
-  return (
-    <>
-      <ResultsToolbar
-        columns={visibleColumns}
-        canEdit={active && canEdit(role)}
-        canDelete={active && canDelete(role)}
-        filters={filters}
-        sort={sort}
-        outputFlows={outputFlows}
-      />
-      <Suspense fallback={<ResultsFallback />}>
-        <LandSalesResults
-          filters={filters}
-          page={page}
-          sort={sort}
-          columns={visibleColumns}
-          canEdit={active && canEdit(role)}
-        />
-      </Suspense>
-    </>
-  );
+export default function LandSalesPage({ searchParams }: PageProps) {
+  return <SalesResultsPage path={LAND_SALES_PATH} searchParams={searchParams} />;
 }

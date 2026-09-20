@@ -12,11 +12,12 @@ import {
   templateObjectPath,
   validateTemplateFile,
 } from '@/lib/land-sales/docx-templates';
-import { SALES_DATABASE_KEY } from '@/lib/land-sales/field-visibility';
+import { SALES_DATABASE_KEY, isDatabaseKey, type DatabaseKey } from '@/lib/land-sales/field-visibility';
 import {
   outputFlowDraftError,
   type OutputFlowDraft,
 } from '@/lib/land-sales/output-flows';
+import { salesPathFromDatabaseKey } from '@/lib/land-sales/sales-path';
 
 export type TemplateActionState =
   | { status: 'success'; message: string }
@@ -45,9 +46,14 @@ async function requireAdmin() {
   return { supabase, profile };
 }
 
-function refreshTemplateConsumers() {
+function refreshTemplateConsumers(databaseKey: DatabaseKey = SALES_DATABASE_KEY) {
   revalidatePath('/admin/database-manager/templates');
-  revalidatePath('/land-sales');
+  const path = salesPathFromDatabaseKey(databaseKey);
+  if (path) revalidatePath(path.basePath);
+}
+
+function pathLabel(databaseKey: DatabaseKey): string {
+  return salesPathFromDatabaseKey(databaseKey)?.label ?? 'Sales';
 }
 
 export async function uploadTemplateAction(
@@ -61,6 +67,12 @@ export async function uploadTemplateAction(
   const nameError = templateNameError(name);
   if (nameError) return { status: 'error', message: nameError };
 
+  const databaseKeyRaw = formData.get('database_key');
+  if (!isDatabaseKey(databaseKeyRaw)) {
+    return { status: 'error', message: 'This database is not available for merge templates.' };
+  }
+  const databaseKey = databaseKeyRaw;
+
   const file = formData.get('template');
   if (!(file instanceof File)) return { status: 'error', message: templateFileErrorMessage('missing') };
   const fileProblem = validateTemplateFile(file);
@@ -71,7 +83,7 @@ export async function uploadTemplateAction(
   const { data: inserted, error: insertError } = await supabase
     .from('docx_templates')
     .insert({
-      database_key: SALES_DATABASE_KEY,
+      database_key: databaseKey,
       name,
       storage_path: 'pending',
       created_by: profile.id,
@@ -105,8 +117,8 @@ export async function uploadTemplateAction(
     return { status: 'error', message: `Could not save the template: ${pathError.message}` };
   }
 
-  await logAudit(supabase, 'Added Merge Template', `Land Sales: ${name}`);
-  refreshTemplateConsumers();
+  await logAudit(supabase, 'Added Merge Template', `${pathLabel(databaseKey)}: ${name}`);
+  refreshTemplateConsumers(databaseKey);
   return { status: 'success', message: `“${name}” is ready to use in Merge to DOCX.` };
 }
 
@@ -120,7 +132,7 @@ export async function renameTemplateAction(id: string, name: string): Promise<Te
 
   const { data: existing } = await supabase
     .from('docx_templates')
-    .select('name')
+    .select('name, database_key')
     .eq('id', id)
     .maybeSingle();
 
@@ -134,9 +146,9 @@ export async function renameTemplateAction(id: string, name: string): Promise<Te
   await logAudit(
     supabase,
     'Renamed Merge Template',
-    `Land Sales: ${existing?.name ?? id} → ${trimmed}`,
+    `${pathLabel(isDatabaseKey(existing?.database_key) ? existing.database_key : SALES_DATABASE_KEY)}: ${existing?.name ?? id} → ${trimmed}`,
   );
-  refreshTemplateConsumers();
+  refreshTemplateConsumers(isDatabaseKey(existing?.database_key) ? existing.database_key : SALES_DATABASE_KEY);
   return { status: 'success', message: `Renamed to “${trimmed}”.` };
 }
 
@@ -146,7 +158,7 @@ export async function deleteTemplateAction(id: string): Promise<TemplateActionSt
 
   const { data: existing } = await supabase
     .from('docx_templates')
-    .select('name, storage_path')
+    .select('name, storage_path, database_key')
     .eq('id', id)
     .maybeSingle();
 
@@ -164,19 +176,25 @@ export async function deleteTemplateAction(id: string): Promise<TemplateActionSt
     await supabase.storage.from(DOCX_TEMPLATE_BUCKET).remove([existing.storage_path]);
   }
 
-  await logAudit(supabase, 'Deleted Merge Template', `Land Sales: ${existing?.name ?? id}`);
-  refreshTemplateConsumers();
+  await logAudit(supabase, 'Deleted Merge Template', `${pathLabel(isDatabaseKey(existing?.database_key) ? existing.database_key : SALES_DATABASE_KEY)}: ${existing?.name ?? id}`);
+  refreshTemplateConsumers(isDatabaseKey(existing?.database_key) ? existing.database_key : SALES_DATABASE_KEY);
   return { status: 'success', message: `Deleted “${existing?.name ?? 'template'}”.` };
 }
 
-export async function saveOutputFlowAction(draft: OutputFlowDraft): Promise<TemplateActionState> {
+export async function saveOutputFlowAction(
+  databaseKey: DatabaseKey,
+  draft: OutputFlowDraft,
+): Promise<TemplateActionState> {
   const { supabase, profile } = await requireAdmin();
   if (!profile) return { status: 'error', message: DENIED };
+  if (!isDatabaseKey(databaseKey)) {
+    return { status: 'error', message: 'This database is not available for output flows.' };
+  }
 
   const { data: templates, error: templateError } = await supabase
     .from('docx_templates')
     .select('id')
-    .eq('database_key', SALES_DATABASE_KEY);
+    .eq('database_key', databaseKey);
   if (templateError) {
     return { status: 'error', message: `Could not validate saved templates: ${templateError.message}` };
   }
@@ -187,7 +205,7 @@ export async function saveOutputFlowAction(draft: OutputFlowDraft): Promise<Temp
 
   const { error } = await supabase.rpc('save_docx_output_flow', {
     p_flow_id: draft.id,
-    p_database_key: SALES_DATABASE_KEY,
+    p_database_key: databaseKey,
     p_name: draft.name.trim(),
     p_default_template_id: draft.defaultTemplateId,
     p_conditions: draft.conditions,
@@ -202,9 +220,9 @@ export async function saveOutputFlowAction(draft: OutputFlowDraft): Promise<Temp
   await logAudit(
     supabase,
     draft.id ? 'Updated DOCX Output Flow' : 'Added DOCX Output Flow',
-    `Land Sales: ${draft.name.trim()}`,
+    `${pathLabel(databaseKey)}: ${draft.name.trim()}`,
   );
-  refreshTemplateConsumers();
+  refreshTemplateConsumers(databaseKey);
   return { status: 'success', message: `Saved output flow “${draft.name.trim()}”.` };
 }
 
@@ -214,13 +232,14 @@ export async function deleteOutputFlowAction(id: string): Promise<TemplateAction
 
   const { data: existing } = await supabase
     .from('docx_output_flows')
-    .select('name')
+    .select('name, database_key')
     .eq('id', id)
     .maybeSingle();
   const { error } = await supabase.from('docx_output_flows').delete().eq('id', id);
   if (error) return { status: 'error', message: `Could not delete the output flow: ${error.message}` };
 
-  await logAudit(supabase, 'Deleted DOCX Output Flow', `Land Sales: ${existing?.name ?? id}`);
-  refreshTemplateConsumers();
+  const flowKey = isDatabaseKey(existing?.database_key) ? existing.database_key : SALES_DATABASE_KEY;
+  await logAudit(supabase, 'Deleted DOCX Output Flow', `${pathLabel(flowKey)}: ${existing?.name ?? id}`);
+  refreshTemplateConsumers(flowKey);
   return { status: 'success', message: `Deleted “${existing?.name ?? 'output flow'}”.` };
 }

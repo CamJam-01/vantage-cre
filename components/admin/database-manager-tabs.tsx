@@ -27,12 +27,12 @@ const DEFERRED_CONNECTIONS = [
 export type AuditRow = { timestamp: string; user: string; action: string; detail: string };
 
 export function DatabaseManagerTabs({
-  salesCount,
+  recordCounts,
   auditLog,
   users,
   currentUserId,
 }: {
-  salesCount: number;
+  recordCounts: Partial<Record<string, number>>;
   auditLog: AuditRow[];
   users: UserProfile[];
   currentUserId: string;
@@ -88,7 +88,8 @@ export function DatabaseManagerTabs({
       {tab === 'databases' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           {DATABASE_CATEGORIES.map(db => {
-            const recordLabel = db.key === 'sales' ? `${salesCount} record${salesCount === 1 ? '' : 's'}` : 'Coming in a later phase';
+            const count = recordCounts[db.key] ?? 0;
+            const recordLabel = db.available ? `${count} record${count === 1 ? '' : 's'}` : 'Coming in a later phase';
             const style: CSSProperties = {
               position: 'relative', boxSizing: 'border-box', background: 'var(--color-bg)',
               padding: 'var(--space-6) var(--space-8)', display: 'flex', alignItems: 'center', justifyContent: 'space-between',

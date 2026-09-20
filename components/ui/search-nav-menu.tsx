@@ -42,7 +42,8 @@ export function SearchNavMenu() {
         Search
       </button>
       <div id={menuId} className="nav-dropdown-menu" role="menu">
-        <Link href="/land-sales" role="menuitem" onClick={() => setOpen(false)}>Results</Link>
+        <Link href="/land-sales" role="menuitem" onClick={() => setOpen(false)}>Land Results</Link>
+        <Link href="/improved-sales" role="menuitem" onClick={() => setOpen(false)}>Improved Results</Link>
         <Link href="/search" role="menuitem" onClick={() => setOpen(false)}>New</Link>
       </div>
     </div>

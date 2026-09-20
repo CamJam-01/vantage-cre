@@ -92,6 +92,23 @@ describe('applyLandSaleFilters', () => {
       [{ op: 'overlaps', column: 'proposed_use_labels', value: ['Retail'] }],
     );
   });
+
+  it('queries improved_sales when that table is requested', () => {
+    const tables: string[] = [];
+    const builder = {
+      select() { return builder; },
+      order() { return builder; },
+      range() { return builder; },
+    };
+    const supabase = {
+      from(table: string) {
+        tables.push(table);
+        return builder;
+      },
+    } as unknown as SupabaseClient;
+    applyLandSaleFilters(supabase, emptyFilters, { from: 0, to: 49 }, undefined, 'improved_sales');
+    assert.deepEqual(tables, ['improved_sales']);
+  });
 });
 
 describe('getDistinctSecondaryTypes', () => {
@@ -109,6 +126,17 @@ describe('getDistinctSecondaryTypes', () => {
     await assert.rejects(() => getDistinctSecondaryTypes(supabase), /function is unavailable/);
   });
 
+  it('passes the Improved table name to the parameterized RPC', async () => {
+    const supabase = {
+      rpc: async (fn: string, args?: { p_table: string }) => {
+        assert.equal(fn, 'distinct_secondary_types');
+        assert.deepEqual(args, { p_table: 'improved_sales' });
+        return { data: ['Retail'], error: null };
+      },
+    } as unknown as SupabaseClient;
+    assert.deepEqual(await getDistinctSecondaryTypes(supabase, 'improved_sales'), ['Retail']);
+  });
+
   it('rejects a malformed successful response', async () => {
     const supabase = {
       rpc: async () => ({ data: { value: 'Retail' }, error: null }),
@@ -120,8 +148,9 @@ describe('getDistinctSecondaryTypes', () => {
 describe('getDistinctProposedUses', () => {
   it('splits combined RPC values, deduplicates, and sorts', async () => {
     const supabase = {
-      rpc: async (fn: string) => {
+      rpc: async (fn: string, args?: { p_table: string }) => {
         assert.equal(fn, 'distinct_proposed_uses');
+        assert.equal(args, undefined);
         return { data: [' Retail, Office ', 'Industrial', '', 'Retail'], error: null };
       },
     } as unknown as SupabaseClient;

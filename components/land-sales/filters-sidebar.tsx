@@ -24,6 +24,7 @@ import { DEFAULT_RESULTS_SORT, type ResultsSort } from '@/lib/land-sales/results
 import { buildSearchFilterEntries, type SearchFilterEntry } from '@/lib/land-sales/search-filter-entries';
 import { US_STATES } from '@/lib/land-sales/constants';
 import type { ResultColumn } from '@/lib/land-sales/result-columns';
+import type { SalesPath } from '@/lib/land-sales/sales-path';
 
 /** The "+ Add Filter" trigger sits inside the sidebar's own `overflow-y:auto`
  * region, so an absolutely-positioned menu gets silently clipped by that
@@ -52,10 +53,12 @@ function computeMenuStyle(triggerRect: DOMRect): CSSProperties {
 }
 
 export function FiltersSidebar({
+  path,
   filters,
   columns,
   sort = DEFAULT_RESULTS_SORT,
 }: {
+  path: SalesPath;
   filters: LandSaleFilters;
   columns: ResultColumn[];
   sort?: ResultsSort;
@@ -79,7 +82,7 @@ export function FiltersSidebar({
 
   const activeCount = appliedFilterCount(filters);
   const applySearch = (next: LandSaleFilters) => {
-    router.replace(landSalesPageHref(next, 1, sort));
+    router.replace(landSalesPageHref(next, 1, sort, path.basePath));
   };
   const searchEntries = buildSearchFilterEntries(filters, applySearch);
   const dirty = draftsDiffer(draft, filters.fieldFilters ?? []);
@@ -228,7 +231,7 @@ export function FiltersSidebar({
             )}
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexShrink: 0 }}>
-            <Link href={`/search/sales/land?${filtersKey}`} style={{ fontSize: 13, fontWeight: 600 }}>Modify Search</Link>
+            <Link href={`${path.searchPath}?${filtersKey}`} style={{ fontSize: 13, fontWeight: 600 }}>Modify Search</Link>
             <button
               ref={closeBtnRef}
               type="button"

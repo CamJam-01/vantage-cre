@@ -1,7 +1,14 @@
 import type { ResultColumn } from './result-columns';
 
-export type DatabaseKey = 'sales';
+export type DatabaseKey = 'sales' | 'improved-sales';
 export const SALES_DATABASE_KEY: DatabaseKey = 'sales';
+export const IMPROVED_SALES_DATABASE_KEY: DatabaseKey = 'improved-sales';
+export const DATABASE_KEYS: readonly DatabaseKey[] = [SALES_DATABASE_KEY, IMPROVED_SALES_DATABASE_KEY];
+
+export function isDatabaseKey(value: unknown): value is DatabaseKey {
+  return value === SALES_DATABASE_KEY || value === IMPROVED_SALES_DATABASE_KEY;
+}
+
 export type HiddenFieldIds = ReadonlySet<string>;
 
 export function fieldVisibilityId(column: ResultColumn): string {

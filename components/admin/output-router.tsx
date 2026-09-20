@@ -11,6 +11,7 @@ import {
   type TemplateActionState,
 } from '@/app/(app)/admin/database-manager/templates/actions';
 import type { DocxTemplate } from '@/lib/land-sales/docx-templates';
+import type { DatabaseKey } from '@/lib/land-sales/field-visibility';
 import {
   OUTPUT_FLOW_CONDITION_LIMIT,
   OUTPUT_FLOW_NAME_MAX_LENGTH,
@@ -276,11 +277,13 @@ function FlowEditor({
 }
 
 export function OutputRouter({
+  databaseKey,
   templates,
   flows,
   fields,
   loadError,
 }: {
+  databaseKey: DatabaseKey;
   templates: DocxTemplate[];
   flows: DocxOutputFlow[];
   fields: string[];
@@ -298,7 +301,7 @@ export function OutputRouter({
   function save() {
     if (!draft) return;
     startTransition(async () => {
-      const result = await saveOutputFlowAction(draft);
+      const result = await saveOutputFlowAction(databaseKey, draft);
       setStatus(result);
       if (result?.status === 'success') setDraft(null);
     });
