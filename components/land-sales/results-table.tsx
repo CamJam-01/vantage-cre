@@ -61,9 +61,9 @@ function SortableHeader({
       <Link href={href} className="col-header">
         <span className="col-header-label">{column.label}</span>
         {active ? (
-          sort.dir === 'asc' ? <ChevronUp size={14} strokeWidth={1.5} /> : <ChevronDown size={14} strokeWidth={1.5} />
+          sort.dir === 'asc' ? <ChevronUp size={18} strokeWidth={2.5} /> : <ChevronDown size={18} strokeWidth={2.5} />
         ) : (
-          <ChevronsUpDown size={12} strokeWidth={1.5} style={{ opacity: 0.35 }} />
+          <ChevronsUpDown size={22} strokeWidth={2} />
         )}
       </Link>
     </th>

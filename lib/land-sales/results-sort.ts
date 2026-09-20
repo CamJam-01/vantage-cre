@@ -46,9 +46,21 @@ export function appendSortParams(params: URLSearchParams, sort: ResultsSort): vo
   params.set('dir', encoded.dir);
 }
 
+/** Header click cycle: idle → asc → desc → default table order.
+ * The default table is already Sale Date desc, so that column's first
+ * click from default is asc rather than a no-op unset. */
 export function toggleResultsSort(current: ResultsSort, column: string): ResultsSort {
-  if (current.column === column) {
-    return { column, dir: current.dir === 'asc' ? 'desc' : 'asc' };
+  if (current.column !== column) {
+    return { column, dir: 'asc' };
   }
-  return { column, dir: 'asc' };
+  if (current.dir === 'asc') {
+    return { column, dir: 'desc' };
+  }
+  if (
+    current.column === DEFAULT_RESULTS_SORT.column
+    && current.dir === DEFAULT_RESULTS_SORT.dir
+  ) {
+    return { column, dir: 'asc' };
+  }
+  return DEFAULT_RESULTS_SORT;
 }
