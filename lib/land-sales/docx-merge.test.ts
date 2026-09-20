@@ -117,8 +117,8 @@ describe('mergeDocx', () => {
 
   it('fills every record from its own values, in the order given', () => {
     assert.equal(bodyText.indexOf('Riverbend Tract') < bodyText.indexOf('Kestrel Flats'), true);
-    assert.match(bodyText, /Sold for \$1,250,000 on 08\/14\/2025 in Austin\./);
-    assert.match(bodyText, /Sold for \$980,000 on 03\/02\/2024 in Round Rock\./);
+    assert.match(bodyText, /Sold for \$1,250,000 on 14\/08\/2025 in Austin\./);
+    assert.match(bodyText, /Sold for \$980,000 on 02\/03\/2024 in Round Rock\./);
   });
 
   it('numbers merged comps sequentially in merge order', () => {

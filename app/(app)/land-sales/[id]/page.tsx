@@ -34,7 +34,7 @@ export default async function RecordDetailsPage({ params, searchParams }: PagePr
   const resultsParams = new URLSearchParams(from ?? '');
   const filters = decodeFilters(resultsParams);
   const sort = decodeSort(resultsParams.get('sort'), resultsParams.get('dir'));
-  const { prevId, nextId } = await fetchAdjacentLandSaleIds(
+  const { prevId, nextId, position, total } = await fetchAdjacentLandSaleIds(
     supabase,
     filters,
     sort,
@@ -50,6 +50,8 @@ export default async function RecordDetailsPage({ params, searchParams }: PagePr
       canDelete={active && canDelete(role)}
       prevId={prevId}
       nextId={nextId}
+      resultPosition={position}
+      resultTotal={total}
       hiddenFieldIds={[...display.hidden]}
       fieldOrder={display.fieldOrder}
       fieldDividers={display.fieldDividers}

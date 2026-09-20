@@ -150,6 +150,47 @@ function isMissingSortValue(value: unknown): boolean {
   return value == null || value === '';
 }
 
+type NeighborQuery = {
+  is: (column: string, value: null) => NeighborQuery;
+  filter: (column: string, operator: string, value: string) => NeighborQuery;
+  or: (filters: string) => NeighborQuery;
+  order: (column: string, options: { ascending: boolean; nullsFirst?: boolean }) => NeighborQuery;
+  limit: (count: number) => PromiseLike<{ data: Array<{ id?: string }> | null; error: { message: string } | null }>;
+};
+
+/** Apply the keyset clause for a row earlier/later in filtered sort order. */
+function withNeighborKeyset<T>(
+  query: T,
+  sort: ResultsSort,
+  currentId: string,
+  currentSortValue: unknown,
+  direction: 'prev' | 'next',
+): T {
+  const ascending = sort.dir === 'asc';
+  const forward = direction === 'next';
+  const col = formatOrColumn(sort.column);
+  const idOp = forward ? 'gt' : 'lt';
+  const wantGreaterSort = forward ? ascending : !ascending;
+  const primaryOp = wantGreaterSort ? 'gt' : 'lt';
+  let next = query as unknown as NeighborQuery;
+
+  if (isMissingSortValue(currentSortValue)) {
+    if (forward) {
+      next = next.is(sort.column, null).filter('id', idOp, currentId);
+    } else {
+      next = next.or(`${col}.not.is.null,and(${col}.is.null,id.${idOp}.${currentId})`);
+    }
+  } else {
+    const value = formatOrValue(currentSortValue);
+    let orFilter =
+      `${col}.${primaryOp}.${value},and(${col}.eq.${value},id.${idOp}.${currentId})`;
+    // Nulls sort last in both directions; they only follow a non-null current row.
+    if (forward) orFilter += `,${col}.is.null`;
+    next = next.or(orFilter);
+  }
+  return next as T;
+}
+
 /** One step earlier/later in the same filtered + sorted result order as
  * `applyLandSaleFilters` (sort column, then `id` ascending, nulls last). */
 async function fetchNeighborLandSaleId(
@@ -162,28 +203,10 @@ async function fetchNeighborLandSaleId(
 ): Promise<string | null> {
   const ascending = sort.dir === 'asc';
   const forward = direction === 'next';
-  const col = formatOrColumn(sort.column);
-  const idOp = forward ? 'gt' : 'lt';
-  const wantGreaterSort = forward ? ascending : !ascending;
-  const primaryOp = wantGreaterSort ? 'gt' : 'lt';
 
   let query = supabase.from('land_sales').select('id');
   query = withLandSaleFilters(query, filters);
-
-  if (isMissingSortValue(currentSortValue)) {
-    if (forward) {
-      query = query.is(sort.column, null).filter('id', idOp, currentId);
-    } else {
-      query = query.or(`${col}.not.is.null,and(${col}.is.null,id.${idOp}.${currentId})`);
-    }
-  } else {
-    const value = formatOrValue(currentSortValue);
-    let orFilter =
-      `${col}.${primaryOp}.${value},and(${col}.eq.${value},id.${idOp}.${currentId})`;
-    // Nulls sort last in both directions; they only follow a non-null current row.
-    if (forward) orFilter += `,${col}.is.null`;
-    query = query.or(orFilter);
-  }
+  query = withNeighborKeyset(query, sort, currentId, currentSortValue, direction);
 
   if (forward) {
     query = query
@@ -201,21 +224,76 @@ async function fetchNeighborLandSaleId(
   return typeof id === 'string' && id ? id : null;
 }
 
-/** Previous/next record ids in the filtered result set the details page was
- * opened from. Missing `from` (empty filters + default sort) still walks the
- * full catalog order. */
+async function countFilteredLandSales(
+  supabase: SupabaseClient,
+  filters: LandSaleFilters,
+): Promise<number> {
+  const { count, error } = await applyLandSaleFilters(supabase, filters, { head: true });
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/** How many filtered rows sort strictly before the current record. */
+async function countPrecedingLandSales(
+  supabase: SupabaseClient,
+  filters: LandSaleFilters,
+  sort: ResultsSort,
+  currentId: string,
+  currentSortValue: unknown,
+): Promise<number> {
+  let query = supabase
+    .from('land_sales')
+    .select('id', { count: 'exact', head: true });
+  query = withLandSaleFilters(query, filters);
+  query = withNeighborKeyset(query, sort, currentId, currentSortValue, 'prev');
+  const { count, error } = await query;
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+async function landSaleMatchesFilters(
+  supabase: SupabaseClient,
+  filters: LandSaleFilters,
+  currentId: string,
+): Promise<boolean> {
+  let query = supabase
+    .from('land_sales')
+    .select('id', { count: 'exact', head: true })
+    .eq('id', currentId);
+  query = withLandSaleFilters(query, filters);
+  const { count, error } = await query;
+  if (error) throw new Error(error.message);
+  return (count ?? 0) > 0;
+}
+
+/** Previous/next record ids and 1-based position in the filtered result set
+ * the details page was opened from. Missing `from` still walks the full
+ * catalog order. */
 export async function fetchAdjacentLandSaleIds(
   supabase: SupabaseClient,
   filters: LandSaleFilters,
   sort: ResultsSort,
   currentId: string,
   currentSortValue: unknown,
-): Promise<{ prevId: string | null; nextId: string | null }> {
-  const [prevId, nextId] = await Promise.all([
+): Promise<{
+  prevId: string | null;
+  nextId: string | null;
+  position: number | null;
+  total: number;
+}> {
+  const [prevId, nextId, total, preceding, inSet] = await Promise.all([
     fetchNeighborLandSaleId(supabase, filters, sort, currentId, currentSortValue, 'prev'),
     fetchNeighborLandSaleId(supabase, filters, sort, currentId, currentSortValue, 'next'),
+    countFilteredLandSales(supabase, filters),
+    countPrecedingLandSales(supabase, filters, sort, currentId, currentSortValue),
+    landSaleMatchesFilters(supabase, filters, currentId),
   ]);
-  return { prevId, nextId };
+  return {
+    prevId,
+    nextId,
+    position: inSet ? preceding + 1 : null,
+    total,
+  };
 }
 
 /** Unique non-empty "Secondary Type" values, used to populate the search page's type filters. */

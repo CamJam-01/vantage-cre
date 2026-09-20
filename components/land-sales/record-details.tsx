@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { deleteLandSale, updateLandSale, type CreateFormState } from '@/app/(app)/land-sales/actions';
 import {
-  columnInputValue,
   fieldInputId,
   flaggedSaleDateRaw,
   toInputString,
@@ -23,6 +22,7 @@ import {
   type FieldDivider,
 } from '@/lib/land-sales/field-visibility';
 import { costarColumnType } from '@/lib/land-sales/costar-column-types';
+import { formatCatalogValue } from '@/lib/land-sales/format';
 
 const initialState: CreateFormState = null;
 
@@ -87,6 +87,8 @@ export function RecordDetails({
   canDelete = false,
   prevId = null,
   nextId = null,
+  resultPosition = null,
+  resultTotal = 0,
   hiddenFieldIds = [],
   fieldOrder = [],
   fieldDividers = [],
@@ -97,6 +99,8 @@ export function RecordDetails({
   canDelete?: boolean;
   prevId?: string | null;
   nextId?: string | null;
+  resultPosition?: number | null;
+  resultTotal?: number;
   hiddenFieldIds?: string[];
   fieldOrder?: string[];
   fieldDividers?: FieldDivider[];
@@ -110,6 +114,8 @@ export function RecordDetails({
         canDelete={canDelete}
         prevId={prevId}
         nextId={nextId}
+        resultPosition={resultPosition}
+        resultTotal={resultTotal}
         hiddenFieldIds={hiddenFieldIds}
         fieldOrder={fieldOrder}
         fieldDividers={fieldDividers}
@@ -124,6 +130,8 @@ export function RecordDetails({
       canDelete={canDelete}
       prevId={prevId}
       nextId={nextId}
+      resultPosition={resultPosition}
+      resultTotal={resultTotal}
       hiddenFieldIds={hiddenFieldIds}
       fieldOrder={fieldOrder}
       fieldDividers={fieldDividers}
@@ -137,6 +145,8 @@ function BoundRecordDetailsForm({
   canDelete,
   prevId,
   nextId,
+  resultPosition,
+  resultTotal,
   hiddenFieldIds,
   fieldOrder,
   fieldDividers,
@@ -146,6 +156,8 @@ function BoundRecordDetailsForm({
   canDelete: boolean;
   prevId: string | null;
   nextId: string | null;
+  resultPosition: number | null;
+  resultTotal: number;
   hiddenFieldIds: string[];
   fieldOrder: string[];
   fieldDividers: FieldDivider[];
@@ -159,6 +171,8 @@ function BoundRecordDetailsForm({
       canDelete={canDelete}
       prevId={prevId}
       nextId={nextId}
+      resultPosition={resultPosition}
+      resultTotal={resultTotal}
       state={state}
       formAction={formAction}
       pending={pending}
@@ -180,15 +194,21 @@ function FieldControl({
 }) {
   const id = fieldInputId(header);
   const kind = costarColumnType(header);
+  const flagged = header === 'Sale Date' ? flaggedSaleDateRaw(record) : undefined;
+  const displayValue = flagged
+    ?? (() => {
+      const formatted = formatCatalogValue(header, record.columns[header]);
+      return formatted === '—' ? '' : formatted;
+    })();
+
   if (!editing) {
-    const flagged = header === 'Sale Date' ? flaggedSaleDateRaw(record) : undefined;
     return (
       <>
         <input
           className="input"
           readOnly
           tabIndex={-1}
-          value={columnInputValue(record, header) || '—'}
+          value={displayValue || '—'}
         />
         {flagged && (
           <span className="record-flag" title={`Unrecognized date from import: "${flagged}". Flagged for review.`}>
@@ -216,7 +236,7 @@ function FieldControl({
       name={header}
       type="text"
       className="input"
-      defaultValue={columnInputValue(record, header)}
+      defaultValue={displayValue}
       inputMode={kind === 'number' ? 'decimal' : undefined}
     />
   );
@@ -241,6 +261,8 @@ export function RecordDetailsForm({
   createMode = false,
   prevId = null,
   nextId = null,
+  resultPosition = null,
+  resultTotal = 0,
   state = null,
   formAction,
   pending = false,
@@ -255,6 +277,8 @@ export function RecordDetailsForm({
   createMode?: boolean;
   prevId?: string | null;
   nextId?: string | null;
+  resultPosition?: number | null;
+  resultTotal?: number;
   state?: CreateFormState;
   formAction?: (formData: FormData) => void;
   pending?: boolean;
@@ -406,6 +430,11 @@ export function RecordDetailsForm({
                 <FaChevronLeftIcon />
                 Previous
               </button>
+              {resultPosition != null && resultTotal > 0 && (
+                <span className="record-bar-nav-position" aria-live="polite">
+                  {resultPosition} / {resultTotal}
+                </span>
+              )}
               <button
                 type="button"
                 className="record-bar-nav-btn"

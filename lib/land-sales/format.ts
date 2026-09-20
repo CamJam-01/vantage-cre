@@ -1,5 +1,7 @@
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat('en-US');
+const acres = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 const IDENTIFIER_COLUMNS = new Set([
   'Property Zip Code',
   'Assessed Year',
@@ -7,6 +9,30 @@ const IDENTIFIER_COLUMNS = new Set([
   'Parcel Number 1 (Min)',
   'Parcel Number 2 (Max)',
   'PropertyID',
+]);
+
+/** Whole-dollar USD amounts (no fractional cents in presentation). */
+const WHOLE_DOLLAR_COLUMNS = new Set([
+  'Assessed Value',
+  'Assessed Land',
+  'Assessed Improved',
+  'Sale Price',
+  'Asking Price',
+]);
+
+/** Per-unit prices — keep every stored fractional digit. */
+const PRECISE_CURRENCY_COLUMNS = new Set([
+  'Price Per AC Land',
+  'Price Per SF Land',
+  'Price Per AC Land Net',
+  'Price Per SF Land Net',
+]);
+
+/** Quantities shown with thousands separators (no forced decimals). */
+const GROUPED_NUMBER_COLUMNS = new Set([
+  'Land Area SF',
+  'Land SF Gross',
+  'Land SF Net',
 ]);
 
 export function formatCurrency(value: number | null | undefined): string {
@@ -17,18 +43,18 @@ export function formatNumber(value: number | null | undefined): string {
   return value == null ? '—' : number.format(value);
 }
 
+/** Sale Date (and other catalog dates) as dd/mm/yyyy. */
 export function formatDate(value: string | null | undefined): string {
   if (!value) return '—';
   const iso = value.slice(0, 10);
   const [year, month, day] = iso.split('-');
   if (!year || !month || !day) return '—';
-  return `${month}/${day}/${year}`;
+  return `${day}/${month}/${year}`;
 }
 
 function isMoneyColumn(header: string): boolean {
-  return header === 'Assessed Value'
-    || header === 'Assessed Land'
-    || /price|payment|balance|tax|income|expense|down payment/i.test(header);
+  return WHOLE_DOLLAR_COLUMNS.has(header)
+    || /payment|balance|tax|income|expense|down payment/i.test(header);
 }
 
 /** Adds USD presentation without coercing through a number, preserving every
@@ -68,11 +94,14 @@ export function formatCatalogValue(header: string, value: unknown): string {
   // These fields may be numeric in Postgres, but their digits identify or label
   // something rather than count it, so grouping would misrepresent them.
   if (IDENTIFIER_COLUMNS.has(header)) return text;
-  if (header === 'Price Per SF Land') return formatPreciseCurrency(text);
+  if (PRECISE_CURRENCY_COLUMNS.has(header)) return formatPreciseCurrency(text);
   if (typeof value === 'number' || /^-?\d+(\.\d+)?$/.test(text)) {
     const n = typeof value === 'number' ? value : Number(text);
     if (!Number.isFinite(n)) return text;
-    return isMoneyColumn(header) ? formatCurrency(n) : formatNumber(n);
+    if (header === 'Land Area AC') return acres.format(n);
+    if (WHOLE_DOLLAR_COLUMNS.has(header) || isMoneyColumn(header)) return formatCurrency(n);
+    if (GROUPED_NUMBER_COLUMNS.has(header)) return formatNumber(n);
+    return formatNumber(n);
   }
   return text;
 }
