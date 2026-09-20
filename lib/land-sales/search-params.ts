@@ -11,6 +11,7 @@ export type LandSaleFilters = {
   county?: string;
   city?: string;
   types: string[];
+  proposedUses: string[];
   sfMin?: number;
   sfMax?: number;
   acMin?: number;
@@ -19,7 +20,7 @@ export type LandSaleFilters = {
   fieldFilters?: FieldFilter[];
 };
 
-export const emptyFilters: LandSaleFilters = { types: [], fieldFilters: [] };
+export const emptyFilters: LandSaleFilters = { types: [], proposedUses: [], fieldFilters: [] };
 
 export function encodeFilters(filters: LandSaleFilters): URLSearchParams {
   const params = new URLSearchParams();
@@ -28,6 +29,7 @@ export function encodeFilters(filters: LandSaleFilters): URLSearchParams {
   if (filters.county) params.set('county', filters.county);
   if (filters.city) params.set('city', filters.city);
   for (const t of filters.types) params.append('type', t);
+  for (const use of filters.proposedUses) params.append('proposedUse', use);
   if (filters.sfMin != null) params.set('sfMin', String(filters.sfMin));
   if (filters.sfMax != null) params.set('sfMax', String(filters.sfMax));
   if (filters.acMin != null) params.set('acMin', String(filters.acMin));
@@ -66,6 +68,11 @@ export function decodeFilters(input: SearchParamsInput): LandSaleFilters {
       .map(t => t.trim())
       .filter(Boolean)
   )];
+  const proposedUses = [...new Set(
+    params.getAll('proposedUse')
+      .map(use => use.trim())
+      .filter(Boolean)
+  )];
 
   const num = (key: string): number | undefined => {
     const v = params.get(key);
@@ -98,6 +105,7 @@ export function decodeFilters(input: SearchParamsInput): LandSaleFilters {
     county: params.get('county') ?? undefined,
     city: params.get('city') ?? undefined,
     types,
+    proposedUses,
     sfMin: num('sfMin'),
     sfMax: num('sfMax'),
     acMin: num('acMin'),
@@ -110,7 +118,8 @@ export function decodeFilters(input: SearchParamsInput): LandSaleFilters {
 export function hasAnyFilter(filters: LandSaleFilters): boolean {
   return Boolean(
     filters.state || filters.market || filters.county || filters.city ||
-    filters.types.length || filters.sfMin != null || filters.sfMax != null ||
+    filters.types.length || filters.proposedUses.length ||
+    filters.sfMin != null || filters.sfMax != null ||
     filters.acMin != null || filters.acMax != null || filters.time ||
     (filters.fieldFilters ?? []).length
   );
@@ -123,6 +132,7 @@ export function appliedFilterCount(filters: LandSaleFilters): number {
     !!filters.county,
     !!filters.city,
     filters.types.length > 0,
+    filters.proposedUses.length > 0,
     filters.sfMin != null || filters.sfMax != null || filters.acMin != null || filters.acMax != null,
     !!filters.time,
   ].filter(Boolean).length + (filters.fieldFilters ?? []).length;

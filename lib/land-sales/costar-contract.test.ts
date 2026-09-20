@@ -58,6 +58,11 @@ describe('CoStar header contract', () => {
     assert.equal(new Set(COSTAR_HEADERS).size, 277);
   });
 
+  it('keeps Clear Height at CoStar CSV column DA (position 105)', () => {
+    assert.equal(COSTAR_HEADERS[104], 'Clear Height');
+    assert.equal(COSTAR_HEADERS.includes('Ceiling Height'), false);
+  });
+
   it('carries the Sprinklers duplicate at the two documented positions', () => {
     const positions = COSTAR_HEADERS.flatMap((h, i) => (h === 'Sprinklers' ? [i + 1] : []));
     assert.deepEqual(positions, [259, 260], 'Sprinklers must stay at positions 259 and 260 (README §3A)');

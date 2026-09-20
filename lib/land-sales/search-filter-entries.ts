@@ -5,6 +5,7 @@ export type SearchFilterEntry =
   | { kind: 'text'; key: string; label: string; value: string; remove: () => void; commit: (v: string) => void }
   | { kind: 'state'; key: string; value: string; remove: () => void; commit: (v: string) => void }
   | { kind: 'type'; key: string; value: string; remove: () => void }
+  | { kind: 'proposedUse'; key: string; value: string; remove: () => void }
   | { kind: 'dateRange'; key: string; label: string; from: string; to: string; remove: () => void; commit: (from: string, to: string) => void }
   | { kind: 'last'; key: string; label: string; duration: string; unit: 'months' | 'years'; remove: () => void; commit: (duration: string, unit: 'months' | 'years') => void };
 
@@ -51,6 +52,12 @@ export function buildSearchFilterEntries(
     entries.push({
       kind: 'type', key: `type:${type}`, value: type,
       remove: () => commit(set({ types: filters.types.filter(t => t !== type) })),
+    });
+  }
+  for (const proposedUse of filters.proposedUses) {
+    entries.push({
+      kind: 'proposedUse', key: `proposedUse:${proposedUse}`, value: proposedUse,
+      remove: () => commit(set({ proposedUses: filters.proposedUses.filter(use => use !== proposedUse) })),
     });
   }
   if (filters.sfMin != null || filters.sfMax != null) {

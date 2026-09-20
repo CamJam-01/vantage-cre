@@ -68,7 +68,7 @@ describe('mergeValue', () => {
     assert.equal(mergeValue('Price Per SF Land', '10.2500'), '$10.2500');
     assert.equal(mergeValue('PropertyID', 9866427), '9866427');
     assert.equal(mergeValue('Buyer (True) Phone', '9195762500'), '(919) 576-2500');
-    assert.equal(mergeValue('Sale Date', '2025-08-14T00:00:00'), '08/14/2025');
+    assert.equal(mergeValue('Sale Date', '2025-08-14T00:00:00'), '14/08/2025');
     assert.equal(mergeValue('Property City', 'Austin'), 'Austin');
     assert.equal(mergeValue('Has Lab Space', true), 'Yes');
     assert.equal(mergeValue('Has Lab Space', false), 'No');

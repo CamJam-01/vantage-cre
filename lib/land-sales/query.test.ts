@@ -7,8 +7,10 @@ import { emptyFilters } from './search-params.ts';
 import {
   applyLandSaleFilters,
   fetchLandSalesByIds,
+  getDistinctProposedUses,
   getDistinctSecondaryTypes,
   isUnsatisfiableRangeError,
+  landSaleFilterClauses,
 } from './query.ts';
 
 describe('isUnsatisfiableRangeError', () => {
@@ -61,6 +63,35 @@ describe('applyLandSaleFilters', () => {
       { column: 'id', ascending: true, nullsFirst: undefined },
     ]);
   });
+
+  it('overlaps proposed_use_labels when proposed uses are selected', () => {
+    const overlaps: Array<{ column: string; value: string[] }> = [];
+    const builder = {
+      select() { return builder; },
+      order() { return builder; },
+      range() { return builder; },
+      overlaps(column: string, value: string[]) {
+        overlaps.push({ column, value });
+        return builder;
+      },
+    };
+    const supabase = {
+      from(table: string) {
+        assert.equal(table, 'land_sales');
+        return builder;
+      },
+    } as unknown as SupabaseClient;
+    applyLandSaleFilters(
+      supabase,
+      { ...emptyFilters, proposedUses: ['Retail', 'Office'] },
+      { from: 0, to: 49 },
+    );
+    assert.deepEqual(overlaps, [{ column: 'proposed_use_labels', value: ['Retail', 'Office'] }]);
+    assert.deepEqual(
+      landSaleFilterClauses({ ...emptyFilters, proposedUses: ['Retail'] }),
+      [{ op: 'overlaps', column: 'proposed_use_labels', value: ['Retail'] }],
+    );
+  });
 });
 
 describe('getDistinctSecondaryTypes', () => {
@@ -83,6 +114,32 @@ describe('getDistinctSecondaryTypes', () => {
       rpc: async () => ({ data: { value: 'Retail' }, error: null }),
     } as unknown as SupabaseClient;
     await assert.rejects(() => getDistinctSecondaryTypes(supabase), /invalid response/);
+  });
+});
+
+describe('getDistinctProposedUses', () => {
+  it('splits combined RPC values, deduplicates, and sorts', async () => {
+    const supabase = {
+      rpc: async (fn: string) => {
+        assert.equal(fn, 'distinct_proposed_uses');
+        return { data: [' Retail, Office ', 'Industrial', '', 'Retail'], error: null };
+      },
+    } as unknown as SupabaseClient;
+    assert.deepEqual(await getDistinctProposedUses(supabase), ['Industrial', 'Office', 'Retail']);
+  });
+
+  it('surfaces RPC failures instead of misreporting an empty catalog', async () => {
+    const supabase = {
+      rpc: async () => ({ data: null, error: { message: 'function is unavailable' } }),
+    } as unknown as SupabaseClient;
+    await assert.rejects(() => getDistinctProposedUses(supabase), /function is unavailable/);
+  });
+
+  it('rejects a malformed successful response', async () => {
+    const supabase = {
+      rpc: async () => ({ data: { value: 'Retail' }, error: null }),
+    } as unknown as SupabaseClient;
+    await assert.rejects(() => getDistinctProposedUses(supabase), /invalid response/);
   });
 });
 

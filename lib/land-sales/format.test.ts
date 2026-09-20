@@ -34,18 +34,37 @@ describe('formatCatalogValue', () => {
     assert.equal(formatCatalogValue('Buyer (True) Phone', 'Ask broker'), 'Ask broker');
   });
 
-  it('continues grouping numeric quantities', () => {
-    assert.equal(formatCatalogValue('Land Area SF', 9866427), '9,866,427');
+  it('rounds Land Area AC to two decimal places', () => {
+    assert.equal(formatCatalogValue('Land Area AC', 1.5), '1.50');
+    assert.equal(formatCatalogValue('Land Area AC', 12.345), '12.35');
+    assert.equal(formatCatalogValue('Land Area AC', 1234), '1,234.00');
   });
 
-  it('formats assessed value and land as whole-dollar USD', () => {
+  it('groups Land Area SF and land SF net/gross with commas', () => {
+    assert.equal(formatCatalogValue('Land Area SF', 9866427), '9,866,427');
+    assert.equal(formatCatalogValue('Land SF Gross', 1000000), '1,000,000');
+    assert.equal(formatCatalogValue('Land SF Net', 50000), '50,000');
+  });
+
+  it('formats assessed and sale prices as whole-dollar USD', () => {
     assert.equal(formatCatalogValue('Assessed Value', 2350950), '$2,350,950');
     assert.equal(formatCatalogValue('Assessed Land', '331602'), '$331,602');
+    assert.equal(formatCatalogValue('Assessed Improved', 1000), '$1,000');
+    assert.equal(formatCatalogValue('Sale Price', 1250000), '$1,250,000');
+    assert.equal(formatCatalogValue('Asking Price', 999999), '$999,999');
   });
 
-  it('preserves every stored decimal digit in Price Per SF Land', () => {
+  it('formats Sale Date as dd/mm/yyyy', () => {
+    assert.equal(formatCatalogValue('Sale Date', '2025-08-14T00:00:00'), '14/08/2025');
+    assert.equal(formatCatalogValue('Sale Date', '2024-03-02'), '02/03/2024');
+  });
+
+  it('preserves every stored decimal digit in per-unit price columns', () => {
     assert.equal(formatCatalogValue('Price Per SF Land', 10.25), '$10.25');
     assert.equal(formatCatalogValue('Price Per SF Land', '10.2500'), '$10.2500');
     assert.equal(formatCatalogValue('Price Per SF Land', '1234.56789'), '$1,234.56789');
+    assert.equal(formatCatalogValue('Price Per AC Land', '250000.5'), '$250,000.5');
+    assert.equal(formatCatalogValue('Price Per AC Land Net', '1000.25'), '$1,000.25');
+    assert.equal(formatCatalogValue('Price Per SF Land Net', '12.5'), '$12.5');
   });
 });

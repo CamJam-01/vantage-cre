@@ -7,6 +7,7 @@ describe('fieldFilters in search params', () => {
     const encoded = encodeFilters({
       state: 'NC',
       types: [],
+      proposedUses: [],
       sfMin: 1000,
       fieldFilters: [
         { column: 'Property City', kind: 'text', contains: 'Wendell' },
@@ -27,6 +28,7 @@ describe('fieldFilters in search params', () => {
   it('omits empty field filters and ignores unknown ff columns', () => {
     const encoded = encodeFilters({
       types: [],
+      proposedUses: [],
       fieldFilters: [{ column: 'Zoning', kind: 'text', contains: 'RA' }],
     });
     encoded.append('ff', 'Not A Column|text|x');
@@ -37,7 +39,20 @@ describe('fieldFilters in search params', () => {
 
   it('counts field filters in hasAnyFilter', () => {
     assert.equal(hasAnyFilter(emptyFilters), false);
-    assert.equal(hasAnyFilter({ types: [], fieldFilters: [{ column: 'Zoning', kind: 'text', contains: 'RA' }] }), true);
+    assert.equal(hasAnyFilter({ types: [], proposedUses: [], fieldFilters: [{ column: 'Zoning', kind: 'text', contains: 'RA' }] }), true);
+    assert.equal(hasAnyFilter({ types: [], proposedUses: ['Retail'] }), true);
+  });
+
+  it('round-trips repeated proposedUse params', () => {
+    const encoded = encodeFilters({
+      types: ['Industrial'],
+      proposedUses: ['Retail', 'Office'],
+    });
+    assert.deepEqual(encoded.getAll('type'), ['Industrial']);
+    assert.deepEqual(encoded.getAll('proposedUse'), ['Retail', 'Office']);
+    const decoded = decodeFilters(encoded);
+    assert.deepEqual(decoded.types, ['Industrial']);
+    assert.deepEqual(decoded.proposedUses, ['Retail', 'Office']);
   });
 
   it('does not treat a leftover msa param as Market', () => {

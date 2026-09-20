@@ -66,18 +66,29 @@ describe('encodeSort / round trip', () => {
 });
 
 describe('toggleResultsSort', () => {
-  it('starts a new column ascending and flips the active column', () => {
+  it('cycles a new column through asc, desc, then back to the default table', () => {
     assert.deepEqual(toggleResultsSort(DEFAULT_RESULTS_SORT, 'Sale Price'), {
       column: 'Sale Price',
-      dir: 'asc',
-    });
-    assert.deepEqual(toggleResultsSort(DEFAULT_RESULTS_SORT, 'Sale Date'), {
-      column: 'Sale Date',
       dir: 'asc',
     });
     assert.deepEqual(toggleResultsSort({ column: 'Sale Price', dir: 'asc' }, 'Sale Price'), {
       column: 'Sale Price',
       dir: 'desc',
     });
+    assert.deepEqual(
+      toggleResultsSort({ column: 'Sale Price', dir: 'desc' }, 'Sale Price'),
+      DEFAULT_RESULTS_SORT,
+    );
+  });
+
+  it('starts the default column ascending instead of no-op unsetting', () => {
+    assert.deepEqual(toggleResultsSort(DEFAULT_RESULTS_SORT, 'Sale Date'), {
+      column: 'Sale Date',
+      dir: 'asc',
+    });
+    assert.deepEqual(
+      toggleResultsSort({ column: 'Sale Date', dir: 'asc' }, 'Sale Date'),
+      DEFAULT_RESULTS_SORT,
+    );
   });
 });

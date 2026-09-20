@@ -25,7 +25,23 @@ describe('buildSearchFilterEntries', () => {
       state: 'NC',
       city: 'Wendell',
       types: ['Retail'],
+      proposedUses: ['Office'],
     }, () => {});
-    assert.deepEqual(entries.map(e => e.kind), ['state', 'text', 'type']);
+    assert.deepEqual(entries.map(e => e.kind), ['state', 'text', 'type', 'proposedUse']);
+  });
+
+  it('removes a proposed-use chip without touching secondary types', () => {
+    const applied: LandSaleFilters[] = [];
+    const entries = buildSearchFilterEntries({
+      ...emptyFilters,
+      types: ['Retail'],
+      proposedUses: ['Office', 'Industrial'],
+    }, next => applied.push(next));
+    const office = entries.find(e => e.kind === 'proposedUse' && e.value === 'Office');
+    assert.equal(office?.kind, 'proposedUse');
+    if (office?.kind !== 'proposedUse') return;
+    office.remove();
+    assert.deepEqual(applied[0]?.types, ['Retail']);
+    assert.deepEqual(applied[0]?.proposedUses, ['Industrial']);
   });
 });
