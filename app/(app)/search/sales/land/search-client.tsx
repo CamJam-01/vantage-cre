@@ -24,8 +24,54 @@ const TABS: { key: Tab; label: string }[] = [
 const sectionStyle: CSSProperties = { padding: 'var(--space-6)', background: 'var(--color-neutral-100)' };
 const modeRowStyle: CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'flex-start', flexDirection: 'row', gap: 20 };
 const twoColStyle: CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' };
+const tagGridStyle: CSSProperties = { display: 'grid', flexWrap: 'wrap', gap: 15, gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' };
 
-export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTypes: string[]; initial: LandSaleFilters }) {
+function FilterTagGrid({
+  values,
+  selected,
+  onToggle,
+  emptyLabel,
+}: {
+  values: string[];
+  selected: string[];
+  onToggle: (value: string) => void;
+  emptyLabel: string;
+}) {
+  return (
+    <div style={tagGridStyle}>
+      {values.map(value => {
+        const isSelected = selected.includes(value);
+        return (
+          <Tag
+            key={value}
+            onClick={() => onToggle(value)}
+            style={{
+              background: isSelected ? 'var(--color-accent-600)' : 'var(--color-paper)',
+              color: isSelected ? 'var(--color-paper)' : 'var(--color-neutral-900)',
+              border: `1px solid ${isSelected ? 'var(--color-accent-600)' : 'var(--color-neutral-400)'}`,
+              cursor: 'pointer', fontSize: 14, fontWeight: 500, gap: 0, padding: 10,
+            }}
+          >
+            {value}
+          </Tag>
+        );
+      })}
+      {values.length === 0 && (
+        <p style={{ gridColumn: '1 / -1', margin: 0, color: 'var(--color-neutral-700)' }}>{emptyLabel}</p>
+      )}
+    </div>
+  );
+}
+
+export function LandSalesSearchClient({
+  secondaryTypes,
+  proposedUses: proposedUseOptions,
+  initial,
+}: {
+  secondaryTypes: string[];
+  proposedUses: string[];
+  initial: LandSaleFilters;
+}) {
   const router = useRouter();
 
   const [activeTab, setActiveTab] = useState<Tab>('location');
@@ -37,6 +83,7 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
   const [county, setCounty] = useState(initial.county ?? '');
   const [city, setCity] = useState(initial.city ?? '');
   const [types, setTypes] = useState<string[]>([...initial.types]);
+  const [proposedUses, setProposedUses] = useState<string[]>([...initial.proposedUses]);
   const [sfMin, setSfMin] = useState(initial.sfMin != null ? String(initial.sfMin) : '');
   const [sfMax, setSfMax] = useState(initial.sfMax != null ? String(initial.sfMax) : '');
   const [acMin, setAcMin] = useState(initial.acMin != null ? String(initial.acMin) : '');
@@ -55,6 +102,10 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
     setTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
   }
 
+  function toggleProposedUse(use: string) {
+    setProposedUses(prev => prev.includes(use) ? prev.filter(x => x !== use) : [...prev, use]);
+  }
+
   function handleContinue() {
     let time: TimeFilter | undefined;
     if (timeMode === 'last' && lastDuration) {
@@ -68,6 +119,7 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
       county: county.trim() || undefined,
       city: city.trim() || undefined,
       types,
+      proposedUses,
       sfMin: sizeMode === 'sf' ? parseFormattedNumber(sfMin) : undefined,
       sfMax: sizeMode === 'sf' ? parseFormattedNumber(sfMax) : undefined,
       acMin: sizeMode === 'ac' ? parseFormattedNumber(acMin) : undefined,
@@ -129,27 +181,25 @@ export function LandSalesSearchClient({ secondaryTypes, initial }: { secondaryTy
         )}
 
         {activeTab === 'type' && (
-          <div style={{ ...sectionStyle, display: 'grid', flexWrap: 'wrap', gap: 15, gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
-            {secondaryTypes.map(t => {
-              const selected = types.includes(t);
-              return (
-                <Tag
-                  key={t}
-                  onClick={() => toggleType(t)}
-                  style={{
-                    background: selected ? 'var(--color-accent-600)' : 'var(--color-paper)',
-                    color: selected ? 'var(--color-paper)' : 'var(--color-neutral-900)',
-                    border: `1px solid ${selected ? 'var(--color-accent-600)' : 'var(--color-neutral-400)'}`,
-                    cursor: 'pointer', fontSize: 14, fontWeight: 500, gap: 0, padding: 10,
-                  }}
-                >
-                  {t}
-                </Tag>
-              );
-            })}
-            {secondaryTypes.length === 0 && (
-              <p style={{ gridColumn: '1 / -1', margin: 0, color: 'var(--color-neutral-700)' }}>No secondary types available.</p>
-            )}
+          <div style={{ ...sectionStyle, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>Land Type</span>
+              <FilterTagGrid
+                values={secondaryTypes}
+                selected={types}
+                onToggle={toggleType}
+                emptyLabel="No secondary types available."
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>Proposed Use</span>
+              <FilterTagGrid
+                values={proposedUseOptions}
+                selected={proposedUses}
+                onToggle={toggleProposedUse}
+                emptyLabel="No proposed uses available."
+              />
+            </div>
           </div>
         )}
 

@@ -3,6 +3,7 @@ import type { LandSaleFilters } from './search-params';
 import { landSaleFromRow } from './db';
 import type { LandSale } from './schema';
 import { chunkIds } from './export-ids';
+import { uniqueProposedUseLabels } from './proposed-use';
 import { DEFAULT_RESULTS_SORT, type ResultsSort } from './results-sort';
 
 function lastDurationToDate(duration: number, unit: 'months' | 'years'): string | null {
@@ -17,6 +18,7 @@ export type FilterClause =
   | { op: 'eq'; column: string; value: string | number | boolean }
   | { op: 'ilike'; column: string; value: string }
   | { op: 'in'; column: string; value: string[] }
+  | { op: 'overlaps'; column: string; value: string[] }
   | { op: 'gte'; column: string; value: string | number }
   | { op: 'lte'; column: string; value: string | number };
 
@@ -27,6 +29,7 @@ export function landSaleFilterClauses(filters: LandSaleFilters): FilterClause[] 
   if (filters.city) clauses.push({ op: 'ilike', column: 'Property City', value: `%${filters.city}%` });
   if (filters.market) clauses.push({ op: 'ilike', column: 'Market', value: `%${filters.market}%` });
   if (filters.types.length) clauses.push({ op: 'in', column: 'Secondary Type', value: [...filters.types] });
+  if (filters.proposedUses.length) clauses.push({ op: 'overlaps', column: 'proposed_use_labels', value: [...filters.proposedUses] });
   if (filters.sfMin != null) clauses.push({ op: 'gte', column: 'Land Area SF', value: filters.sfMin });
   if (filters.sfMax != null) clauses.push({ op: 'lte', column: 'Land Area SF', value: filters.sfMax });
   if (filters.acMin != null) clauses.push({ op: 'gte', column: 'Land Area AC', value: filters.acMin });
@@ -69,6 +72,7 @@ type FilterableQuery = {
   eq: (column: string, value: string | number | boolean) => FilterableQuery;
   ilike: (column: string, value: string) => FilterableQuery;
   in: (column: string, value: string[]) => FilterableQuery;
+  overlaps: (column: string, value: string[]) => FilterableQuery;
   gte: (column: string, value: string | number) => FilterableQuery;
   lte: (column: string, value: string | number) => FilterableQuery;
 };
@@ -87,6 +91,9 @@ function withLandSaleFilters<T>(query: T, filters: LandSaleFilters): T {
         break;
       case 'in':
         next = next.in(clause.column, clause.value);
+        break;
+      case 'overlaps':
+        next = next.overlaps(clause.column, clause.value);
         break;
       case 'gte':
         next = next.gte(clause.column, clause.value);
@@ -303,6 +310,15 @@ export async function getDistinctSecondaryTypes(supabase: SupabaseClient): Promi
   if (!Array.isArray(data)) throw new Error('distinct_secondary_types returned an invalid response.');
   const values = data.filter((value): value is string => typeof value === 'string' && value.trim() !== '');
   return [...new Set(values.map(value => value.trim()))].sort((a, b) => a.localeCompare(b));
+}
+
+/** Unique Proposed Use tokens after splitting combined cells, for the search chips. */
+export async function getDistinctProposedUses(supabase: SupabaseClient): Promise<string[]> {
+  const { data, error } = await supabase.rpc('distinct_proposed_uses');
+  if (error) throw new Error(error.message);
+  if (!Array.isArray(data)) throw new Error('distinct_proposed_uses returned an invalid response.');
+  const values = data.filter((value): value is string => typeof value === 'string' && value.trim() !== '');
+  return uniqueProposedUseLabels(values);
 }
 
 /** Full catalog rows for export, in the order the caller asked. Chunks the

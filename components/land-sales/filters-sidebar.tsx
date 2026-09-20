@@ -521,7 +521,10 @@ function SearchFilterControl({
   onClearLocal: () => void;
 }) {
   const rowStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' };
-  const removeLabel = entry.kind === 'state' ? 'State' : entry.kind === 'type' ? 'Secondary Type' : (entry as { label?: string }).label ?? entry.key;
+  const removeLabel = entry.kind === 'state' ? 'State'
+    : entry.kind === 'type' ? 'Secondary Type'
+    : entry.kind === 'proposedUse' ? 'Proposed Use'
+    : (entry as { label?: string }).label ?? entry.key;
   const onRemove = () => { onClearLocal(); entry.remove(); };
 
   switch (entry.kind) {
@@ -618,10 +621,12 @@ function SearchFilterControl({
         </div>
       );
     }
-    case 'type': {
+    case 'type':
+    case 'proposedUse': {
+      const label = entry.kind === 'type' ? 'Secondary Type' : 'Proposed Use';
       return (
         <div style={rowStyle}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>Secondary Type</label>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>{label}</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}>
             <span className="tag tag-neutral" style={{ flex: 1, minWidth: 0 }}>{entry.value}</span>
             <RemoveFilterButton column={removeLabel} onRemove={onRemove} />

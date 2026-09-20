@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { getDistinctSecondaryTypes } from '@/lib/land-sales/query';
+import { getDistinctProposedUses, getDistinctSecondaryTypes } from '@/lib/land-sales/query';
 import { decodeFilters } from '@/lib/land-sales/search-params';
 import { LandSalesSearchClient } from './search-client';
 
@@ -11,6 +11,15 @@ export default async function LandSalesSearchPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const filters = decodeFilters(params);
   const supabase = await createClient();
-  const secondaryTypes = await getDistinctSecondaryTypes(supabase);
-  return <LandSalesSearchClient secondaryTypes={secondaryTypes} initial={filters} />;
+  const [secondaryTypes, proposedUses] = await Promise.all([
+    getDistinctSecondaryTypes(supabase),
+    getDistinctProposedUses(supabase),
+  ]);
+  return (
+    <LandSalesSearchClient
+      secondaryTypes={secondaryTypes}
+      proposedUses={proposedUses}
+      initial={filters}
+    />
+  );
 }

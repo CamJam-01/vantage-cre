@@ -107,7 +107,7 @@ create table public.land_sales (
   "Capacity - Available kW" text,
   "Capacity - Critical IT kW" text,
   "Capacity - Total Utility kW" text,
-  "Ceiling Height" text,
+  "Clear Height" text,
   "Column Spacing" text,
   "Comp ID" bigint,
   "Comps Number" text,
