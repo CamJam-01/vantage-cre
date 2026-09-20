@@ -241,7 +241,6 @@ export function ResultsTable({
   totalCount,
   page,
   columns,
-  canEdit,
   filters,
   sort,
 }: {
@@ -361,6 +360,7 @@ function ResultsBody({
                   <th style={{ ...stickyHeaderCellStyle, width: CHECKBOX_WIDTH_PX }}>
                     <input
                       type="checkbox"
+                      className="results-checkbox results-checkbox--select-all"
                       checked={pageState === 'all'}
                       ref={input => {
                         if (input) input.indeterminate = pageState === 'some';
@@ -394,13 +394,13 @@ function ResultsBody({
                     <tr
                       key={key}
                       onClick={() => viewDetails(r.id)}
-                      style={{ background: isSelected ? 'var(--color-accent-100)' : undefined, cursor: 'pointer' }}
+                      style={{ background: isSelected ? 'var(--color-accent-100)' : undefined, cursor: 'pointer', userSelect: 'none' }}
                     >
                       <td style={{ width: ROW_NUMBER_WIDTH_PX, textAlign: 'right', color: 'var(--color-neutral-600)', fontVariantNumeric: 'tabular-nums' }}>
                         {index + 1}
                       </td>
                       <td onClick={e => e.stopPropagation()}>
-                        <input type="checkbox" checked={isSelected} onChange={() => toggleRow(key)} aria-label={`Select ${parcel || address || r.id}`} />
+                        <input type="checkbox" className="results-checkbox results-checkbox--select-row" checked={isSelected} onChange={() => toggleRow(key)} aria-label={`Select ${parcel || address || r.id}`} />
                       </td>
                       {columns.map(col => (
                         <td key={fieldVisibilityId(col)}>

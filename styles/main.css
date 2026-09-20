@@ -397,6 +397,40 @@ textarea.input { min-height: 90px; resize: vertical; }
   height: calc(1.15em * 4);
   line-height: 1.15;
 }
+
+.results-checkbox {
+  appearance: none;
+  position: relative;
+  width: 1.25rem;
+  height: 1.25rem;
+  background: #ffffff;
+  border: 1px solid var(--color-accent-2-600);
+  border-radius: 0;
+}
+.results-checkbox:is(:hover, :focus-visible) {
+  border-color: var(--color-accent-2-800);
+  background: var(--color-accent-2-200);
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.results-checkbox:checked {
+  border-color: var(--color-accent-2-800);
+  background: var(--color-accent-2-800);
+}
+.results-checkbox:checked::before {
+  content: '✓';
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  bottom: 1px;
+  left: 0;
+}
+
 /* — dialog — */
 .dialog-backdrop {
   position: fixed; inset: 0; display: grid; place-items: center;
@@ -595,27 +629,34 @@ textarea.input { min-height: 90px; resize: vertical; }
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
   box-sizing: border-box;
   padding: var(--space-3) var(--space-6);
-  background: var(--color-accent-700);
-  border-bottom: 1px solid color-mix(in srgb, #000000 14%, transparent);
+  background: var(--color-paper);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-divider);
 }
 .record-bar-back {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 13px; font-weight: 500; text-decoration: none;
-  color: var(--color-accent-200);
+  color: var(--color-neutral-700);
   padding: 0; border: 0; background: transparent; cursor: pointer;
   font-family: inherit;
 }
-.record-bar-back:hover { color: var(--color-paper); }
+.record-bar-back:hover { color: var(--color-text); }
 .record-bar-actions { display: flex; align-items: center; gap: var(--space-3); flex-shrink: 0; }
 .record-bar .btn-primary {
-  background: var(--color-accent-900); border-color: var(--color-accent-900); color: var(--color-paper);
+  background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg);
 }
-.record-bar .btn-primary:hover { background: var(--color-accent-800); }
+.record-bar .btn-primary:hover:not(:disabled) { background: var(--color-accent-600); }
+.record-bar .btn-primary:disabled {
+  background: var(--color-neutral-200);
+  border-color: var(--color-neutral-200);
+  color: var(--color-neutral-500);
+  opacity: 1;
+}
 .record-bar .btn-secondary {
-  border-color: color-mix(in srgb, var(--color-accent-2-100) 45%, transparent);
-  color: var(--color-accent-2-100);
+  border-color: var(--color-divider);
+  color: var(--color-text);
 }
-.record-bar .btn-secondary:hover { background: color-mix(in srgb, var(--color-paper) 12%, transparent); }
+.record-bar .btn-secondary:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
 
 /* Masthead — reads directly off the ground, no panel behind it. */
 .record-head { margin-bottom: var(--space-6); }
@@ -626,7 +667,20 @@ textarea.input { min-height: 90px; resize: vertical; }
   gap: var(--space-4);
 }
 .record-head-title h1 { flex: 1; min-width: 0; }
-.record-head-title .btn { flex-shrink: 0; }
+.record-delete {
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-danger-500);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.record-delete:hover { color: var(--color-danger-700); }
 .record-head .tags {
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2);
   margin-bottom: var(--space-3);

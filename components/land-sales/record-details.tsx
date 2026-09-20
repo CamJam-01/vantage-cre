@@ -358,7 +358,7 @@ export function RecordDetailsForm({
                 type="submit"
                 variant="primary"
                 form={FORM_ID}
-                disabled={pending}
+                disabled={!dirty || pending}
                 onClick={() => setNextHref(null)}
               >
                 {pending ? 'Saving…' : 'Save'}
@@ -388,9 +388,9 @@ export function RecordDetailsForm({
                   <div className="record-head-title">
                     <h1>{address || location || 'Land Sale Record'}</h1>
                     {canDelete && (
-                      <Button type="button" variant="secondary" onClick={() => setConfirmDelete(true)}>
-                        Delete
-                      </Button>
+                      <button type="button" className="record-delete" onClick={() => setConfirmDelete(true)}>
+                        Delete Record
+                      </button>
                     )}
                   </div>
                   {subtitle && <p className="sub">{subtitle}</p>}
