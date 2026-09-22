@@ -1,12 +1,17 @@
 import { NavHeader } from '@/components/ui/nav-header';
+import { FeedbackNamePrefill } from '@/components/feedback/feedback-name-prefill';
 import { ResultsSelectionProvider } from '@/components/land-sales/results-selection';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUserProfile } from '@/lib/users/roles';
+import { feedbackSubmitterName } from '@/lib/users/feedback-name';
 import { signOutAction } from '@/app/(app)/land-sales/actions';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const profile = await getCurrentUserProfile(supabase);
+  // The widget itself is site-wide (root layout); only the name it starts with
+  // needs a session, and this is the layout that already has the profile.
+  const submitterName = profile ? feedbackSubmitterName(profile) : null;
 
   if (profile?.is_suspended) {
     return (
@@ -26,6 +31,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <button type="submit" className="btn btn-primary">Sign out</button>
           </form>
         </main>
+        <FeedbackNamePrefill name={submitterName} />
       </div>
     );
   }
@@ -34,6 +40,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div style={{ minHeight: '100vh', width: '100%', fontFamily: 'var(--font-body)', display: 'flex', flexDirection: 'column' }}>
       <NavHeader profile={profile} />
       <ResultsSelectionProvider>{children}</ResultsSelectionProvider>
+      <FeedbackNamePrefill name={submitterName} />
     </div>
   );
 }

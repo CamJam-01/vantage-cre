@@ -128,6 +128,13 @@ These terms have precise meanings here. Use them; do not invent synonyms.
   selected record to another saved template. Users choose the Output Flow, not
   its implementation templates (§6.7).
 
+**Feedback widget**
+: The hosted, third-party panel behind the "Feedback" badge in the corner of
+  every page. It belongs to a separate service; this application only loads it
+  and tells it what name to start its "Name" field with. It is not part of the
+  comp loop, holds no records, and is never a place to put product
+  functionality (§5).
+
 **The provider format**
 : The CoStar CSV export — a fixed, ordered header row. It is simultaneously the
   field catalog, the database columns, the import contract, and the export
@@ -264,7 +271,17 @@ with in-place editing · CSV import with per-row validation · manual record
 entry · global field visibility, ordering, and dividers · **document (DOCX)
 merge through admin-managed Output Flows, conditional template routing, and
 sequential comp numbering** · user administration · audit log · user profiles
-with avatars.
+with avatars · an embedded third-party feedback widget.
+
+**The feedback widget** loads on every page, signed in or not, and opens a
+panel for sending a comment to the people who maintain this tool. Its "Name"
+field arrives pre-filled with the signed-in user's display name — username,
+then full name, blank if neither is set. That name is the *only* thing this
+application hands the widget. The widget can also attach a screenshot, but
+only when a user deliberately captures one, which means a comp on screen can
+leave with a bug report; that is the user's action, not a transfer this system
+performs. The widget is a reporting channel, not a step in the spine (§4), and
+it is the one surface outside the design system (§6.5).
 
 ### Deliberately deferred
 
@@ -418,6 +435,13 @@ layer, and the only stylesheet. The system's original prose guide is no longer
 checked in, so its governing rules are recorded in `AGENTS.md` §6; read that
 before styling, and keep it in step with the sheet.
 
+**One surface is exempt: the third-party feedback widget (§5).** It renders
+inside its own shadow root under `all: initial`, so it neither inherits the
+tokens nor leaks its styling into the page. Its badge and panel will not look
+like Industry and cannot be made to without forking someone else's stylesheet.
+That is an accepted, contained exception — not a precedent for a second visual
+language anywhere a screen of ours is rendered.
+
 ### 6.6 Prefer the boring shape
 
 This is a small, single-tenant internal tool with a handful of users. Favor the
@@ -488,6 +512,7 @@ Enough to orient; the details belong in `AGENTS.md`.
 | Admin descriptors and configuration handling | `lib/admin/` |
 | Audit logging | `lib/audit/` |
 | Feature components, grouped by area | `components/` |
+| The feedback widget loader and its name prefill | `components/feedback/` |
 | Shared primitives built on the design system | `components/ui/` |
 | Database schema history | `supabase/migrations/` |
 | The design system — tokens and component classes, the only stylesheet | `styles/main.css` |
@@ -529,6 +554,7 @@ Match the request to its shape before writing anything.
 | "Change what import accepts" | Almost always wrong — re-read §6.1 and confirm the round trip survives before proceeding. |
 | "Let users customize their own view" | **Out of scope** as stated (§2, §5). Raise it rather than building it. |
 | "Change a color/spacing/border" | Through design-system tokens only (§6.5). |
+| "Change what the feedback widget asks for / looks like / does with a submission" | **Not here.** Only the loader tag and the name prefill live in this repository (`components/feedback/`); the panel's fields, categories, styling, and destination are configured in the widget vendor's dashboard. Do not rebuild any of it locally. |
 | Anything not on this table and not in §5's "Built" list | **A possible scope change.** Ask before building, and if it is confirmed, amend this document as part of the work — see §5 "Changing this scope". |
 
 When a request is genuinely ambiguous, the tie-breaker is §1: which reading
