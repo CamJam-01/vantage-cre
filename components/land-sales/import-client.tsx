@@ -134,7 +134,7 @@ export function ImportLandSalesClient({ path }: { path: SalesPath }) {
               {rowWarnings.length > 0 && (
                 <div style={{ marginBottom: 'var(--space-3)' }}>
                   <div className="tag tag-warning" style={{ marginBottom: 'var(--space-2)' }}>
-                    {rowWarnings.length} record{rowWarnings.length === 1 ? '' : 's'} flagged — unrecognized Sale Date, will still import
+                    {rowWarnings.length} import warning{rowWarnings.length === 1 ? '' : 's'} — records will still import
                   </div>
                   <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--color-warning-700)' }}>
                     {rowWarnings.map((warn, i) => <li key={i}>{warn}</li>)}
@@ -201,7 +201,7 @@ export function ImportLandSalesClient({ path }: { path: SalesPath }) {
               {outcome.warnings && outcome.warnings.length > 0 && (
                 <div style={{ marginBottom: 'var(--space-3)' }}>
                   <div className="tag tag-warning" style={{ marginBottom: 'var(--space-2)' }}>
-                    {outcome.warnings.length} record{outcome.warnings.length === 1 ? '' : 's'} flagged for review
+                    {outcome.warnings.length} import warning{outcome.warnings.length === 1 ? '' : 's'}
                   </div>
                   <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--color-warning-700)' }}>
                     {outcome.warnings.map((warn, i) => <li key={i}>{warn}</li>)}
