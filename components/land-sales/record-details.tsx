@@ -246,6 +246,8 @@ function FieldControl({
       className="input"
       defaultValue={displayValue}
       inputMode={kind === 'number' ? 'decimal' : undefined}
+      placeholder={kind === 'date' ? 'MM/DD/YYYY' : undefined}
+      aria-label={kind === 'date' ? `${header} (MM/DD/YYYY)` : undefined}
     />
   );
 }

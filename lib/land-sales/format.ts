@@ -1,3 +1,5 @@
+import { costarColumnType } from './costar-column-types';
+
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat('en-US');
 const acres = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -43,13 +45,13 @@ export function formatNumber(value: number | null | undefined): string {
   return value == null ? '—' : number.format(value);
 }
 
-/** Sale Date (and other catalog dates) as dd/mm/yyyy. */
+/** Sale Date (and other catalog dates) as MM/DD/YYYY, without timezone conversion. */
 export function formatDate(value: string | null | undefined): string {
   if (!value) return '—';
   const iso = value.slice(0, 10);
   const [year, month, day] = iso.split('-');
   if (!year || !month || !day) return '—';
-  return `${day}/${month}/${year}`;
+  return `${month}/${day}/${year}`;
 }
 
 function isMoneyColumn(header: string): boolean {
@@ -87,7 +89,7 @@ export function formatCatalogValue(header: string, value: unknown): string {
   if (value == null || value === '') return '—';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   const text = String(value);
-  if (/^\d{4}-\d{2}-\d{2}/.test(text) && (header.includes('Date') || header === 'Sale Date')) {
+  if (/^\d{4}-\d{2}-\d{2}/.test(text) && costarColumnType(header) === 'date') {
     return formatDate(text);
   }
   if (header.includes('Phone')) return formatPhoneNumber(text);

@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { COSTAR_HEADERS } from './costar-fields.ts';
-import { formatCatalogValue } from './format.ts';
+import { costarColumnType } from './costar-column-types.ts';
+import { coerceColumnValue } from './schema.ts';
+import { formatDate, formatCatalogValue } from './format.ts';
 
 describe('formatCatalogValue', () => {
   it('renders identifier-like numeric fields without grouping or numeric coercion', () => {
@@ -54,9 +56,30 @@ describe('formatCatalogValue', () => {
     assert.equal(formatCatalogValue('Asking Price', 999999), '$999,999');
   });
 
-  it('formats Sale Date as dd/mm/yyyy', () => {
-    assert.equal(formatCatalogValue('Sale Date', '2025-08-14T00:00:00'), '14/08/2025');
-    assert.equal(formatCatalogValue('Sale Date', '2024-03-02'), '02/03/2024');
+  it('formats every date-typed catalog field as MM/DD/YYYY', () => {
+    const fields = COSTAR_HEADERS.filter(header => costarColumnType(header) === 'date');
+    assert.ok(fields.length > 0);
+    for (const field of fields) {
+      assert.equal(formatCatalogValue(field, '2026-08-20T00:00:00'), '08/20/2026', field);
+      assert.equal(formatCatalogValue(field, '2024-03-02'), '03/02/2024', field);
+      assert.equal(formatCatalogValue(field, '2024-02-29'), '02/29/2024', field);
+      assert.equal(formatCatalogValue(field, null), '—', field);
+    }
+  });
+
+  it('preserves the date when a displayed create/edit value is submitted', () => {
+    for (const field of COSTAR_HEADERS.filter(header => costarColumnType(header) === 'date')) {
+      for (const iso of ['2024-03-02', '2026-08-20', '2024-02-29']) {
+        assert.equal(coerceColumnValue(field, formatCatalogValue(field, iso)), iso, field);
+      }
+    }
+  });
+
+  it('keeps the stored calendar date across timezone offsets and blank values', () => {
+    assert.equal(formatDate('2026-01-01T00:00:00+14:00'), '01/01/2026');
+    assert.equal(formatDate('2026-12-31T23:30:00-12:00'), '12/31/2026');
+    assert.equal(formatDate(''), '—');
+    assert.equal(formatDate(undefined), '—');
   });
 
   it('preserves every stored decimal digit in per-unit price columns', () => {
