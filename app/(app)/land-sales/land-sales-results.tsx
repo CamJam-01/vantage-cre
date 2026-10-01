@@ -112,7 +112,7 @@ export async function SalesResultsPage({
     loadDisplaySettings(supabase, path.databaseKey),
     listDocxOutputFlows(supabase, path.databaseKey).catch(() => [] as DocxOutputFlow[]),
   ]);
-  const columns = orderColumns(resultColumns(), display.fieldOrder);
+  const columns = orderColumns(resultColumns({ pathId: path.id }), display.fieldOrder);
   const visibleColumns = filterVisibleColumns(columns, display.hidden);
   const role = profile?.role ?? 'Viewer';
   const active = Boolean(profile && !profile.is_suspended);

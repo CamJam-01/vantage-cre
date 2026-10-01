@@ -10,3 +10,6 @@ supabase/.temp/
 *.docx
 *.xlsx
 *.csv
+
+# Header-only provider contract fixture; contains no records.
+!lib/land-sales/fixtures/costar-improved-sales-template.csv

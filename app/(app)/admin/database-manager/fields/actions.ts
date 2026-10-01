@@ -30,7 +30,8 @@ export async function saveFieldVisibilityAction(
     return { status: 'error', message: 'Only active Admin users can change field visibility.' };
   }
 
-  const columns = resultColumns();
+  const path = salesPathFromDatabaseKey(formData.get('database_key'));
+  const columns = resultColumns({ pathId: path?.id });
   const submission = parseVisibilitySubmission(formData, columns);
   if (!submission.ok) return { status: 'error', message: submission.message };
 
@@ -47,7 +48,6 @@ export async function saveFieldVisibilityAction(
   if (error) return { status: 'error', message: `Could not save field visibility: ${error.message}` };
 
   const visibleCount = columns.length - submission.hiddenFieldIds.length;
-  const path = salesPathFromDatabaseKey(submission.databaseKey);
   await logAudit(
     supabase,
     'Updated Field Visibility',

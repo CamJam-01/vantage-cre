@@ -1,8 +1,7 @@
-import { COSTAR_HEADER_ROW, COSTAR_HEADERS, SALE_DATE_RAW_COLUMN } from './costar-fields';
+import type { SalesPathId } from './sales-path';
+import { costarHeaderRow, costarHeaders, SALE_DATE_RAW_COLUMN } from './costar-fields';
 import { costarTextValues, landSaleToRow } from './db';
 import { coerceLandSaleInput, type LandSale, type LandSaleInput } from './schema';
-
-export const csvHeaders = COSTAR_HEADERS;
 
 export function csvCell(value: string | number | null | undefined): string {
   const text = String(value ?? '');
@@ -23,17 +22,18 @@ function saleDateExport(record: LandSale): string {
   return record.saleDateRaw ?? '';
 }
 
-/** Export-side CSV builder. Always emits all 278 header positions in
- * canonical order; display configuration cannot change the file. */
-export function makeCsv(rows: LandSale[]): string {
+/** Always emits the selected path's exact CoStar sequence, including duplicate
+ * positions; display configuration cannot change the file. */
+export function makeCsv(rows: LandSale[], pathId: SalesPathId = 'land'): string {
+  const headers = costarHeaders(pathId);
   const body = rows.map(row => {
     const columns = landSaleToRow(row);
-    return COSTAR_HEADERS.map(name => {
+    return headers.map(name => {
       if (name === 'Sale Date') return csvCell(saleDateExport(row));
       return csvCell(exportCellValue(columns[name]));
     }).join(',');
   });
-  return [COSTAR_HEADER_ROW, ...body].join('\r\n');
+  return [costarHeaderRow(pathId), ...body].join('\r\n');
 }
 
 export function downloadCsv(filename: string, content: string) {
@@ -48,8 +48,8 @@ export function downloadCsv(filename: string, content: string) {
 
 /** Import template: header row plus one blank data row so an unmodified
  * template uploads as a single empty record. */
-export function makeCsvTemplate(): string {
-  return [COSTAR_HEADER_ROW, COSTAR_HEADERS.map(() => '').join(',')].join('\r\n');
+export function makeCsvTemplate(pathId: SalesPathId = 'land'): string {
+  return [costarHeaderRow(pathId), costarHeaders(pathId).map(() => '').join(',')].join('\r\n');
 }
 
 /** RFC4180-ish CSV tokenizer: handles quoted fields with embedded commas,
@@ -91,16 +91,17 @@ export function looksLikeWrongDelimiter(headers: string[]): boolean {
   return headers.length === 1 && /[;\t]/.test(headers[0]);
 }
 
-export function headersMatchExactly(headers: string[]): boolean {
+export function headersMatchExactly(headers: string[], pathId: SalesPathId = 'land'): boolean {
+  const csvHeaders = costarHeaders(pathId);
   if (headers.length !== csvHeaders.length) return false;
   return headers.every((h, i) => h.trim().toLowerCase() === csvHeaders[i].toLowerCase());
 }
 
 /** Import only accepts the template header row. Extra or renamed columns are
  * rejected rather than mapped or turned into new database fields. */
-export function csvHeaderError(headers: string[]): string | undefined {
-  if (headersMatchExactly(headers)) return undefined;
-  return `CSV headers must match the import template exactly (${csvHeaders.length} columns).`;
+export function csvHeaderError(headers: string[], pathId: SalesPathId = 'land'): string | undefined {
+  if (headersMatchExactly(headers, pathId)) return undefined;
+  return `CSV headers must match the import template exactly (${costarHeaders(pathId).length} columns).`;
 }
 
 export type ImportRowResult =
@@ -120,11 +121,22 @@ export function importLandSaleRow(row: Extract<ImportRowResult, { ok: true }>): 
 /** Validates template-ordered CoStar data rows. Unparseable cells become null
  * with a warning (Sale Date keeps its original text); the row is never rejected
  * for a value the type cannot understand. */
-export function validateDataRows(rows: string[][]): ImportRowResult[] {
+export function validateDataRows(rows: string[][], pathId: SalesPathId = 'land'): ImportRowResult[] {
+  const headers = costarHeaders(pathId);
   return rows.map((values, index) => {
     const rowNumber = index + 2;
-    const textColumns = costarTextValues(values);
+    const textColumns = costarTextValues(values, headers);
     const { input, warnings } = coerceLandSaleInput(textColumns, rowNumber);
+    const seen = new Map<string, string>();
+    const warned = new Set<string>();
+    headers.forEach((header, position) => {
+      const value = (values[position] ?? '').trim();
+      if (seen.has(header) && seen.get(header) !== value && !warned.has(header)) {
+        warnings.push(`Row ${rowNumber}, ${header}: duplicate CSV columns differ — the last value is kept.`);
+        warned.add(header);
+      }
+      seen.set(header, value);
+    });
     return {
       row: rowNumber,
       ok: true as const,

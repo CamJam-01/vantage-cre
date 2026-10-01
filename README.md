@@ -89,7 +89,7 @@ These terms have precise meanings here. Use them; do not invent synonyms.
 **Field**
 : One named attribute of a record. **A field *is* a CoStar header string** —
   there is no other kind of field, and no field has a second name. The catalog
-  is *large* (278 header positions, 277 distinct names) because it is inherited
+  is *large* (277 distinct names; 278 Land positions and 279 Improved positions) because it is inherited
   wholesale from the provider's export format rather than designed here. Most
   fields are empty on most records. That is expected and must not be
   "cleaned up." The catalog is **closed**: see §3A.
@@ -145,12 +145,16 @@ These terms have precise meanings here. Use them; do not invent synonyms.
 
 ## 3A. The field catalog — closed and canonical
 
-**One header set governs everything.** The CoStar header row in Appendix A is
-the field catalog, the `land_sales` and `improved_sales` columns, the CSV import template, and
-the CSV export format — **the same list, in the same order, with
-the same spelling**. There is no mapping layer, no alias, no renamed subset, no
-app-specific field identifier. Land and Improved are separate tables (and
-separate arrangements); they are not separate catalogs.
+**Each sales path has its own exact CoStar CSV sequence.** Appendix A defines
+Land (278 positions); Appendix B defines Improved (279 positions), copied from
+`Costar Improved Sales Template.csv`. They contain the same 277 distinct field
+names and use the same Postgres types. The selected path's sequence governs its
+import template, import validation, export, and default display order. There
+are no aliases or app-specific field identifiers: a field is its header string.
+
+The live `improved_sales` table already contains all 277 required fields. Its
+physical column order remains unchanged; CSV values bind by exact header name,
+so matching the provider sequence does not require rebuilding either table.
 
 **The catalog is closed.** No header may be added, removed, renamed, reordered,
 aliased, or given a display synonym — not in the database, not in the template,
@@ -163,8 +167,8 @@ record create/view/edit screens is the result of an Admin toggling visibility
 and reordering fields in settings (§3 *arrangement*). That configuration is
 presentation only. **It has no bearing whatsoever on the database columns, the
 import template, or the export file.** Hiding a field does not drop a column.
-Reordering fields does not reorder the CSV. Every export emits all 278 header
-positions in canonical order regardless of what any user can see.
+Reordering fields does not reorder the CSV. Every export emits all header positions in its path's canonical sequence
+regardless of what any user can see.
 
 ### The carve-outs
 
@@ -175,21 +179,18 @@ catalog, the import template, the export file, or the UI as a field**:
 | | What | Why |
 | --- | --- | --- |
 | `id` | `uuid`, primary key | Row identity. CoStar's `Comp ID` is not unique — many rows share `0` or null — so it cannot serve as a key. |
-| `Sprinklers` | one column, two header positions | The header row lists `Sprinklers` twice (positions 259 and 260 of 278). Postgres cannot hold two columns of one name, so 278 header positions map to 277 columns. An import keeps the second position's value and export writes that value into both. If a source file ever carries different values there, one is lost. **Accepted known lossiness** — do not add a column without a §5 decision. |
+| Duplicate headers | one stored column per distinct name | Both paths repeat `Sprinklers`; Improved also repeats `Average Rental Rate Per kW`. Import keeps the last value and warns if repeated values differ. Export fills every matching position. **Accepted known lossiness** — do not add storage without a §5 decision. |
 | `_sale_date_raw` | `text`, system store | Holds the original text of an unrecognized `Sale Date` so ingest can flag the row for review and export can re-emit it. Named to be self-evidently outside the catalog. |
 
 Any future non-catalog storage column joins this table or it does not exist.
 
 ### Verified state
 
-As of this writing the four representations agree exactly: the canonical list in
-Appendix A, the `COSTAR_HEADER_ROW` constant in `lib/land-sales/costar-fields.ts`,
-the header list in the creating migration, and the live `land_sales` /
-`improved_sales` columns
-(277 catalog columns in canonical order, plus `id` and `_sale_date_raw`). **Appendix A is the
-contract; the code constant is its executable copy.** A test must assert they
-remain byte-identical — that test is what makes the single-source claim real
-rather than aspirational.
+The distinct field names and types in Appendices A/B, the code catalog, and the
+live `land_sales` / `improved_sales` tables agree: 277 catalog columns plus `id`
+and `_sale_date_raw`. The physical database order remains unchanged. **Each
+appendix is the CSV contract; its code constant is the executable copy.** Tests
+must assert byte-identical header sequences and the shared field/type contract.
 
 ---
 
@@ -232,7 +233,7 @@ Seven capabilities. A change either extends one of these or is out of scope.
    (§3A).
 
 6. **Get the comps out.** Export the *selected* rows in the provider format:
-   **all 278 header positions, in canonical order, every time** — never only the
+   **all header positions in the selected path's canonical order, every time** — never only the
    visible fields, never in the Admin's display order. Selection survives paging
    through a result set; the header checkbox adds or removes the current page
    only. Export is a Viewer-level capability: reading and taking away what you
@@ -271,7 +272,8 @@ with in-place editing · CSV import with per-row validation · manual record
 entry · global field visibility, ordering, and dividers · **document (DOCX)
 merge through admin-managed Output Flows, conditional template routing, and
 sequential comp numbering** · user administration · audit log · user profiles
-with avatars · an embedded third-party feedback widget.
+with avatars · an embedded third-party feedback widget · path-specific CoStar CSV sequences
+(278 positions for Land, 279 for Improved).
 
 **The feedback widget** loads on every page, signed in or not, and opens a
 panel for sending a comment to the people who maintain this tool. Its "Name"
@@ -351,10 +353,10 @@ These are the invariants. Breaking one is a defect even if every test passes.
 
 ### 6.1 The CoStar header row *is* the schema
 
-The header row in Appendix A is the field catalog, in its exact order, including
-its quirks (a duplicated name, inconsistent conventions, hundreds of columns
-irrelevant to land). The stored record mirrors those names verbatim, quirks
-included. Import accepts that header row and no other — a renamed, reordered,
+The selected path's header row (Appendix A for Land, Appendix B for Improved)
+defines its CSV sequence, including repeated positions. The stored record
+mirrors the distinct names verbatim. Both paths share those names and types.
+Import accepts that header row and no other — a renamed, reordered,
 added, or missing column is a rejected file, never a guessed mapping. Export
 reproduces that header row exactly, in full, every time.
 
@@ -378,7 +380,8 @@ never stores, imports, exports, filters, arranges, or presents it as a field.
 Changing the catalog is therefore not ordinary work: it changes the product's
 contract with CoStar and with every previously exported file. It requires an
 explicit decision under §5, and then a migration, a constant update, and an
-Appendix A update together.
+applicable appendix update together. A sequence-only change with the same
+stored field names and types does not require a schema migration.
 
 ### 6.2 Never lose the user's data
 
@@ -542,15 +545,15 @@ Match the request to its shape before writing anything.
 | The request | What it actually is |
 | --- | --- |
 | "Show field X on the record screen" / "reorder fields" / "group these together" | **Configuration.** Do it through the admin arrangement. No code. |
-| "Add field X to the database" / "rename this column" / "drop the fields we don't use" | **A change to a closed catalog (§3A).** Not ordinary work. Confirm under §5 first; if approved, migration + `COSTAR_HEADER_ROW` + Appendix A move together. |
+| "Add field X to the database" / "rename this column" / "drop the fields we don't use" | **A change to a closed catalog (§3A).** Not ordinary work. Confirm under §5 first; if approved, the selected header constant, applicable appendix, and tests move together; migrate only if storage changes. |
 | "Field X should show as *Y* on screen" | **No.** A field's name is its header (§3A). Rename the *header* via the process above, or leave it. |
 | "Make field X filterable" | Confirm the column's Postgres type is classified correctly; the filter tier follows from that type. Nothing else is required — every catalog field is equally a field. |
-| "Only export the columns we're actually using" | **No.** Export is always all 278 positions in canonical order (§4.6, §3A). |
+| "Only export the columns we're actually using" | **No.** Export is always the selected path's full canonical sequence (§4.6, §3A). |
 | "Add a merge tag for field X" | **Nothing to do.** Every catalog field already has one, derived from its header (§3 *Merge tag*). If a tag seems missing, the header is not what you think it is. |
 | "Add a computed/non-field merge tag" | **A scope decision.** `{{ comp_number }}` is the sole approved merge-only tag and must stay output-only; another requires the §5 process and must not silently create a second field model. |
 | "Route different records to different DOCX templates" | **Output Flow configuration.** Define a default and ordered conditions in the Admin Output Router; do not hard-code a field or template choice in the merge route (§6.7). |
 | "Make the merged document keep raw values" / "import a DOCX" | **No.** A merged document is a deliverable, not an interchange format (§6.7). Fidelity lives in the CSV export. |
-| "Add a Rentals/Ground Lease/… database" | **A new spine branch.** Substantial. Follow `Sales → Land` structurally; expect a new catalog, a new table, and a new arrangement, not a parameterized generalization of the existing one. Improved is already built: same catalog as Land, separate table and arrangement. |
+| "Add a Rentals/Ground Lease/… database" | **A new spine branch.** Substantial. Follow `Sales → Land` structurally; expect a new catalog, a new table, and a new arrangement, not a parameterized generalization of the existing one. Improved is already built: the same distinct fields as Land, with its own CSV sequence, table, and arrangement. |
 | "Change what import accepts" | Almost always wrong — re-read §6.1 and confirm the round trip survives before proceeding. |
 | "Let users customize their own view" | **Out of scope** as stated (§2, §5). Raise it rather than building it. |
 | "Change a color/spacing/border" | Through design-system tokens only (§6.5). |
@@ -584,22 +587,13 @@ you may expect.
 
 ---
 
-## Appendix A. The canonical CoStar header row
+## Appendix A. Land Sales canonical CoStar header row
 
 **This is the contract.** 278 header positions, 277 distinct names
-(`Sprinklers` appears at positions 259 and 260). It defines, identically and
-simultaneously:
-
-- the `public.land_sales` and `public.improved_sales` columns (these 277 names, plus the `id` and
-  `_sale_date_raw` carve-outs);
-- the CSV **import** template header row;
-- the CSV **export** header row;
-- every field the application knows about.
-
-Nothing may be added, removed, renamed, reordered, or aliased. See §3A for the
-carve-outs and §6.1 for the governing rule. The executable copy is
-`COSTAR_HEADER_ROW` in `lib/land-sales/costar-fields.ts`, which must stay
-byte-identical to the line below; a test enforces this.
+(`Sprinklers` appears at positions 259 and 260). This is Land's import/export
+sequence and default field order. Appendix B defines Improved's sequence.
+Both share these 277 stored names and the column types below; physical database
+column order does not control CSV order.
 
 ```text
 Property Address,Property City,Property State,Property Type,Land Area AC,Land Area SF,Star Rating,Sale Price,Sale Date,Sale Status,Asking Price,Price Per AC Land,Price Per SF Land,Sale Type,Property Name,Buyer (True) Company,Buyer (True) Type,Buyer (True) Secondary Type,Buyer (True) Origin,Acquisition Fund Name,Buyers Broker Company,Seller (True) Company,Seller (True) Type,Seller (True) Secondary Type,Seller (True) Origin,Listing Broker Company,Hold Period,Secondary Type,Proposed Use,Zoning,Market,Disposition Fund Name,Submarket Name,Location Type,Property County,Country,Subcontinent,Continent,Property Zip Code,Corner,Map Code,Actual Cap Rate,Affordable Type,Age,All-Inclusive,All-Suites,Amenities,Anchor Tenants,Assessed Improved,Assessed Land,Assessed Value,Assessed Year,Average Rental Rate Per kW,Avg Unit SF,Brand,Building Class,Building Condition,Building Materials,Building Operating Expenses,Building Park,Building SF,Building Tax Expenses,Buyer (Contact) Address,Buyer (Contact) City,Buyer (Contact) Company,Buyer (Contact) Contact Name,Buyer (Contact) Phone,Buyer (Contact) State,Buyer (Contact) Zip Code,Buyer (Recorded) Address,Buyer (Recorded) City,Buyer (Recorded) Company,Buyer (Recorded) Contact Name,Buyer (Recorded) Phone,Buyer (Recorded) State,Buyer (Recorded) Street Name,Buyer (Recorded) Street Number,Buyer (Recorded) Street Post-Direction,Buyer (Recorded) Street Pre-Direction,Buyer (Recorded) Zip Code,Buyer (True) Address,Buyer (True) City,Buyer (True) Contact Name,Buyer (True) Phone,Buyer (True) Post-Direction,Buyer (True) Pre-Direction,Buyer (True) State,Buyer (True) Street Name,Buyer (True) Street Number,Buyer (True) Zip Code,Buyers Broker Address,Buyers Broker Agent First Name,Buyers Broker Agent Last Name,Buyers Broker City,Buyers Broker Phone,Buyers Broker State,Buyers Broker Street Name,Buyers Broker Street Number,Buyers Broker Street Post-Direction,Buyers Broker Street Pre-Direction,Buyers Broker Zip Code,Capacity - Available kW,Capacity - Critical IT kW,Capacity - Total Utility kW,Clear Height,Column Spacing,Comp ID,Comps Number,Construction Begin,Construction Material,Cooling Redundancy,Coverage,Cross Street,Data Center Tier,Data Center Type,Data Hall Area SF,Data Hall Count,Density kW/rack,Density kW/SF,Description Text,Document Number,Down Payment,Drive Ins,Electric Utility,Fips Code,Fire Sprinkler,First Trust Deed Balance,First Trust Deed Lender,First Trust Deed Payment,First Trust Deed Terms,Flood Risk,Flood Zone,Floor Area Ratio,Frontage,GIM,GRM,Gross Income,Has Lab Space,Heating,Hotel Class,Hotel Location Type,Hotel Operator,Improvement Ratio,Lab Space (SF),Lab Space Percent Composition,Land Improvements,Land SF Gross,Land SF Net,Latitude,Legal Description,Listing Broker Address,Listing Broker Agent First Name,Listing Broker Agent Last Name,Listing Broker City,Listing Broker Phone,Listing Broker State,Listing Broker Street Name,Listing Broker Street Number,Listing Broker Street Post-Direction,Listing Broker Street Pre-Direction,Listing Broker Zip Code,Loading Docks,Longitude,Lot Dimensions,Map Page,Map X,Map Y,Market Time,Multi-Sale Name,Net Income,Non-Arms Length Reasons,Number of 1 Bedroom Units,Number of 2 Bedroom Units,Number of 3 Bedroom Units,Number of Beds,Number of Cranes,Number of Floors,Number of Other Bedroom Units,Number of Parking Spaces,Number of Rooms,Number of Studio Units,Number of Tenants,Number of Units,Office Space,One Bedroom Mix,Other Mix,Parcel Number 1 (Min),Parcel Number 2 (Max),Parent Company,Parking Ratio,Percent Leased,Percent Office,Portfolio City,Portfolio County,Portfolio Name,Portfolio State,Portfolio Zip,Power,Power Redundancy,Power Usage Effectiveness,Pre-Leasing,Price Per AC Land Net,Price Per Room,Price Per SF,Price Per SF (Net),Price Per SF Land Net,Price Per Total kW,Price Per Unit,Pro Forma Cap Rate,Property Street Name,Property Street Number,Property Street Post-Direction,Property Street Pre-Direction,PropertyID,Publication Date,Rail Served,Recording Date,Region,Research Status,Roof Type,Sale Category,Sale Condition,Sale Price Comment,Scale,Second Trust Deed Balance,Second Trust Deed Lender,Second Trust Deed Payment,Second Trust Deed Terms,Seller (Contact) Address,Seller (Contact) City,Seller (Contact) Company,Seller (Contact) Contact Name,Seller (Contact) Phone,Seller (Contact) State,Seller (Contact) Zip Code,Seller (Recorded) Address,Seller (Recorded) City,Seller (Recorded) Company,Seller (Recorded) Contact Name,Seller (Recorded) Phone,Seller (Recorded) State,Seller (Recorded) Street Name,Seller (Recorded) Street Number,Seller (Recorded) Street Post-Direction,Seller (Recorded) Street Pre-Direction,Seller (Recorded) Zip Code,Seller (True) Address,Seller (True) City,Seller (True) Contact Name,Seller (True) Phone,Seller (True) Post-Direction,Seller (True) Pre-Direction,Seller (True) State,Seller (True) Street Name,Seller (True) Street Number,Seller (True) Zip Code,Sewer,Size,Sprinklers,Sprinklers,Stamp,Studio Mix,Submarket Cluster,Submarket Code,Tenancy,Three Bedroom Mix,Title Company,Total Expense Amount,Transaction Notes,Transfer Tax,Two Bedroom Mix,Typical Floor (SF),Units Per Acre,University,Vacancy,Water,Year Built,Year Renovated
@@ -623,3 +617,16 @@ coerced accordingly on read and write:
 
 This is the same classification `lib/land-sales/costar-column-types.ts` holds;
 the two must not diverge.
+
+
+## Appendix B — Improved Sales CoStar CSV sequence
+
+This is the exact header sequence from the supplied Improved Sales template:
+279 positions, 277 distinct names. `Average Rental Rate Per kW` and `Sprinklers`
+each occur twice; both positions share one stored field. Import keeps the last
+value and warns if duplicates differ. Export repeats the stored value into both.
+The field types are the same as Appendix A; database physical order is independent.
+
+```text
+Property Address,Property City,Property State,Property Type,Building SF,Capacity - Total Utility kW,Capacity - Critical IT kW,Capacity - Available kW,Star Rating,Sale Price,Price Per SF,Sale Date,Sale Status,Asking Price,Percent Leased,Actual Cap Rate,Pro Forma Cap Rate,Sale Type,Property Name,Buyer (True) Company,Buyer (True) Type,Buyer (True) Secondary Type,Buyer (True) Origin,Acquisition Fund Name,Buyers Broker Company,Seller (True) Company,Seller (True) Type,Seller (True) Secondary Type,Seller (True) Origin,Listing Broker Company,Hold Period,Secondary Type,Data Center Type,Building Class,Year Built,Land Area AC,Land Area SF,Number of Floors,Clear Height,Column Spacing,Number of Cranes,Loading Docks,Drive Ins,Sewer,Power,Zoning,Market,Disposition Fund Name,Submarket Name,Location Type,Property County,Country,Subcontinent,Continent,Property Zip Code,Map Code,Data Hall Area SF,Data Hall Count,Power Usage Effectiveness,Data Center Tier,Power Redundancy,Cooling Redundancy,Electric Utility,Density kW/SF,Density kW/rack,Average Rental Rate Per kW,Affordable Type,Age,All-Inclusive,All-Suites,Amenities,Anchor Tenants,Assessed Improved,Assessed Land,Assessed Value,Assessed Year,Average Rental Rate Per kW,Avg Unit SF,Brand,Building Condition,Building Materials,Building Operating Expenses,Building Park,Building Tax Expenses,Buyer (Contact) Address,Buyer (Contact) City,Buyer (Contact) Company,Buyer (Contact) Contact Name,Buyer (Contact) Phone,Buyer (Contact) State,Buyer (Contact) Zip Code,Buyer (Recorded) Address,Buyer (Recorded) City,Buyer (Recorded) Company,Buyer (Recorded) Contact Name,Buyer (Recorded) Phone,Buyer (Recorded) State,Buyer (Recorded) Street Name,Buyer (Recorded) Street Number,Buyer (Recorded) Street Post-Direction,Buyer (Recorded) Street Pre-Direction,Buyer (Recorded) Zip Code,Buyer (True) Address,Buyer (True) City,Buyer (True) Contact Name,Buyer (True) Phone,Buyer (True) Post-Direction,Buyer (True) Pre-Direction,Buyer (True) State,Buyer (True) Street Name,Buyer (True) Street Number,Buyer (True) Zip Code,Buyers Broker Address,Buyers Broker Agent First Name,Buyers Broker Agent Last Name,Buyers Broker City,Buyers Broker Phone,Buyers Broker State,Buyers Broker Street Name,Buyers Broker Street Number,Buyers Broker Street Post-Direction,Buyers Broker Street Pre-Direction,Buyers Broker Zip Code,Comp ID,Comps Number,Construction Begin,Construction Material,Corner,Coverage,Cross Street,Description Text,Document Number,Down Payment,Fips Code,Fire Sprinkler,First Trust Deed Balance,First Trust Deed Lender,First Trust Deed Payment,First Trust Deed Terms,Flood Risk,Flood Zone,Floor Area Ratio,Frontage,GIM,GRM,Gross Income,Has Lab Space,Heating,Hotel Class,Hotel Location Type,Hotel Operator,Improvement Ratio,Lab Space (SF),Lab Space Percent Composition,Land Improvements,Land SF Gross,Land SF Net,Latitude,Legal Description,Listing Broker Address,Listing Broker Agent First Name,Listing Broker Agent Last Name,Listing Broker City,Listing Broker Phone,Listing Broker State,Listing Broker Street Name,Listing Broker Street Number,Listing Broker Street Post-Direction,Listing Broker Street Pre-Direction,Listing Broker Zip Code,Longitude,Lot Dimensions,Map Page,Map X,Map Y,Market Time,Multi-Sale Name,Net Income,Non-Arms Length Reasons,Number of 1 Bedroom Units,Number of 2 Bedroom Units,Number of 3 Bedroom Units,Number of Beds,Number of Other Bedroom Units,Number of Parking Spaces,Number of Rooms,Number of Studio Units,Number of Tenants,Number of Units,Office Space,One Bedroom Mix,Other Mix,Parcel Number 1 (Min),Parcel Number 2 (Max),Parent Company,Parking Ratio,Percent Office,Portfolio City,Portfolio County,Portfolio Name,Portfolio State,Portfolio Zip,Pre-Leasing,Price Per AC Land,Price Per AC Land Net,Price Per Room,Price Per SF (Net),Price Per SF Land,Price Per SF Land Net,Price Per Total kW,Price Per Unit,Property Street Name,Property Street Number,Property Street Post-Direction,Property Street Pre-Direction,PropertyID,Proposed Use,Publication Date,Rail Served,Recording Date,Region,Research Status,Roof Type,Sale Category,Sale Condition,Sale Price Comment,Scale,Second Trust Deed Balance,Second Trust Deed Lender,Second Trust Deed Payment,Second Trust Deed Terms,Seller (Contact) Address,Seller (Contact) City,Seller (Contact) Company,Seller (Contact) Contact Name,Seller (Contact) Phone,Seller (Contact) State,Seller (Contact) Zip Code,Seller (Recorded) Address,Seller (Recorded) City,Seller (Recorded) Company,Seller (Recorded) Contact Name,Seller (Recorded) Phone,Seller (Recorded) State,Seller (Recorded) Street Name,Seller (Recorded) Street Number,Seller (Recorded) Street Post-Direction,Seller (Recorded) Street Pre-Direction,Seller (Recorded) Zip Code,Seller (True) Address,Seller (True) City,Seller (True) Contact Name,Seller (True) Phone,Seller (True) Post-Direction,Seller (True) Pre-Direction,Seller (True) State,Seller (True) Street Name,Seller (True) Street Number,Seller (True) Zip Code,Size,Sprinklers,Sprinklers,Stamp,Studio Mix,Submarket Cluster,Submarket Code,Tenancy,Three Bedroom Mix,Title Company,Total Expense Amount,Transaction Notes,Transfer Tax,Two Bedroom Mix,Typical Floor (SF),Units Per Acre,University,Vacancy,Water,Year Renovated
+```

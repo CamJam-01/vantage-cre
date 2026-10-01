@@ -46,12 +46,11 @@ export function landSaleToRow(input: LandSaleInput): Record<string, unknown> {
   return columns;
 }
 
-/** Walk the 278 header positions into the 277 columns. Positions 259 and 260
- * both write `Sprinklers`, so the second value wins — accepted known lossiness
- * (README §3A); do not add a column without a §5 decision. */
-export function costarTextValues(values: string[]): Record<string, string | null> {
+/** Walk the selected CSV sequence into named columns. Duplicate positions
+ * share one column and the last value wins (README §3A). */
+export function costarTextValues(values: string[], headers?: readonly string[]): Record<string, string | null> {
   const columns: Record<string, string | null> = {};
-  costarFields().forEach((field, index) => {
+  costarFields(headers).forEach((field, index) => {
     const raw = (values[index] ?? '').trim();
     columns[field.column] = raw ? raw : null;
   });

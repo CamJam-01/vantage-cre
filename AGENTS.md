@@ -121,30 +121,30 @@ The technical expression of README §6. Everything here is testable, and everyth
 
 ### 3.1 The catalog and the schema are the same thing
 
-**README Appendix A is the contract.** `COSTAR_HEADER_ROW` in `lib/land-sales/costar-fields.ts` is its executable copy and must stay byte-identical to it: **278 header positions, 277 distinct names** (`Sprinklers` at positions 259 and 260; Postgres cannot hold two columns of one name, so both positions share one column).
+**README Appendices A and B are the contracts.** `COSTAR_HEADER_ROW` in `lib/land-sales/costar-fields.ts` is its executable copy and must stay byte-identical to it: **278 header positions, 277 distinct names** (`Sprinklers` at positions 259 and 260; Postgres cannot hold two columns of one name, so both positions share one column).
 
-One header set is the catalog, the `land_sales` and `improved_sales` columns, the import template, and the export format — see README §3A. There is no mapping layer, no alias, no app-specific field identifier, and no subset with its own names or types. A field *is* a header string.
+Land and Improved share 277 distinct stored fields and types, but have separate canonical CSV sequences — see README §3A. `IMPROVED_COSTAR_HEADER_ROW` matches Appendix B: 279 positions, with duplicate `Sprinklers` and `Average Rental Rate Per kW`. Thread the sales path through template, header validation, data-row parsing, export, and default display order. There is no mapping layer, no alias, no app-specific field identifier, and no subset with its own names or types. A field *is* a header string.
 
 `land_sales` and `improved_sales` column names are those header strings **verbatim**, spaces, parentheses and all. Consequences:
 
 - Always quote identifiers in queries: `.select('"Secondary Type"')`, `.eq('Property State', v)`.
 - Derive every field list from `COSTAR_HEADER_ROW`. Never hand-maintain a second list of field names anywhere.
 - The count `278` is asserted in the migration. If it changes, that assertion changes with it, deliberately.
-- **The catalog is closed.** Adding, removing, renaming, or reordering a header is a contract change requiring a §5 decision, then a migration + constant + Appendix A update together.
+- **The catalog is closed.** Adding, removing, renaming, or reordering a header is a contract change requiring a §5 decision, then constant + applicable appendix + tests together, with a migration only when storage changes. Sequence-only changes never require rebuilding a table.
 
 **Three carve-outs** — none is a catalog field, and none may reach the catalog, the template, the export, or the UI:
 
 | | What | Why |
 | --- | --- | --- |
 | `id` | `uuid` primary key | Row identity; `Comp ID` is not unique. |
-| `Sprinklers` | one column serving two header positions | Postgres name collision. Import keeps the second value; export writes it into both. Accepted known lossiness. |
+| Duplicate headers | `Sprinklers` in both paths; `Average Rental Rate Per kW` also in Improved | One column per name. Import keeps the last value and warns if duplicates differ; export writes it into every matching position. Accepted known lossiness. |
 | `_sale_date_raw` | `text` system store | Original text of an unrecognized `Sale Date`. Not a field. |
 
 Any new non-catalog storage column joins that table in README §3A, or it is not added.
 
-**Display never affects storage.** Field visibility and ordering are admin presentation configuration. Hiding a field never drops a column; reordering never reorders the CSV. Export always emits all 278 positions in canonical order, whatever the arrangement says.
+**Display never affects storage.** Field visibility and ordering are admin presentation configuration. Hiding a field never drops a column; reordering never reorders the CSV. Export always emits its path's full canonical sequence (Land 278; Improved 279), whatever the arrangement says.
 
-**Required drift guard.** A test must assert that README Appendix A, `COSTAR_HEADER_ROW`, and the live `land_sales` / `improved_sales` columns (277 catalog names in order, plus `id` and `_sale_date_raw`) agree, and that `costar-column-types.ts` matches the live Postgres types. Without it, "single source of truth" is aspirational.
+**Required drift guard.** A test must assert that README Appendices A/B and their header constants agree byte-for-byte, and the live `land_sales` / `improved_sales` columns contain their 277 distinct fields plus `id` and `_sale_date_raw`. Physical database order is independent of CSV order; names and types must agree, and that `costar-column-types.ts` matches the live Postgres types. Without it, "single source of truth" is aspirational.
 
 ### 3.2 Validation
 
@@ -158,7 +158,7 @@ Validation runs identically client-side (immediate feedback) and server-side (th
 
 ### 3.3 The round trip is the contract
 
-Import accepts the exact template header row and nothing else — no fuzzy matching, no column remapping, no auto-created fields. Export emits `COSTAR_HEADER_ROW` verbatim.
+Import accepts the selected path's exact template header row and nothing else — no fuzzy matching, no column remapping, no auto-created fields. Export emits `costarHeaderRow(path.id)` verbatim.
 
 **Any change touching import, export, the catalog, or the schema must be tested in both directions**: a file exported from here re-imports here, and the record survives unchanged. This is README §6.1 and it is the system's central constraint.
 

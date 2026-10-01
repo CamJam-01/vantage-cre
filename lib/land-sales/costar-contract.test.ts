@@ -2,11 +2,11 @@
  *
  * README Appendix A is the contract; `COSTAR_HEADER_ROW` is its executable
  * copy. Four representations must agree — the README, this constant, the
- * creating migration, and the live `land_sales` / `improved_sales` columns — and nothing else
+ * creating migration, and the live `land_sales` / `improved_sales` field names/types — and nothing else
  * enforces it. These tests cover the two that live in the repository.
  *
  * The live database is checked out-of-band, since a unit test has no
- * credentials. Run this and expect 277 catalog names in canonical order plus
+ * credentials. Run this and expect the same set of 277 catalog names plus
  * the documented carve-outs (`id`, `_sale_date_raw`), and nothing else, on
  * both sales tables:
  *

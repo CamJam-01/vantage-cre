@@ -43,7 +43,7 @@ export function ImportLandSalesClient({ path }: { path: SalesPath }) {
       setFileError('This file appears to use semicolons or tabs instead of commas. Re-export it as a comma-separated CSV and try again.');
       return;
     }
-    const headerError = csvHeaderError(hdrs);
+    const headerError = csvHeaderError(hdrs, path.id);
     if (headerError) {
       setFileError(headerError);
       return;
@@ -54,7 +54,7 @@ export function ImportLandSalesClient({ path }: { path: SalesPath }) {
       return;
     }
 
-    setRowResults(validateDataRows(dataRaw));
+    setRowResults(validateDataRows(dataRaw, path.id));
   }
 
   async function handleImport(importNonDuplicates = false) {
@@ -96,7 +96,7 @@ export function ImportLandSalesClient({ path }: { path: SalesPath }) {
           type="button"
           className="btn btn-ghost"
           style={{ padding: 0, marginBottom: 'var(--space-6)' }}
-          onClick={() => downloadCsv(path.importTemplateFilename, makeCsvTemplate())}
+          onClick={() => downloadCsv(path.importTemplateFilename, makeCsvTemplate(path.id))}
         >
           Download CSV template
         </button>

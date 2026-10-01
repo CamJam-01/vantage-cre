@@ -41,7 +41,7 @@ export function makeExportPost(path: SalesPath) {
     const { records, error } = await fetchLandSalesByIds(supabase, ids, path.table);
     if (error) return NextResponse.json({ error }, { status: 500 });
 
-    const csv = makeCsv(records);
+    const csv = makeCsv(records, path.id);
     return new NextResponse(csv, {
       status: 200,
       headers: {
