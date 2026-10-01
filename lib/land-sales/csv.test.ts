@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { COSTAR_HEADER_ROW, COSTAR_HEADERS } from './costar-fields.ts';
 import {
-  csvHeaderError, csvHeaders, importLandSaleRow, makeCsv, makeCsvTemplate,
+  csvHeaderError, importLandSaleRow, makeCsv, makeCsvTemplate,
   parseCsv, recordKey, RECORD_KEY_COLUMNS, splitFreshAndDuplicates, validateDataRows,
 } from './csv.ts';
 import { SALE_DATE_RAW_COLUMN } from './costar-fields.ts';
@@ -55,7 +55,6 @@ describe('makeCsvTemplate', () => {
   it('includes a blank data row so the template itself can import', () => {
     const rows = makeCsvTemplate().split('\r\n');
     assert.equal(rows[0], COSTAR_HEADER_ROW);
-    assert.equal(rows[0], csvHeaders.join(','));
     assert.equal(rows[0], COSTAR_HEADERS.join(','));
     assert.equal(rows[1], COSTAR_HEADERS.map(() => '').join(','));
   });

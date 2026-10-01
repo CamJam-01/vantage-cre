@@ -31,7 +31,7 @@ export default async function DatabaseFieldsPage({ searchParams }: PageProps) {
       fieldDividers: [] as FieldDivider[],
       error: error instanceof Error ? error.message : 'Could not load field visibility.',
     }));
-  const columns = resultColumns();
+  const columns = resultColumns({ pathId: path.id });
   const disabledReason = settings.error ?? undefined;
 
   return (

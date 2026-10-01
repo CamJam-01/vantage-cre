@@ -1,4 +1,5 @@
-import { costarColumnNames } from './costar-fields';
+import type { SalesPathId } from './sales-path';
+import { costarHeaders, costarColumnNames } from './costar-fields';
 import { costarColumnType } from './costar-column-types';
 import type { LandSale } from './schema';
 
@@ -10,14 +11,16 @@ const DEFAULT_RESULT_COLUMNS: readonly ResultColumn[] =
   costarColumnNames().map(name => ({ key: name, label: name }));
 
 export type ResultColumnsOptions = {
+  pathId?: SalesPathId;
   [option: string]: unknown;
 };
 
 /** Legacy option objects remain accepted for source compatibility. The closed
- * CoStar catalog is now authoritative regardless of their contents. */
+ * CoStar sequence for the selected path is authoritative; records cannot redefine it. */
 export function resultColumns(options: ResultColumnsOptions = {}): ResultColumn[] {
-  void options;
-  return [...DEFAULT_RESULT_COLUMNS];
+  return options.pathId === 'improved'
+    ? costarColumnNames(costarHeaders('improved')).map(name => ({ key: name, label: name }))
+    : [...DEFAULT_RESULT_COLUMNS];
 }
 
 export function resultSortValue(record: LandSale, column: ResultColumn): string | number | null {

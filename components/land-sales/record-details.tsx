@@ -300,7 +300,7 @@ export function RecordDetailsForm({
 }) {
   const router = useRouter();
   const hidden = new Set(hiddenFieldIds);
-  const rows = fieldDisplayRows(resultColumns(), fieldOrder, fieldDividers);
+  const rows = fieldDisplayRows(resultColumns({ pathId: path.id }), fieldOrder, fieldDividers);
   const pages = buildRecordDisplayPages(rows, hidden);
   const tabbedPages = pages.filter(page => page.title !== null);
   const editing = canEdit || createMode;

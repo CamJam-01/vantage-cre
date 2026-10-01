@@ -226,7 +226,7 @@ export async function importLandSales(
   if (looksLikeWrongDelimiter(headers)) {
     return { headerError: 'This file appears to use semicolons or tabs instead of commas. Re-export it as a comma-separated CSV and try again.' };
   }
-  const headerError = csvHeaderError(headers);
+  const headerError = csvHeaderError(headers, path.id);
   if (headerError) return { headerError };
 
   const dataRowsRaw = rows.slice(1);
@@ -234,7 +234,7 @@ export async function importLandSales(
     return { headerError: 'The CSV contains a header row but no data rows.' };
   }
 
-  const results = validateDataRows(dataRowsRaw);
+  const results = validateDataRows(dataRowsRaw, path.id);
 
   const rowErrors = results.filter(r => !r.ok).flatMap(r => (r.ok ? [] : r.errors));
   if (rowErrors.length) return { rowErrors };
