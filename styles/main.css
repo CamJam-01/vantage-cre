@@ -2,15 +2,20 @@
    Ported from claude_design/_ds/industry-f4035e7d-525b-4f20-b25f-6e55ddf79c74/styles.css.
    Deviation from the source file: the Google Fonts @import is replaced by next/font/google
    (see app/layout.tsx), which self-hosts the same two families and feeds them into
-   --font-heading/--font-body below via CSS variables. Everything else is unmodified. */
+   --font-heading/--font-body below via CSS variables. Translucent colors use RGBA
+   so the feedback screenshot renderer can parse them. */
 
 :root {
+  /* Keep RGB channels canonical: alpha colors must serialize as RGBA for the
+     hosted feedback widget's html2canvas renderer. */
   --color-bg: #f2f2f3;
   --color-surface: #e9e9ea;
-  --color-text: #1d1f20;
-  --color-accent: #5980a6;
+  --color-text-rgb: 29, 31, 32;
+  --color-text: rgb(var(--color-text-rgb));
+  --color-accent-rgb: 89, 128, 166;
+  --color-accent: rgb(var(--color-accent-rgb));
   --color-accent-2: #728fab;
-  --color-divider: color-mix(in srgb, #1d1f20 16%, transparent);
+  --color-divider: rgba(var(--color-text-rgb), 0.16);
 
   /* Tonal ramps — generated in OKLCH on one shared lightness scale, so the
      same step of any role matches the others in visual value. */
@@ -22,7 +27,8 @@
   --color-neutral-600: #7a7a7d;
   --color-neutral-700: #5d5d60;
   --color-neutral-800: #424244;
-  --color-neutral-900: #2b2b2d;
+  --color-neutral-900-rgb: 43, 43, 45;
+  --color-neutral-900: rgb(var(--color-neutral-900-rgb));
 
   --color-accent-100: #eef6ff;
   --color-accent-200: #d6ebff;
@@ -31,7 +37,8 @@
   --color-accent-500: #749dc4;
   --color-accent-600: #597ea3;
   --color-accent-700: #416180;
-  --color-accent-800: #2c455d;
+  --color-accent-800-rgb: 44, 69, 93;
+  --color-accent-800: rgb(var(--color-accent-800-rgb));
   --color-accent-900: #1d2d3d;
 
   --color-accent-2-100: #eef6ff;
@@ -62,9 +69,9 @@
 
   /* Elevation — derived from the ground: soft ink-tinted shadows on a
      light theme, a hairline edge + ambient darkness on a dark one. */
-  --shadow-sm: 0 1px 2px color-mix(in srgb, #2b2b2d 14%, transparent);
-  --shadow-md: 0 3px 10px color-mix(in srgb, #2b2b2d 16%, transparent);
-  --shadow-lg: 0 12px 32px color-mix(in srgb, #2b2b2d 22%, transparent);
+  --shadow-sm: 0 1px 2px rgba(var(--color-neutral-900-rgb), 0.14);
+  --shadow-md: 0 3px 10px rgba(var(--color-neutral-900-rgb), 0.16);
+  --shadow-lg: 0 12px 32px rgba(var(--color-neutral-900-rgb), 0.22);
 
   --color-paper: #ffffff;
 
@@ -130,12 +137,12 @@ img { display: block; max-width: 100%; }
 figure { margin: 0; }
 figcaption {
   font-size: 11px; margin-top: var(--space-1);
-  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  color: rgba(var(--color-text-rgb), 0.55);
 }
-.text-muted { color: color-mix(in srgb, var(--color-text) 55%, transparent); }
+.text-muted { color: rgba(var(--color-text-rgb), 0.55); }
 :focus { outline: none; }
 :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
-::selection { background: color-mix(in srgb, var(--color-accent) 30%, transparent); }
+::selection { background: rgba(var(--color-accent-rgb), 0.3); }
 
 /* — rules — */
 .hr {
@@ -160,18 +167,18 @@ figcaption {
 .btn-primary:hover { background: var(--color-accent-600); }
 .btn-primary:active { background: var(--color-accent-700); }
 .btn-secondary { border-color: var(--color-divider); }
-.btn-secondary:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
-.btn-secondary:active { background: color-mix(in srgb, var(--color-text) 14%, transparent); }
+.btn-secondary:hover { background: rgba(var(--color-text-rgb), 0.07); }
+.btn-secondary:active { background: rgba(var(--color-text-rgb), 0.14); }
 .btn-ghost { color: var(--color-accent); padding-inline: var(--space-1); }
-.btn-ghost:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
-.btn-ghost:active { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+.btn-ghost:hover { background: rgba(var(--color-accent-rgb), 0.1); }
+.btn-ghost:active { background: rgba(var(--color-accent-rgb), 0.18); }
 .btn-icon { width: 36px; height: 36px; padding: 0; }
 .btn-block { width: 100%; margin-top: var(--space-2); }
 
 /* — forms — */
 .field > label {
   display: block; font-size: 12px; margin-bottom: 5px;
-  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  color: rgba(var(--color-text-rgb), 0.7);
 }
 .input {
   width: 100%; min-height: 36px; padding: 6px 10px; font: inherit;
@@ -179,7 +186,7 @@ figcaption {
   background: var(--color-surface);
   border: 1px solid var(--color-divider); border-radius: var(--radius-md);
 }
-.input:hover { border-color: color-mix(in srgb, var(--color-text) 45%, transparent); }
+.input:hover { border-color: rgba(var(--color-text-rgb), 0.45); }
 .input:focus-visible { border-color: var(--color-accent); outline-offset: 0; }
 textarea.input { min-height: 90px; resize: vertical; }
 .radio { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
@@ -216,7 +223,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 }
 .seg-opt + .seg-opt { border-left: 1px solid var(--color-divider); }
 .seg-opt:has(input:checked) { background: var(--color-accent); color: var(--color-bg); }
-.seg-opt:not(:has(input:checked)):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.seg-opt:not(:has(input:checked)):hover { background: rgba(var(--color-text-rgb), 0.07); }
 .seg-opt:has(input:focus-visible) { outline: 2px solid var(--color-accent); outline-offset: -2px; }
 
 /* — cards — */
@@ -232,7 +239,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 .card-body { margin: 0; font-size: 13px; opacity: 0.8; flex: 1; }
 .card-meta {
   display: flex; align-items: center; gap: 6px; font-size: 11px;
-  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  color: rgba(var(--color-text-rgb), 0.5);
 }
 .elev-sm { box-shadow: var(--shadow-sm); }
 .elev-md { box-shadow: var(--shadow-md); }
@@ -309,7 +316,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 .nav-dropdown-menu a:focus-visible,
 .nav-dropdown-menu button:hover,
 .nav-dropdown-menu button:focus-visible {
-  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  background: rgba(var(--color-text-rgb), 0.06);
 }
 .nav-dropdown-menu button {
   display: block;
@@ -345,14 +352,14 @@ textarea.input { min-height: 90px; resize: vertical; }
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .table th {
   text-align: left; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
-  color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  color: rgba(var(--color-text-rgb), 0.6);
   padding: var(--space-2); border-bottom: 1px solid var(--color-divider);
 }
 .table td {
   padding: var(--space-2);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
+  border-bottom: 1px solid rgba(var(--color-text-rgb), 0.08);
 }
-.table tbody tr:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+.table tbody tr:hover { background: rgba(var(--color-text-rgb), 0.04); }
 .results-table.table th {
   text-transform: none;
   letter-spacing: 0.01em;
@@ -444,7 +451,7 @@ textarea.input { min-height: 90px; resize: vertical; }
   position: fixed; inset: 0; display: grid; place-items: center;
   z-index: 100;
   padding: var(--space-4);
-  background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+  background: rgba(var(--color-neutral-900-rgb), 0.5);
 }
 .dialog {
   width: min(440px, 100%); display: flex; flex-direction: column; gap: var(--space-3);
@@ -569,7 +576,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 .results-add-dropdown a:focus-visible,
 .results-add-dropdown button:hover:not(:disabled),
 .results-add-dropdown button:focus-visible:not(:disabled) {
-  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  background: rgba(var(--color-text-rgb), 0.06);
 }
 .results-add-dropdown button:disabled {
   opacity: 0.45;
@@ -579,7 +586,7 @@ textarea.input { min-height: 90px; resize: vertical; }
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: color-mix(in srgb, var(--color-neutral-900) 50%, transparent);
+  background: rgba(var(--color-neutral-900-rgb), 0.5);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
@@ -709,7 +716,7 @@ textarea.input { min-height: 90px; resize: vertical; }
   border-color: var(--color-divider);
   color: var(--color-text);
 }
-.record-bar .btn-secondary:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.record-bar .btn-secondary:hover { background: rgba(var(--color-text-rgb), 0.07); }
 
 /* Masthead — reads directly off the ground, no panel behind it. */
 .record-head { margin-bottom: var(--space-6); }
@@ -764,7 +771,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 }
 .record-tab[aria-selected="true"] { background: var(--color-accent); color: var(--color-bg); }
 .record-tab[aria-selected="true"] .sheet-no { opacity: 1; }
-.record-tab:not([aria-selected="true"]):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); }
+.record-tab:not([aria-selected="true"]):hover { background: rgba(var(--color-text-rgb), 0.07); }
 
 /* Sheet panel — neutral surface on the light page ground. */
 .record-panel {
@@ -777,7 +784,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 .record-panel-title {
   display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4);
   margin-bottom: var(--space-6); padding-bottom: var(--space-4);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-accent-800) 20%, transparent);
+  border-bottom: 1px solid rgba(var(--color-accent-800-rgb), 0.2);
 }
 .record-panel-title h2 {
   margin: 0; font-size: 21px; letter-spacing: 0.005em; color: var(--color-accent-800);
@@ -799,7 +806,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 .record-span-12 { grid-column: span 12; }
 .record-divider {
   grid-column: span 12; height: 1px; margin: 2px 0;
-  background: color-mix(in srgb, var(--color-accent-800) 18%, transparent);
+  background: rgba(var(--color-accent-800-rgb), 0.18);
 }
 .record-section-label {
   grid-column: span 12; margin-top: 4px;
@@ -818,7 +825,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 .field-toggle-track {
   position: relative; flex: none; width: 40px; height: 22px; border-radius: 999px;
   background: var(--color-neutral-400);
-  border: 1px solid color-mix(in srgb, var(--color-text) 25%, transparent);
+  border: 1px solid rgba(var(--color-text-rgb), 0.25);
   transition: background 120ms ease, border-color 120ms ease;
 }
 .field-toggle-knob {
@@ -844,7 +851,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 /* Admin-arranged section break: titles every field between it and the next. */
 .record-field-group {
   grid-column: span 12; margin-top: 6px; padding-bottom: 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-accent-800) 20%, transparent);
+  border-bottom: 1px solid rgba(var(--color-accent-800-rgb), 0.2);
   font-family: var(--font-heading); font-size: 18px; font-weight: 600;
   letter-spacing: 0.005em; color: var(--color-accent-800);
 }
@@ -854,19 +861,19 @@ textarea.input { min-height: 90px; resize: vertical; }
    .input uses would otherwise disappear into it. */
 .record-panel .input {
   background: var(--color-paper);
-  border-color: color-mix(in srgb, var(--color-accent-800) 20%, transparent);
+  border-color: rgba(var(--color-accent-800-rgb), 0.2);
 }
 .record-panel .input:hover { border-color: var(--color-accent-700); }
 .record-panel .input:focus-visible { border-color: var(--color-accent-800); }
 .record-panel .input[readonly] { cursor: default; }
 .record-panel .input[readonly]:hover {
-  border-color: color-mix(in srgb, var(--color-accent-800) 20%, transparent);
+  border-color: rgba(var(--color-accent-800-rgb), 0.2);
 }
 .record-affix { position: relative; }
 .record-affix > .affix {
   position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
   font-size: 14px; pointer-events: none;
-  color: color-mix(in srgb, var(--color-text) 38%, transparent);
+  color: rgba(var(--color-text-rgb), 0.38);
 }
 .record-affix > .input { padding-left: 22px; }
 .record-flag {
@@ -886,7 +893,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 .record-titleblock > div {
   display: flex; flex-direction: column; gap: 3px; justify-content: center;
   padding: 10px 14px;
-  border-right: 1px solid color-mix(in srgb, var(--color-accent-800) 18%, transparent);
+  border-right: 1px solid rgba(var(--color-accent-800-rgb), 0.18);
 }
 .record-titleblock > div:last-child { border-right: 0; align-items: center; text-align: center; }
 .record-titleblock .tb-label {
@@ -912,6 +919,6 @@ textarea.input { min-height: 90px; resize: vertical; }
   .record-tab { flex: 1; justify-content: center; }
   .record-titleblock { grid-template-columns: 1fr 1fr; }
   .record-titleblock > div {
-    border-bottom: 1px solid color-mix(in srgb, var(--color-accent-800) 18%, transparent);
+    border-bottom: 1px solid rgba(var(--color-accent-800-rgb), 0.18);
   }
 }
