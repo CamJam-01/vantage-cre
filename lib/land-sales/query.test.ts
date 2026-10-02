@@ -22,6 +22,24 @@ describe('isUnsatisfiableRangeError', () => {
 });
 
 describe('applyLandSaleFilters', () => {
+  it('combines land and building bounds using their stored units', () => {
+    assert.deepEqual(landSaleFilterClauses({
+      ...emptyFilters, sfMin: 1000, acMax: 3,
+      buildingSfMin: 20000, buildingSfMax: 40000,
+    }), [
+      { op: 'gte', column: 'Land Area SF', value: 1000 },
+      { op: 'lte', column: 'Land Area AC', value: 3 },
+      { op: 'gte', column: 'Building SF', value: 20000 },
+      { op: 'lte', column: 'Building SF', value: 40000 },
+    ]);
+    assert.deepEqual(landSaleFilterClauses({
+      ...emptyFilters, buildingSfMin: 0, buildingSfMax: 50000,
+    }), [
+      { op: 'gte', column: 'Building SF', value: 0 },
+      { op: 'lte', column: 'Building SF', value: 50000 },
+    ]);
+  });
+
   function captureOrders() {
     const orders: Array<{ column: string; ascending: boolean; nullsFirst?: boolean }> = [];
     const builder = {

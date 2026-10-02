@@ -60,27 +60,23 @@ export function buildSearchFilterEntries(
       remove: () => commit(set({ proposedUses: filters.proposedUses.filter(use => use !== proposedUse) })),
     });
   }
-  if (filters.sfMin != null || filters.sfMax != null) {
+  const areaRanges = [
+    { key: 'sf', label: 'Land Area SF', minKey: 'sfMin', maxKey: 'sfMax' },
+    { key: 'ac', label: 'Land Area AC', minKey: 'acMin', maxKey: 'acMax' },
+    { key: 'buildingSf', label: 'Building Area SF', minKey: 'buildingSfMin', maxKey: 'buildingSfMax' },
+  ] as const;
+  for (const { key, label, minKey, maxKey } of areaRanges) {
+    const min = filters[minKey];
+    const max = filters[maxKey];
+    if (min == null && max == null) continue;
     entries.push({
-      kind: 'number', key: 'sf', label: 'Land Area SF',
-      min: filters.sfMin != null ? String(filters.sfMin) : '',
-      max: filters.sfMax != null ? String(filters.sfMax) : '',
-      remove: () => commit(set({ sfMin: undefined, sfMax: undefined })),
+      kind: 'number', key, label,
+      min: min != null ? String(min) : '',
+      max: max != null ? String(max) : '',
+      remove: () => commit(set({ [minKey]: undefined, [maxKey]: undefined })),
       commit: (min, max) => commit(set({
-        sfMin: min === '' ? undefined : Number(min),
-        sfMax: max === '' ? undefined : Number(max),
-      })),
-    });
-  }
-  if (filters.acMin != null || filters.acMax != null) {
-    entries.push({
-      kind: 'number', key: 'ac', label: 'Land Area AC',
-      min: filters.acMin != null ? String(filters.acMin) : '',
-      max: filters.acMax != null ? String(filters.acMax) : '',
-      remove: () => commit(set({ acMin: undefined, acMax: undefined })),
-      commit: (min, max) => commit(set({
-        acMin: min === '' ? undefined : Number(min),
-        acMax: max === '' ? undefined : Number(max),
+        [minKey]: min === '' ? undefined : Number(min),
+        [maxKey]: max === '' ? undefined : Number(max),
       })),
     });
   }

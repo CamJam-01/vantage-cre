@@ -16,6 +16,8 @@ export type LandSaleFilters = {
   sfMax?: number;
   acMin?: number;
   acMax?: number;
+  buildingSfMin?: number;
+  buildingSfMax?: number;
   time?: TimeFilter;
   fieldFilters?: FieldFilter[];
 };
@@ -34,6 +36,8 @@ export function encodeFilters(filters: LandSaleFilters): URLSearchParams {
   if (filters.sfMax != null) params.set('sfMax', String(filters.sfMax));
   if (filters.acMin != null) params.set('acMin', String(filters.acMin));
   if (filters.acMax != null) params.set('acMax', String(filters.acMax));
+  if (filters.buildingSfMin != null) params.set('buildingSfMin', String(filters.buildingSfMin));
+  if (filters.buildingSfMax != null) params.set('buildingSfMax', String(filters.buildingSfMax));
   if (filters.time?.mode === 'last') {
     params.set('lastDuration', String(filters.time.duration));
     params.set('lastUnit', filters.time.unit);
@@ -110,6 +114,8 @@ export function decodeFilters(input: SearchParamsInput): LandSaleFilters {
     sfMax: num('sfMax'),
     acMin: num('acMin'),
     acMax: num('acMax'),
+    buildingSfMin: num('buildingSfMin'),
+    buildingSfMax: num('buildingSfMax'),
     time,
     fieldFilters: [...fieldByColumn.values()],
   };
@@ -121,6 +127,7 @@ export function hasAnyFilter(filters: LandSaleFilters): boolean {
     filters.types.length || filters.proposedUses.length ||
     filters.sfMin != null || filters.sfMax != null ||
     filters.acMin != null || filters.acMax != null || filters.time ||
+    filters.buildingSfMin != null || filters.buildingSfMax != null ||
     (filters.fieldFilters ?? []).length
   );
 }
@@ -134,6 +141,7 @@ export function appliedFilterCount(filters: LandSaleFilters): number {
     filters.types.length > 0,
     filters.proposedUses.length > 0,
     filters.sfMin != null || filters.sfMax != null || filters.acMin != null || filters.acMax != null,
+    filters.buildingSfMin != null || filters.buildingSfMax != null,
     !!filters.time,
   ].filter(Boolean).length + (filters.fieldFilters ?? []).length;
 }

@@ -35,6 +35,8 @@ export function landSaleFilterClauses(filters: LandSaleFilters): FilterClause[] 
   if (filters.sfMax != null) clauses.push({ op: 'lte', column: 'Land Area SF', value: filters.sfMax });
   if (filters.acMin != null) clauses.push({ op: 'gte', column: 'Land Area AC', value: filters.acMin });
   if (filters.acMax != null) clauses.push({ op: 'lte', column: 'Land Area AC', value: filters.acMax });
+  if (filters.buildingSfMin != null) clauses.push({ op: 'gte', column: 'Building SF', value: filters.buildingSfMin });
+  if (filters.buildingSfMax != null) clauses.push({ op: 'lte', column: 'Building SF', value: filters.buildingSfMax });
 
   if (filters.time?.mode === 'range') {
     if (filters.time.from) clauses.push({ op: 'gte', column: 'Sale Date', value: filters.time.from });
