@@ -89,7 +89,7 @@ describe('Improved CoStar sequence', () => {
   });
 
   it('warns on differing repeated values and repeats the last stored value on export', () => {
-    const values = IMPROVED_COSTAR_HEADERS.map(() => '');
+    const values = IMPROVED_COSTAR_HEADERS.map(header => header === 'Sale Date' ? '08/20/2026' : '');
     for (const header of ['Average Rental Rate Per kW', 'Sprinklers']) {
       const positions = IMPROVED_COSTAR_HEADERS.flatMap((name, i) => name === header ? [i] : []);
       values[positions[0]] = 'first';
@@ -98,6 +98,9 @@ describe('Improved CoStar sequence', () => {
     const [imported] = validateDataRows([values], 'improved');
     assert.ok(imported.ok);
     assert.equal(imported.warnings?.length, 2);
+    assert.ok(imported.warnings?.every(warning => warning.includes('duplicate CSV columns differ')));
+    assert.equal(imported.data.columns['Sale Date'], '2026-08-20');
+    assert.equal(imported.data.saleDateRaw, undefined);
     const record = landSaleFromRow({ id: 'fixture-id', ...importLandSaleRow(imported) });
     assert.ok(record);
     const [, exported] = parseCsv(makeCsv([record], 'improved'));
