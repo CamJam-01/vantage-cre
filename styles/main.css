@@ -377,7 +377,25 @@ textarea.input { min-height: 90px; resize: vertical; }
   cursor: pointer;
   user-select: none;
 }
+.results-table .column-resize-handle {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: var(--space-3);
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  border-right: 1px solid transparent;
+}
+.results-table .column-resize-handle:is(:hover, :focus-visible, [data-resizing]) {
+  border-right-color: var(--color-bg);
+  background: rgba(var(--color-accent-800-rgb), 0.2);
+}
+.results-table .column-resize-handle:focus-visible {
+  outline-offset: calc(-1 * var(--space-1));
+}
 .results-table .col-header svg {
+  flex-shrink: 0;
   opacity: 0.35;
   transition: opacity 0.12s ease;
 }
