@@ -27,6 +27,38 @@ const modeRowStyle: CSSProperties = { display: 'flex', alignItems: 'center', jus
 const twoColStyle: CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' };
 const tagGridStyle: CSSProperties = { display: 'grid', flexWrap: 'wrap', gap: 15, gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' };
 
+function AreaRange({ label, name, mode, min, max, onModeChange, onMinChange, onMaxChange }: {
+  label: string;
+  name: string;
+  mode: 'sf' | 'ac';
+  min: string;
+  max: string;
+  onModeChange?: (mode: 'sf' | 'ac') => void;
+  onMinChange: (value: string) => void;
+  onMaxChange: (value: string) => void;
+}) {
+  return (
+    <fieldset style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', border: 0, padding: 0, margin: 0, minWidth: 0 }} aria-label={label}>
+      <div style={modeRowStyle}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>{label}</span>
+        {onModeChange && <SegmentedControl
+          name={name}
+          value={mode}
+          onChange={value => onModeChange(value === 'ac' ? 'ac' : 'sf')}
+          options={[{ label: 'SF', value: 'sf' }, { label: 'AC', value: 'ac' }]}
+        />}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>{label} {mode.toUpperCase()}</span>
+        <div style={twoColStyle}>
+          <Field id={`${name}-${mode}-min`} label="Min" type="text" inputMode="decimal" value={min} onChange={e => onMinChange(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
+          <Field id={`${name}-${mode}-max`} label="Max" type="text" inputMode="decimal" value={max} onChange={e => onMaxChange(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
+        </div>
+      </div>
+    </fieldset>
+  );
+}
+
 function FilterTagGrid({
   values,
   selected,
@@ -67,12 +99,12 @@ function FilterTagGrid({
 export function LandSalesSearchClient({
   path,
   secondaryTypes,
-  proposedUses: proposedUseOptions,
+  proposedUses: proposedUseOptions = [],
   initial,
 }: {
   path: SalesPath;
   secondaryTypes: string[];
-  proposedUses: string[];
+  proposedUses?: string[];
   initial: LandSaleFilters;
 }) {
   const router = useRouter();
@@ -91,6 +123,8 @@ export function LandSalesSearchClient({
   const [sfMax, setSfMax] = useState(initial.sfMax != null ? String(initial.sfMax) : '');
   const [acMin, setAcMin] = useState(initial.acMin != null ? String(initial.acMin) : '');
   const [acMax, setAcMax] = useState(initial.acMax != null ? String(initial.acMax) : '');
+  const [buildingSfMin, setBuildingSfMin] = useState(initial.buildingSfMin != null ? String(initial.buildingSfMin) : '');
+  const [buildingSfMax, setBuildingSfMax] = useState(initial.buildingSfMax != null ? String(initial.buildingSfMax) : '');
 
   const [lastDuration, setLastDuration] = useState(
     initial.time?.mode === 'last' ? String(initial.time.duration) : ''
@@ -122,11 +156,14 @@ export function LandSalesSearchClient({
       county: county.trim() || undefined,
       city: city.trim() || undefined,
       types,
-      proposedUses,
+      proposedUses: path.id === 'land' ? proposedUses : [],
       sfMin: sizeMode === 'sf' ? parseFormattedNumber(sfMin) : undefined,
       sfMax: sizeMode === 'sf' ? parseFormattedNumber(sfMax) : undefined,
       acMin: sizeMode === 'ac' ? parseFormattedNumber(acMin) : undefined,
       acMax: sizeMode === 'ac' ? parseFormattedNumber(acMax) : undefined,
+      buildingSfMin: path.id === 'improved' ? parseFormattedNumber(buildingSfMin) : undefined,
+      buildingSfMax: path.id === 'improved' ? parseFormattedNumber(buildingSfMax) : undefined,
+      fieldFilters: initial.fieldFilters,
       time,
     };
     router.push(`${path.basePath}?${encodeFilters(filters).toString()}`);
@@ -186,7 +223,7 @@ export function LandSalesSearchClient({
         {activeTab === 'type' && (
           <div style={{ ...sectionStyle, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>Land Type</span>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>{path.id === 'improved' ? 'Property Type' : 'Land Type'}</span>
               <FilterTagGrid
                 values={secondaryTypes}
                 selected={types}
@@ -194,7 +231,7 @@ export function LandSalesSearchClient({
                 emptyLabel="No secondary types available."
               />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+            {path.id === 'land' && <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
               <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>Proposed Use</span>
               <FilterTagGrid
                 values={proposedUseOptions}
@@ -202,46 +239,36 @@ export function LandSalesSearchClient({
                 onToggle={toggleProposedUse}
                 emptyLabel="No proposed uses available."
               />
-            </div>
+            </div>}
           </div>
         )}
 
         {activeTab === 'size' && (
           <div style={{ ...sectionStyle, display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <div style={modeRowStyle}>
-              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>
-                Land Area
-              </span>
-              <SegmentedControl
-                name="size-mode"
-                value={sizeMode}
-                onChange={v => {
-                  const next = v as 'sf' | 'ac';
-                  if (next === sizeMode) return;
-                  setSizeMode(next);
-                  if (next === 'sf') { setAcMin(''); setAcMax(''); }
-                  else { setSfMin(''); setSfMax(''); }
-                }}
-                options={[{ label: 'SF', value: 'sf' }, { label: 'AC', value: 'ac' }]}
-              />
-            </div>
-            {sizeMode === 'sf' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                <label htmlFor="sfMin" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>Land Area SF</label>
-                <div style={twoColStyle}>
-                  <Field id="sfMin" label="Min" type="text" inputMode="decimal" placeholder="" value={sfMin} onChange={e => setSfMin(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
-                  <Field id="sfMax" label="Max" type="text" inputMode="decimal" placeholder="" value={sfMax} onChange={e => setSfMax(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-                <label htmlFor="acMin" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>Land Area AC</label>
-                <div style={twoColStyle}>
-                  <Field id="acMin" label="Min" type="text" inputMode="decimal" placeholder="" value={acMin} onChange={e => setAcMin(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
-                  <Field id="acMax" label="Max" type="text" inputMode="decimal" placeholder="" value={acMax} onChange={e => setAcMax(e.target.value)} style={{ backgroundColor: 'var(--color-paper)' }} />
-                </div>
-              </div>
-            )}
+            <AreaRange
+              label="Land Area"
+              name="size-mode"
+              mode={sizeMode}
+              min={sizeMode === 'sf' ? sfMin : acMin}
+              max={sizeMode === 'sf' ? sfMax : acMax}
+              onModeChange={next => {
+                if (next === sizeMode) return;
+                setSizeMode(next);
+                if (next === 'sf') { setAcMin(''); setAcMax(''); }
+                else { setSfMin(''); setSfMax(''); }
+              }}
+              onMinChange={sizeMode === 'sf' ? setSfMin : setAcMin}
+              onMaxChange={sizeMode === 'sf' ? setSfMax : setAcMax}
+            />
+            {path.id === 'improved' && <AreaRange
+              label="Building Area"
+              name="building-size-mode"
+              mode="sf"
+              min={buildingSfMin}
+              max={buildingSfMax}
+              onMinChange={setBuildingSfMin}
+              onMaxChange={setBuildingSfMax}
+            />}
           </div>
         )}
 

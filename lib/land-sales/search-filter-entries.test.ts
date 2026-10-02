@@ -4,6 +4,22 @@ import { buildSearchFilterEntries } from './search-filter-entries.ts';
 import { emptyFilters, type LandSaleFilters } from './search-params.ts';
 
 describe('buildSearchFilterEntries', () => {
+  it('edits and removes building SF without changing land or other filters', () => {
+    const filters = { ...emptyFilters, sfMin: 1000, city: 'Raleigh', buildingSfMin: 10000, buildingSfMax: 20000 };
+    const applied: LandSaleFilters[] = [];
+    const entries = buildSearchFilterEntries(filters, next => applied.push(next));
+    const building = entries.find(e => e.key === 'buildingSf');
+    assert.equal(building?.kind, 'number');
+    if (building?.kind !== 'number') return;
+    assert.equal(building.label, 'Building Area SF');
+    assert.equal(building.min, '10000');
+    assert.equal(building.max, '20000');
+    building.commit('0', '30000');
+    assert.deepEqual(applied[0], { ...filters, buildingSfMin: 0, buildingSfMax: 30000 });
+    building.remove();
+    assert.deepEqual(applied[1], { ...filters, buildingSfMin: undefined, buildingSfMax: undefined });
+  });
+
   it('labels Market as Market, never MSA', () => {
     const applied: LandSaleFilters[] = [];
     const entries = buildSearchFilterEntries(

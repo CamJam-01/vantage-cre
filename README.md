@@ -213,6 +213,12 @@ Seven capabilities. A change either extends one of these or is out of scope.
      `Secondary Type`, `Proposed Use` (split on commas when a cell holds
      multiple labels), `Land Area AC` / `Land Area SF` range, and a `Sale Date`
      window (an absolute range or a trailing period).
+     Improved Sales labels its type selector **Property Type**, omits Proposed
+     Use from the search form, and adds **Building Area** directly below Land
+     Area on the Size tab. Land Area has an SF/AC toggle that clears its previous
+     range when switched. Building Area is always measured in SF, with min/max
+     inputs filtering the existing `Building SF` field. Both area ranges and
+     the Land Area input unit survive URL reloads.
    - **Field filters** over any visible field, typed by that column's Postgres
      type: text *contains*, numeric *min/max*, date *from/to*, boolean *is*.
 
@@ -278,6 +284,8 @@ merge through admin-managed Output Flows, conditional template routing, and
 sequential comp numbering** · user administration · audit log · user profiles
 with avatars · an embedded third-party feedback widget · path-specific CoStar CSV sequences
 (278 positions for Land, 279 for Improved).
+Improved Sales search includes independent Land Area and Building Area ranges
+(Land Area in SF or AC; Building Area in SF only).
 
 **The feedback widget** loads on every page, signed in or not, and opens a
 panel for sending a comment to the people who maintain this tool. Its "Name"

@@ -1,6 +1,27 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { decodeFilters, encodeFilters, emptyFilters, hasAnyFilter } from './search-params.ts';
+import { decodeFilters, encodeFilters, emptyFilters, hasAnyFilter, appliedFilterCount } from './search-params.ts';
+
+describe('building area search params', () => {
+  it('round-trips building SF independently from land ranges', () => {
+    const filters = { ...emptyFilters, sfMin: 1000, acMax: 3, buildingSfMin: 0, buildingSfMax: 50000 };
+    const decoded = decodeFilters(encodeFilters(filters));
+    for (const [key, value] of Object.entries(filters)) {
+      assert.deepEqual(decoded[key as keyof typeof decoded], value);
+    }
+    assert.equal(appliedFilterCount(decoded), 2);
+    assert.equal(hasAnyFilter({ ...emptyFilters, buildingSfMin: 0 }), true);
+  });
+
+  it('ignores malformed building ranges and stale acreage params', () => {
+    const decoded = decodeFilters(new URLSearchParams('buildingSfMin=broken&buildingSfMax=Infinity&buildingAcMin=0&buildingAcMax=1.5'));
+    assert.equal(decoded.buildingSfMin, undefined);
+    assert.equal(decoded.buildingSfMax, undefined);
+    assert.equal(hasAnyFilter(decoded), false);
+    assert.equal(appliedFilterCount(decoded), 0);
+    assert.equal(encodeFilters(decoded).toString(), '');
+  });
+});
 
 describe('fieldFilters in search params', () => {
   it('round-trips ff params alongside leftover search-page state', () => {
