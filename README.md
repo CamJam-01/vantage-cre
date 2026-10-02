@@ -223,7 +223,11 @@ Seven capabilities. A change either extends one of these or is out of scope.
 4. **Read the results.** A table of matching records, one column per visible
    field in the Admin's order, sortable by any column, with rows selectable
    individually or all at once. Records whose imported data was flagged during
-   ingest are marked here for review.
+   ingest are marked here for review. In both sales tables, users can drag a
+   column header’s right edge to resize it, or focus that edge and use the
+   Left/Right arrow keys (Home/End select the minimum/maximum width). Widths
+   are temporary and reset on reload; resizing does not change the global
+   arrangement, stored records, or CSV output.
 
 5. **Inspect and correct one record.** A detail screen laid out entirely by the
    arrangement — the visible catalog fields, in the Admin's order, distributed
@@ -267,7 +271,7 @@ prevent the operation it describes from succeeding.
 ### Built and load-bearing
 
 Authentication and roles · `Sales → Land` and `Sales → Improved` end to end · primary and per-field
-filtering · results table with sort, selection, and CSV export · record detail
+filtering · results table with sort, selection, temporary column resizing, and CSV export · record detail
 with in-place editing · CSV import with per-row validation · manual record
 entry · global field visibility, ordering, and dividers · **document (DOCX)
 merge through admin-managed Output Flows, conditional template routing, and
@@ -299,7 +303,7 @@ up" the UI, and do not silently enable one.
 
 ### Out of scope entirely
 
-Multi-tenancy or workspaces · per-user view preferences · valuation math,
+Multi-tenancy or workspaces · saved per-user view preferences · valuation math,
 adjustment grids, or report generation · acting as the authoritative source for
 provider data · public or unauthenticated access of any kind.
 

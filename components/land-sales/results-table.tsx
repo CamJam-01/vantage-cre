@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type PointerEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronUp, ChevronsUpDown, Minus, TriangleAlert } from 'lucide-react';
@@ -19,6 +19,7 @@ import { PAGE_SIZE, landSalesPageHref, landSalesReturnQuery, resultsRangeLabel }
 import { formatCatalogValue, formatDate } from '@/lib/land-sales/format';
 import { downloadCsv } from '@/lib/land-sales/csv';
 import type { ResultColumn } from '@/lib/land-sales/result-columns';
+import { MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, defaultColumnWidth, draggedColumnWidth, keyboardColumnWidth } from '@/lib/land-sales/column-width';
 import { fieldVisibilityId } from '@/lib/land-sales/field-visibility';
 import { keyedRecords, pageSelectionState } from '@/lib/land-sales/row-selection';
 import { toggleResultsSort, type ResultsSort } from '@/lib/land-sales/results-sort';
@@ -33,40 +34,83 @@ const ROW_NUMBER_WIDTH_PX = 32;
 const CHECKBOX_WIDTH_PX = 40;
 const HEADER_GUTTER_PX = ROW_NUMBER_WIDTH_PX + CHECKBOX_WIDTH_PX;
 
-/** Keep a header to at most two lines: size to the longer of the longest
- * token and half the full label, plus sort icon and cell padding. */
-function headerMinWidth(label: string): number {
-  const pxPerChar = 7.2;
-  const extra = 36;
-  const tokens = label.split(/[\s/()-]+/).filter(Boolean);
-  const longest = tokens.reduce((max, token) => Math.max(max, token.length), 1);
-  const twoLineChars = Math.ceil(label.length / 2);
-  return Math.max(96, Math.ceil(Math.max(longest, twoLineChars) * pxPerChar + extra));
-}
-
 function SortableHeader({
   column,
   sort,
   href,
+  width,
+  onResize,
 }: {
   column: ResultColumn;
   sort: ResultsSort;
   href: string;
+  width: number;
+  onResize: (width: number, commit: boolean) => void;
 }) {
+  const drag = useRef<{ pointerId: number; startX: number; startWidth: number; width: number } | null>(null);
+
+  function finishResize(event: PointerEvent<HTMLSpanElement>, cancel = false) {
+    const current = drag.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    const nextWidth = cancel ? current.startWidth : current.width;
+    drag.current = null;
+    event.currentTarget.removeAttribute('data-resizing');
+    event.currentTarget.setAttribute('aria-valuenow', String(nextWidth));
+    onResize(nextWidth, true);
+  }
+
   const active = sort.column === column.key;
   return (
     <th
-      style={{ ...stickyHeaderCellStyle, minWidth: headerMinWidth(column.label), padding: 0 }}
+      style={{ ...stickyHeaderCellStyle, padding: 0 }}
       aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       <Link href={href} className="col-header">
         <span className="col-header-label">{column.label}</span>
         {active ? (
-          sort.dir === 'asc' ? <ChevronUp size={18} strokeWidth={2.5} /> : <ChevronDown size={18} strokeWidth={2.5} />
+          sort.dir === 'asc' ? <ChevronUp size={18} strokeWidth={1.5} /> : <ChevronDown size={18} strokeWidth={1.5} />
         ) : (
-          <ChevronsUpDown size={22} strokeWidth={2} />
+          <ChevronsUpDown size={22} strokeWidth={1.5} />
         )}
       </Link>
+      <span
+        className="column-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={`Resize ${column.label} column`}
+        aria-valuemin={MIN_COLUMN_WIDTH}
+        aria-valuemax={MAX_COLUMN_WIDTH}
+        aria-valuenow={width}
+        tabIndex={0}
+        title="Drag to resize; use Left/Right arrows when focused"
+        onClick={event => { event.preventDefault(); event.stopPropagation(); }}
+        onPointerDown={event => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          event.stopPropagation();
+          event.currentTarget.focus();
+          event.currentTarget.setPointerCapture(event.pointerId);
+          event.currentTarget.setAttribute('data-resizing', '');
+          drag.current = { pointerId: event.pointerId, startX: event.clientX, startWidth: width, width };
+        }}
+        onPointerMove={event => {
+          const current = drag.current;
+          if (!current || current.pointerId !== event.pointerId) return;
+          current.width = draggedColumnWidth(current.startWidth, current.startX, event.clientX);
+          event.currentTarget.setAttribute('aria-valuenow', String(current.width));
+          onResize(current.width, false);
+        }}
+        onPointerUp={event => finishResize(event)}
+        onPointerCancel={event => finishResize(event, true)}
+        onLostPointerCapture={event => finishResize(event, true)}
+        onKeyDown={event => {
+          const nextWidth = keyboardColumnWidth(width, event.key);
+          if (nextWidth == null) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onResize(nextWidth, true);
+        }}
+      />
     </th>
   );
 }
@@ -265,6 +309,7 @@ export function ResultsTable({
     <>
       <ResultsCount path={path} records={records} totalCount={totalCount} page={page} filters={filters} sort={sort} />
       <ResultsBody
+        key={path.id}
         path={path}
         records={records}
         columns={columns}
@@ -350,10 +395,24 @@ function ResultsBody({
   const pageIds = useMemo(() => keyed.map(row => row.key), [keyed]);
   const pageState = pageSelectionState(selectedIds, pageIds);
 
-  const tableMinWidth = useMemo(
-    () => HEADER_GUTTER_PX + columns.reduce((sum, column) => sum + headerMinWidth(column.label), 0),
-    [columns],
-  );
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const tableRef = useRef<HTMLTableElement>(null);
+  const widths = columns.map(column => columnWidths[column.key] ?? defaultColumnWidth(column.label));
+  const tableWidth = HEADER_GUTTER_PX + widths.reduce((sum, width) => sum + width, 0);
+
+  function resizeColumn(index: number, width: number, commit: boolean) {
+    const column = columns[index];
+    // Preview the colgroup directly: dragging must not re-render thousands of
+    // cells on each pointer move. React commits the final width on release.
+    const table = tableRef.current;
+    const col = table?.querySelectorAll('col')[index + 2];
+    if (!table || !col) return;
+    col.style.width = `${width}px`;
+    table.style.width = `${tableWidth - widths[index] + width}px`;
+    // Restore the preview explicitly on cancellation, even if React’s saved
+    // width is unchanged and therefore produces no style update.
+    if (commit) setColumnWidths(current => ({ ...current, [column.key]: width }));
+  }
 
   function viewDetails(id: string) {
     router.push(searchQuery ? `${path.basePath}/${id}?from=${encodeURIComponent(searchQuery)}` : `${path.basePath}/${id}`);
@@ -364,7 +423,12 @@ function ResultsBody({
       <main style={{ flex: 1, minWidth: 0, paddingTop: 0, boxSizing: 'border-box' }}>
         <div style={{ width: '100%' }}>
           <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 250px)', background: 'var(--color-accent-2-100)' }}>
-            <table className="table results-table" style={{ width: '100%', minWidth: tableMinWidth }}>
+            <table ref={tableRef} className="table results-table" style={{ width: tableWidth, tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: ROW_NUMBER_WIDTH_PX }} />
+                <col style={{ width: CHECKBOX_WIDTH_PX }} />
+                {columns.map((column, index) => <col key={column.key} style={{ width: widths[index] }} />)}
+              </colgroup>
               <thead>
                 <tr>
                   <th style={{ ...stickyHeaderCellStyle, width: ROW_NUMBER_WIDTH_PX }} />
@@ -380,10 +444,12 @@ function ResultsBody({
                       aria-label="Select all rows on this page"
                     />
                   </th>
-                  {columns.map(col => (
+                  {columns.map((col, index) => (
                     <SortableHeader
                       key={fieldVisibilityId(col)}
                       column={col}
+                      width={widths[index]}
+                      onResize={(width, commit) => resizeColumn(index, width, commit)}
                       sort={sort}
                       href={landSalesPageHref(filters, 1, toggleResultsSort(sort, col.key), path.basePath)}
                     />
