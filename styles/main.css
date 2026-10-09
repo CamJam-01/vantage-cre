@@ -112,6 +112,71 @@ h1, h2, h3, h4 { font-family: var(--font-heading); font-weight: var(--font-headi
   border-radius: 0;
 }
 
+/* Search category rows — lift slightly on hover so an unselected option still
+   reads as clickable without competing with the selected outline. */
+.picker-option {
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.picker-option:not(.is-disabled):hover {
+  border-color: rgba(var(--color-accent-rgb), 0.55);
+  box-shadow: var(--shadow-md);
+}
+.picker-option:not(.is-disabled):focus-visible {
+  border-color: var(--color-accent-600);
+  box-shadow: var(--shadow-md);
+}
+
+/* Primary action docked inside a selected picker row — stronger hover than the
+   default accent fill so Continue/Search read as the next step. */
+.picker-continue,
+.search-sheet-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--color-bg);
+  background: var(--color-accent-600);
+  box-shadow: var(--shadow-md);
+}
+.picker-continue {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  height: 100%;
+  box-sizing: border-box;
+}
+.picker-continue svg {
+  transition: transform 120ms ease;
+}
+.picker-continue:hover svg {
+  transform: translateX(4px);
+}
+.picker-continue:hover,
+.search-sheet-action:hover {
+  background: var(--color-accent-700);
+  box-shadow: var(--shadow-lg);
+}
+.picker-continue:active,
+.search-sheet-action:active {
+  background: var(--color-accent-800);
+}
+.picker-continue:focus-visible,
+.search-sheet-action:focus-visible {
+  outline: 2px solid var(--color-accent-800);
+  outline-offset: 2px;
+}
+.record-bar .search-sheet-action {
+  padding: var(--space-2) var(--space-4);
+  font-size: 14px;
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
    Components — built with the tokens above. Plain CSS
    on plain HTML: no JavaScript, no build step. Each class is documented in
@@ -658,7 +723,7 @@ textarea.input { min-height: 90px; resize: vertical; }
 /* Action bar — sticks flush beneath the app nav so Save stays
    reachable however far down the sheet the user has scrolled. */
 .record-bar {
-  position: sticky; top: var(--app-header-height); z-index: 9;
+  position: sticky; top: var(--app-header-height); z-index: 25;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -886,6 +951,60 @@ textarea.input { min-height: 90px; resize: vertical; }
 .record-panel .input[readonly] { cursor: default; }
 .record-panel .input[readonly]:hover {
   border-color: rgba(var(--color-accent-800-rgb), 0.2);
+}
+
+/* Search sheet suggestion combobox — keeps the record-field chrome and opens a
+   paper panel with its own filter input above a scrollable option list. */
+.search-suggest { position: relative; min-width: 0; }
+.search-suggest-panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+  /* Below sticky header (30) and record-bar (25); above sheet fields. */
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  box-shadow: var(--shadow-md);
+}
+.search-suggest-filter {
+  flex: none;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-divider);
+  background: var(--color-neutral-100);
+}
+.search-suggest-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.search-suggest-list button {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+.search-suggest-list button:hover,
+.search-suggest-list button:focus-visible,
+.search-suggest-list li[aria-selected="true"] button {
+  background: rgba(var(--color-text-rgb), 0.06);
+}
+.search-suggest-empty {
+  padding: var(--space-3);
+  font-size: 13px;
+  color: var(--color-neutral-700);
 }
 .record-affix { position: relative; }
 .record-affix > .affix {

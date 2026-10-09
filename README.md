@@ -208,19 +208,27 @@ Seven capabilities. A change either extends one of these or is out of scope.
 
 3. **Filter.** Two tiers, both of which must agree with each other, and both
    addressing catalog headers by their exact names:
-   - **Primary filters** over the headers an appraiser reaches for first —
-     `Property State`, `Property County`, `Property City`, `Market`,
-     `Secondary Type`, `Proposed Use` (split on commas when a cell holds
-     multiple labels), `Land Area AC` / `Land Area SF` range, and a `Sale Date`
-     window (an absolute range or a trailing period).
-     Improved Sales labels its type selector **Property Type**, omits Proposed
-     Use from the search form, and adds **Building Area** directly below Land
-     Area on the Size tab. Land Area has an SF/AC toggle that clears its previous
-     range when switched. Building Area is always measured in SF, with min/max
-     inputs filtering the existing `Building SF` field. Both area ranges and
-     the Land Area input unit survive URL reloads.
+   - **Sales search sheet.** Land and Improved search screens mirror each
+     path's record-detail arrangement — the same Admin pages, groups, and
+     visible fields, presented as a tall sheet with record-style tabs and a
+     single Search action in the sticky bar. Every arranged field is a typed
+     filter control (text *contains*, numeric *min/max*, date *from/to*,
+     boolean *is*); values start blank. Location and type text fields that
+     appraisers reach for most — `Property City`, `Property State`,
+     `Property County`, `Market`, `Submarket Name`, `Property Type`,
+     `Secondary Type`, `Proposed Use`, `Sale Type`, and `Sale Status` — open a
+     searchable combobox of distinct database values while still accepting a
+     typed custom value. Dependent lists are scoped from co-occurring values
+     in the database: City←State, County←State, Market←State,
+     Submarket←Market (and←State when Market is blank), Secondary Type←Property
+     Type, and Proposed Use←Property Type. Incompatible dependents clear when a
+     parent changes. Submitting encodes those choices as field filters in the
+     page address. Legacy primary-filter query parameters still decode and seed
+     matching blanks so old links keep working.
    - **Field filters** over any visible field, typed by that column's Postgres
      type: text *contains*, numeric *min/max*, date *from/to*, boolean *is*.
+     The results sidebar edits them for every path; both search sheets build
+     them from the form above.
 
    A filter set is fully expressible in the page address, so a search is a
    shareable, bookmarkable, reloadable thing. Do not introduce filter state that
@@ -276,16 +284,15 @@ prevent the operation it describes from succeeding.
 
 ### Built and load-bearing
 
-Authentication and roles · `Sales → Land` and `Sales → Improved` end to end · primary and per-field
-filtering · results table with sort, selection, temporary column resizing, and CSV export · record detail
-with in-place editing · CSV import with per-row validation · manual record
-entry · global field visibility, ordering, and dividers · **document (DOCX)
+Authentication and roles · `Sales → Land` and `Sales → Improved` end to end · Land and Improved
+search as arrangement-driven record-style sheets with typed field filters and dependent suggestion
+comboboxes · per-field filtering on results · results table with sort, selection, temporary column
+resizing, and CSV export · record detail with in-place editing · CSV import with per-row validation ·
+manual record entry · global field visibility, ordering, and dividers · **document (DOCX)
 merge through admin-managed Output Flows, conditional template routing, and
 sequential comp numbering** · user administration · audit log · user profiles
 with avatars · an embedded third-party feedback widget · path-specific CoStar CSV sequences
 (278 positions for Land, 279 for Improved).
-Improved Sales search includes independent Land Area and Building Area ranges
-(Land Area in SF or AC; Building Area in SF only).
 
 **The feedback widget** loads on every page, signed in or not, and opens a
 panel for sending a comment to the people who maintain this tool. Its "Name"
@@ -519,7 +526,7 @@ Enough to orient; the details belong in `AGENTS.md`.
 | Sign-in, sign-up, callbacks, password reset | `app/login/`, `app/signup/`, `app/auth/` |
 | Domain logic — the part worth reading first | `lib/land-sales/` |
 | The provider catalog, field types, and record ⟷ row mapping | `lib/land-sales/` (catalog and mapping modules) |
-| Filter encoding/decoding and query construction | `lib/land-sales/` (search-params, query, field-filters) |
+| Filter encoding/decoding and query construction | `lib/land-sales/` (search-params, query, field-filters, search-sheet) |
 | The arrangement: visibility, ordering, dividers, page layout | `lib/land-sales/` (field-visibility, display-settings) |
 | Import/export, validation, duplicate detection | `lib/land-sales/` (csv, schema, dates) |
 | DOCX merge: tags, Output Flow routing, WordprocessingML surgery, template metadata | `lib/land-sales/` (merge-tags, output-flows, docx-xml, docx-merge, docx-templates) |

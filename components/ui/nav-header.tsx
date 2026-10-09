@@ -8,7 +8,7 @@ export function NavHeader({ profile }: { profile: UserProfile | null }) {
   return (
     <header
       style={{
-        position: 'sticky', top: 0, zIndex: 10,
+        position: 'sticky', top: 0, zIndex: 30,
         height: 'var(--app-header-height)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 var(--space-6)', boxSizing: 'border-box',

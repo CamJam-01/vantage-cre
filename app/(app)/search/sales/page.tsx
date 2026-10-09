@@ -20,6 +20,7 @@ export default function SalesSearchPage() {
       subtitle="Choose a property type to continue."
       options={OPTIONS}
       backHref="/search"
+      backLabel="Back"
       continueHref={key => DESTINATIONS[key] ?? '/search/sales'}
     />
   );
