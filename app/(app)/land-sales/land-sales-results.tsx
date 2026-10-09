@@ -1,11 +1,13 @@
 import { Suspense } from 'react';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { ResultsTable, ResultsToolbar } from '@/components/land-sales/results-table';
 import { applyLandSaleFilters, isUnsatisfiableRangeError } from '@/lib/land-sales/query';
 import { landSaleFromRow, projectVisibleLandSale } from '@/lib/land-sales/db';
 import { decodePage, landSalesPageHref, lastPage, pageRange } from '@/lib/land-sales/pagination';
-import { decodeFilters, type LandSaleFilters } from '@/lib/land-sales/search-params';
+import { decodeFilters, encodeFilters, type LandSaleFilters } from '@/lib/land-sales/search-params';
 import type { LandSalesPageData } from '@/lib/land-sales/results-page';
 import { resultColumns, type ResultColumn } from '@/lib/land-sales/result-columns';
 import { decodeSort, type ResultsSort } from '@/lib/land-sales/results-sort';
@@ -116,9 +118,19 @@ export async function SalesResultsPage({
   const visibleColumns = filterVisibleColumns(columns, display.hidden);
   const role = profile?.role ?? 'Viewer';
   const active = Boolean(profile && !profile.is_suspended);
+  const filterQuery = encodeFilters(filters).toString();
+  const backHref = filterQuery ? `${path.searchPath}?${filterQuery}` : path.searchPath;
 
   return (
     <>
+      <div className="record-bar">
+        <Link href={backHref} className="record-bar-back">
+          <ArrowLeft size={14} strokeWidth={1.5} />
+          Back
+        </Link>
+        <div />
+        <div />
+      </div>
       <ResultsToolbar
         path={path}
         columns={visibleColumns}

@@ -7,8 +7,10 @@ import { emptyFilters } from './search-params.ts';
 import {
   applyLandSaleFilters,
   fetchLandSalesByIds,
+  getDistinctCatalogValues,
   getDistinctProposedUses,
   getDistinctSecondaryTypes,
+  loadSearchSuggestions,
   isUnsatisfiableRangeError,
   landSaleFilterClauses,
 } from './query.ts';
@@ -187,6 +189,79 @@ describe('getDistinctProposedUses', () => {
       rpc: async () => ({ data: { value: 'Retail' }, error: null }),
     } as unknown as SupabaseClient;
     await assert.rejects(() => getDistinctProposedUses(supabase), /invalid response/);
+  });
+});
+
+describe('getDistinctCatalogValues', () => {
+  it('normalizes, deduplicates, and sorts RPC values', async () => {
+    const supabase = {
+      rpc: async (fn: string, args?: { p_table: string; p_column: string }) => {
+        assert.equal(fn, 'distinct_catalog_values');
+        assert.deepEqual(args, { p_table: 'land_sales', p_column: 'Market' });
+        return { data: [' Raleigh ', 'Charlotte', '', 'Raleigh'], error: null };
+      },
+    } as unknown as SupabaseClient;
+    assert.deepEqual(await getDistinctCatalogValues(supabase, 'Market'), ['Charlotte', 'Raleigh']);
+  });
+
+  it('rejects columns outside the whitelist', async () => {
+    const supabase = { rpc: async () => ({ data: [], error: null }) } as unknown as SupabaseClient;
+    await assert.rejects(
+      () => getDistinctCatalogValues(supabase, 'Property Name'),
+      /does not allow column/,
+    );
+  });
+
+  it('falls back to a capped select when the RPC is missing', async () => {
+    const supabase = {
+      rpc: async () => ({ data: null, error: { message: 'Could not find the function' } }),
+      from() {
+        return {
+          select() {
+            return {
+              not() {
+                return {
+                  limit: async () => ({
+                    data: [{ Market: ' Raleigh ' }, { Market: 'Charlotte' }, { Market: 'Raleigh' }],
+                    error: null,
+                  }),
+                };
+              },
+            };
+          },
+        };
+      },
+    } as unknown as SupabaseClient;
+    assert.deepEqual(await getDistinctCatalogValues(supabase, 'Market'), ['Charlotte', 'Raleigh']);
+  });
+});
+
+describe('loadSearchSuggestions', () => {
+  it('routes Proposed Use and Secondary Type to their split RPCs', async () => {
+    const calls: Array<{ fn: string; args?: Record<string, string> }> = [];
+    const supabase = {
+      rpc: async (fn: string, args?: Record<string, string>) => {
+        calls.push({ fn, args });
+        if (fn === 'distinct_proposed_uses') return { data: ['Retail, Office'], error: null };
+        if (fn === 'distinct_secondary_types') return { data: ['Industrial'], error: null };
+        return { data: ['Sample'], error: null };
+      },
+    } as unknown as SupabaseClient;
+    const suggestions = await loadSearchSuggestions(supabase);
+    assert.deepEqual(suggestions['Proposed Use'], ['Office', 'Retail']);
+    assert.deepEqual(suggestions['Secondary Type'], ['Industrial']);
+    assert.equal(calls.some(call => call.fn === 'distinct_proposed_uses'), true);
+    assert.equal(calls.some(call => call.fn === 'distinct_secondary_types'), true);
+    assert.equal(calls.some(call => call.fn === 'distinct_catalog_values'), true);
+  });
+
+  it('keeps empty lists when a column RPC fails', async () => {
+    const supabase = {
+      rpc: async () => ({ data: null, error: { message: 'function is unavailable' } }),
+    } as unknown as SupabaseClient;
+    const suggestions = await loadSearchSuggestions(supabase);
+    assert.deepEqual(suggestions['Property City'], []);
+    assert.deepEqual(suggestions['Sale Status'], []);
   });
 });
 

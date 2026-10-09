@@ -3,9 +3,16 @@ import type { LandSaleFilters } from './search-params';
 import { landSaleFromRow } from './db';
 import type { LandSale } from './schema';
 import { chunkIds } from './export-ids';
-import { uniqueProposedUseLabels } from './proposed-use';
+import { splitProposedUseLabels, uniqueProposedUseLabels } from './proposed-use';
 import { DEFAULT_RESULTS_SORT, type ResultsSort } from './results-sort';
 import { LAND_SALES_PATH, type SalesTable } from './sales-path';
+import {
+  SEARCH_SUGGESTION_COLUMNS,
+  emptySearchSuggestionDependencies,
+  indexDependentValues,
+  type SearchSuggestionDependencies,
+  type SearchSuggestions,
+} from './search-sheet';
 
 function lastDurationToDate(duration: number, unit: 'months' | 'years'): string | null {
   if (!Number.isFinite(duration) || duration <= 0) return null;
@@ -338,6 +345,177 @@ export async function getDistinctProposedUses(
   if (!Array.isArray(data)) throw new Error('distinct_proposed_uses returned an invalid response.');
   const values = data.filter((value): value is string => typeof value === 'string' && value.trim() !== '');
   return uniqueProposedUseLabels(values);
+}
+
+const DISTINCT_CATALOG_COLUMNS = new Set([
+  'Property City',
+  'Property State',
+  'Property County',
+  'Market',
+  'Submarket Name',
+  'Property Type',
+  'Secondary Type',
+  'Sale Type',
+  'Sale Status',
+]);
+
+function normalizeDistinctValues(data: unknown): string[] {
+  if (!Array.isArray(data)) return [];
+  const values = data.flatMap(entry => {
+    if (typeof entry === 'string') return [entry];
+    if (entry && typeof entry === 'object') {
+      const record = entry as Record<string, unknown>;
+      const value = Object.values(record)[0];
+      return typeof value === 'string' ? [value] : [];
+    }
+    return [];
+  });
+  return [...new Set(values.map(value => value.trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+}
+
+/** Fallback when the distinct RPC is not deployed yet: scan a capped page of
+ * rows and unique them in process. Prefer the RPC once the migration is live. */
+async function getDistinctCatalogValuesViaSelect(
+  supabase: SupabaseClient,
+  column: string,
+  table: SalesTable,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from(table)
+    .select(`"${column}"`)
+    .not(`"${column}"`, 'is', null)
+    .limit(5000);
+  if (error) throw new Error(error.message);
+  return normalizeDistinctValues(data);
+}
+
+/** Unique non-empty values for a whitelisted catalog text column. */
+export async function getDistinctCatalogValues(
+  supabase: SupabaseClient,
+  column: string,
+  table: SalesTable = LAND_SALES_PATH.table,
+): Promise<string[]> {
+  if (!DISTINCT_CATALOG_COLUMNS.has(column)) {
+    throw new Error(`distinct_catalog_values does not allow column "${column}".`);
+  }
+  const { data, error } = await supabase.rpc('distinct_catalog_values', {
+    p_table: table,
+    p_column: column,
+  });
+  if (error) {
+    // Migration not applied yet — degrade to a capped table scan so search
+    // comboboxes still list known values instead of staying empty.
+    if (/could not find|does not exist|schema cache/i.test(error.message)) {
+      return getDistinctCatalogValuesViaSelect(supabase, column, table);
+    }
+    throw new Error(error.message);
+  }
+  if (!Array.isArray(data)) throw new Error('distinct_catalog_values returned an invalid response.');
+  return normalizeDistinctValues(data);
+}
+
+/** Suggestion lists for the Land search combobox fields. Missing RPCs or a
+ * single-column failure yield an empty list for that field so the sheet still
+ * loads and free-text entry remains available. */
+export async function loadSearchSuggestions(
+  supabase: SupabaseClient,
+  table: SalesTable = LAND_SALES_PATH.table,
+): Promise<SearchSuggestions> {
+  const entries = await Promise.all(
+    SEARCH_SUGGESTION_COLUMNS.map(async column => {
+      try {
+        const values = column === 'Proposed Use'
+          ? await getDistinctProposedUses(supabase, table)
+          : column === 'Secondary Type'
+            ? await getDistinctSecondaryTypes(supabase, table)
+            : await getDistinctCatalogValues(supabase, column, table);
+        return [column, values] as const;
+      } catch {
+        return [column, [] as string[]] as const;
+      }
+    }),
+  );
+  return Object.fromEntries(entries);
+}
+
+function textCell(record: Record<string, unknown>, column: string): string {
+  const value = record[column];
+  return typeof value === 'string' ? value : '';
+}
+
+function pushPair(
+  pairs: { parent: string; child: string }[],
+  parent: string,
+  child: string,
+) {
+  const p = parent.trim();
+  const c = child.trim();
+  if (p && c) pairs.push({ parent: p, child: c });
+}
+
+/** Observed parent→child value pairs from a capped row scan for dependent
+ * search comboboxes (City←State, Market←State, Submarket←Market,
+ * Secondary Type / Proposed Use ← Property Type). */
+export async function loadSearchSuggestionDependencies(
+  supabase: SupabaseClient,
+  table: SalesTable = LAND_SALES_PATH.table,
+): Promise<SearchSuggestionDependencies> {
+  try {
+    const { data, error } = await supabase
+      .from(table)
+      .select([
+        '"Property State"',
+        '"Property City"',
+        '"Property County"',
+        '"Market"',
+        '"Submarket Name"',
+        '"Property Type"',
+        '"Secondary Type"',
+        '"Proposed Use"',
+      ].join(', '))
+      .limit(5000);
+    if (error) throw new Error(error.message);
+
+    const cityPairs: { parent: string; child: string }[] = [];
+    const countyPairs: { parent: string; child: string }[] = [];
+    const marketPairs: { parent: string; child: string }[] = [];
+    const submarketPairs: { parent: string; child: string }[] = [];
+    const secondaryPairs: { parent: string; child: string }[] = [];
+    const proposedUsePairs: { parent: string; child: string }[] = [];
+
+    for (const row of data ?? []) {
+      const record = row as unknown as Record<string, unknown>;
+      const state = textCell(record, 'Property State');
+      const city = textCell(record, 'Property City');
+      const county = textCell(record, 'Property County');
+      const market = textCell(record, 'Market');
+      const submarket = textCell(record, 'Submarket Name');
+      const propertyType = textCell(record, 'Property Type');
+      const secondaryType = textCell(record, 'Secondary Type');
+      const proposedUse = textCell(record, 'Proposed Use');
+
+      pushPair(cityPairs, state, city);
+      pushPair(countyPairs, state, county);
+      pushPair(marketPairs, state, market);
+      pushPair(submarketPairs, market, submarket);
+      pushPair(secondaryPairs, propertyType, secondaryType);
+      for (const label of splitProposedUseLabels(proposedUse)) {
+        pushPair(proposedUsePairs, propertyType, label);
+      }
+    }
+
+    return {
+      citiesByState: indexDependentValues(cityPairs),
+      countiesByState: indexDependentValues(countyPairs),
+      marketsByState: indexDependentValues(marketPairs),
+      submarketsByMarket: indexDependentValues(submarketPairs),
+      secondaryTypesByPropertyType: indexDependentValues(secondaryPairs),
+      proposedUsesByPropertyType: indexDependentValues(proposedUsePairs),
+    };
+  } catch {
+    return emptySearchSuggestionDependencies;
+  }
 }
 
 /** Full catalog rows for export, in the order the caller asked. Chunks the
