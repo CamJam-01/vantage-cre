@@ -29,6 +29,7 @@ export default async function DatabaseFieldsPage({ searchParams }: PageProps) {
       hidden: new Set<string>(),
       fieldOrder: [] as string[],
       fieldDividers: [] as FieldDivider[],
+      recordImagePlacement: 'tab' as const,
       error: error instanceof Error ? error.message : 'Could not load field visibility.',
     }));
   const columns = resultColumns({ pathId: path.id });
@@ -66,6 +67,7 @@ export default async function DatabaseFieldsPage({ searchParams }: PageProps) {
             initialHiddenFieldIds={[...settings.hidden]}
             initialFieldOrder={settings.fieldOrder}
             initialFieldDividers={settings.fieldDividers}
+            initialRecordImagePlacement={settings.recordImagePlacement}
             disabledReason={disabledReason}
           />
         </Blueprint>

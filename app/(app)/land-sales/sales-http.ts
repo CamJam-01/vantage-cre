@@ -24,17 +24,22 @@ import {
 import { RECORD_IMAGE_BUCKET, recordImageContentType } from '@/lib/land-sales/record-image';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-async function loadRecordImageBytes(
+async function loadRecordImagesBytes(
   supabase: SupabaseClient,
-  path: string | undefined,
-): Promise<RecordImageBytes | null> {
-  if (!path) return null;
-  const { data, error } = await supabase.storage.from(RECORD_IMAGE_BUCKET).download(path);
-  if (error || !data) return null;
-  return {
-    bytes: new Uint8Array(await data.arrayBuffer()),
-    mimeType: recordImageContentType(path),
-  };
+  images: ReadonlyArray<{ path: string; caption: string }> | undefined,
+): Promise<RecordImageBytes[]> {
+  if (!images?.length) return [];
+  const loaded: RecordImageBytes[] = [];
+  for (const image of images) {
+    const { data, error } = await supabase.storage.from(RECORD_IMAGE_BUCKET).download(image.path);
+    if (error || !data) continue;
+    loaded.push({
+      bytes: new Uint8Array(await data.arrayBuffer()),
+      mimeType: recordImageContentType(image.path),
+      caption: image.caption,
+    });
+  }
+  return loaded;
 }
 
 export function makeExportPost(path: SalesPath) {
@@ -165,14 +170,14 @@ export function makeMergePost(path: SalesPath) {
     }
 
     const images = await Promise.all(
-      records.map(record => loadRecordImageBytes(supabase, record.recordImagePath)),
+      records.map(record => loadRecordImagesBytes(supabase, record.recordImages)),
     );
 
     try {
       const merged = await mergeRoutedDocx(defaultTemplateBytes, records.map((record, index) => ({
         templateBytes: bytesByTemplateId.get(routedTemplateIds[index]) as Uint8Array,
         values: mergeValuesForRecord(record.columns, index + 1),
-        image: images[index],
+        images: images[index],
       })));
       return new NextResponse(Buffer.from(merged), {
         status: 200,

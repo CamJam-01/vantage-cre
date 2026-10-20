@@ -51,8 +51,8 @@ export const COMP_NUMBER_MERGE_TAG: MergeTagDescriptor = {
   type: 'sequence',
 };
 
-/** Embeds the record photo from `_record_image_path` into the DOCX. Not a
- * catalog field and never CSV — see README §3A carve-outs. */
+/** Embeds every photo in `_record_images` into the DOCX. Not a catalog field
+ * and never CSV — see README §3A carve-outs. */
 export const RECORD_IMAGE_MERGE_TAG: MergeTagDescriptor = {
   tag: '{{ record_image }}',
   name: 'record_image',

@@ -20,6 +20,10 @@ import {
   saveFieldVisibilityAction,
   type FieldVisibilityActionState,
 } from '@/app/(app)/admin/database-manager/fields/actions';
+import {
+  DEFAULT_RECORD_IMAGE_PLACEMENT,
+  type RecordImagePlacement,
+} from '@/lib/land-sales/display-settings';
 
 type FieldVisibilityFormProps = {
   databaseKey: DatabaseKey;
@@ -27,8 +31,14 @@ type FieldVisibilityFormProps = {
   initialHiddenFieldIds: string[];
   initialFieldOrder: string[];
   initialFieldDividers: FieldDivider[];
+  initialRecordImagePlacement?: RecordImagePlacement;
   disabledReason?: string;
 };
+
+const RECORD_IMAGE_PLACEMENT_OPTIONS: { label: string; value: RecordImagePlacement }[] = [
+  { label: 'Photos tab', value: 'tab' },
+  { label: 'Above details', value: 'above' },
+];
 
 const initialState: FieldVisibilityActionState = null;
 
@@ -63,6 +73,7 @@ export function FieldVisibilityForm({
   initialHiddenFieldIds,
   initialFieldOrder,
   initialFieldDividers,
+  initialRecordImagePlacement = DEFAULT_RECORD_IMAGE_PLACEMENT,
   disabledReason,
 }: FieldVisibilityFormProps) {
   const [state, formAction, pending] = useActionState(saveFieldVisibilityAction, initialState);
@@ -72,11 +83,23 @@ export function FieldVisibilityForm({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('both');
+  const [placementOverride, setPlacementOverride] = useState<RecordImagePlacement | null>(null);
   const handleRefs = useRef(new Map<string, HTMLButtonElement>());
 
   const saved = state?.status === 'success'
-    ? { hidden: state.hiddenFieldIds, order: state.fieldOrder, dividers: state.fieldDividers }
-    : { hidden: initialHiddenFieldIds, order: initialFieldOrder, dividers: initialFieldDividers };
+    ? {
+        hidden: state.hiddenFieldIds,
+        order: state.fieldOrder,
+        dividers: state.fieldDividers,
+        placement: state.recordImagePlacement,
+      }
+    : {
+        hidden: initialHiddenFieldIds,
+        order: initialFieldOrder,
+        dividers: initialFieldDividers,
+        placement: initialRecordImagePlacement,
+      };
+  const recordImagePlacement = placementOverride ?? saved.placement;
   const savedHidden = new Set(saved.hidden);
   const savedIds = fieldDisplayRows(columns, saved.order, saved.dividers).map(row => row.id);
 
@@ -148,7 +171,8 @@ export function FieldVisibilityForm({
   const dividersDirty = dividers.some(
     divider => savedDividerLabels.get(divider.id) !== divider.label,
   );
-  const dirty = visibilityDirty || orderDirty || dividersDirty;
+  const placementDirty = recordImagePlacement !== saved.placement;
+  const dirty = visibilityDirty || orderDirty || dividersDirty || placementDirty;
   const disabled = Boolean(disabledReason) || pending;
   const message = disabledReason
     ?? (state?.status === 'error' ? state.message : state?.status === 'success' ? state.message : undefined);
@@ -182,6 +206,7 @@ export function FieldVisibilityForm({
   return (
     <form action={formAction}>
       <input type="hidden" name="database_key" value={databaseKey} />
+      <input type="hidden" name="record_image_placement" value={recordImagePlacement} />
       {/* Order carries hidden fields, pages, and groups alike, so unchecking a
           field does not lose its place in the arrangement. */}
       {rowIds.map(id => (
@@ -196,6 +221,32 @@ export function FieldVisibilityForm({
           <input key={`on-${row.id}`} type="hidden" name="visible_field_id" value={row.id} />
         ) : null
       ))}
+
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 'var(--space-3)',
+        marginBottom: 'var(--space-5)',
+        flexWrap: 'wrap',
+      }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>
+            Record image
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--color-neutral-700)', margin: 'var(--space-1) 0 0' }}>
+            Photos tab is the default. Above details restores the previous layout.
+          </p>
+        </div>
+        <div style={{ minWidth: 260, flex: '0 1 280px' }}>
+          <SegmentedControl
+            name="record-image-placement-ui"
+            value={recordImagePlacement}
+            onChange={value => setPlacementOverride(value as RecordImagePlacement)}
+            options={RECORD_IMAGE_PLACEMENT_OPTIONS}
+          />
+        </div>
+      </div>
 
       <p style={{ fontSize: 13, color: 'var(--color-neutral-700)', margin: '0 0 var(--space-3)' }}>
         Drag a field by its handle to change the order, or focus a handle and press the up and down

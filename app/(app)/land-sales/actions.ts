@@ -21,10 +21,13 @@ import { mergeVisibleUpdate, sanitizeVisibleCreate } from '@/lib/land-sales/visi
 import { salesPathFromId, type SalesPath, type SalesPathId } from '@/lib/land-sales/sales-path';
 import {
   RECORD_IMAGE_BUCKET,
-  RECORD_IMAGE_COLUMN,
+  RECORD_IMAGES_COLUMN,
+  appendRecordImage,
+  readRecordImagesFromRow,
   recordImageFileErrorMessage,
   recordImageObjectPath,
-  recordImageObjectsToRemove,
+  recordImageStoragePaths,
+  removeRecordImageAtPath,
   validateRecordImageFile,
 } from '@/lib/land-sales/record-image';
 
@@ -150,9 +153,13 @@ export async function updateLandSale(
 }
 
 export type DeleteFormState = { error?: string } | null;
-export type RecordImageActionState = { error?: string; path?: string | null; signedUrl?: string | null } | null;
+export type RecordImageActionState = {
+  error?: string;
+  path?: string | null;
+  signedUrl?: string | null;
+} | null;
 
-export async function updateRecordImageAction(
+export async function addRecordImageAction(
   pathId: SalesPathId,
   recordId: string,
   formData: FormData,
@@ -175,18 +182,17 @@ export async function updateRecordImageAction(
 
   const { data: existing, error: loadError } = await supabase
     .from(path.table)
-    .select(`"${RECORD_IMAGE_COLUMN}"`)
+    .select('*')
     .eq('id', recordId)
     .maybeSingle();
-  // A missing carve-out column also yields null data — surface that error
-  // instead of claiming the row is gone.
   if (loadError) return { error: loadError.message };
   if (!existing) return { error: 'That record no longer exists.' };
 
-  const previousPath = typeof existing[RECORD_IMAGE_COLUMN] === 'string'
-    ? existing[RECORD_IMAGE_COLUMN]
-    : null;
+  const current = readRecordImagesFromRow(existing as Record<string, unknown>);
   const objectPath = recordImageObjectPath(path.table, recordId, file.type, crypto.randomUUID());
+  const appended = appendRecordImage(current, { path: objectPath, caption: '' });
+  if (!appended.ok) return { error: appended.error };
+
   const { error: uploadError } = await supabase.storage.from(RECORD_IMAGE_BUCKET).upload(objectPath, file, {
     contentType: file.type,
     upsert: false,
@@ -195,26 +201,19 @@ export async function updateRecordImageAction(
 
   const { error } = await supabase
     .from(path.table)
-    .update({ [RECORD_IMAGE_COLUMN]: objectPath })
+    .update({ [RECORD_IMAGES_COLUMN]: appended.images })
     .eq('id', recordId);
 
-  const stale = recordImageObjectsToRemove({
-    previousPath,
-    table: path.table,
-    recordId,
-    newPath: objectPath,
-    rowUpdated: !error,
-  });
-  if (stale.length > 0) {
-    await supabase.storage.from(RECORD_IMAGE_BUCKET).remove(stale);
+  if (error) {
+    await supabase.storage.from(RECORD_IMAGE_BUCKET).remove([objectPath]);
+    return { error: error.message };
   }
-  if (error) return { error: error.message };
 
   const { data: signed } = await supabase.storage
     .from(RECORD_IMAGE_BUCKET)
     .createSignedUrl(objectPath, 60 * 60);
 
-  await logAudit(supabase, 'Updated Record Image', `${path.label}: ${recordId}`);
+  await logAudit(supabase, 'Added Record Image', `${path.label}: ${recordId}`);
   revalidatePath(`${path.basePath}/${recordId}`);
   return { path: objectPath, signedUrl: signed?.signedUrl ?? null };
 }
@@ -222,10 +221,12 @@ export async function updateRecordImageAction(
 export async function removeRecordImageAction(
   pathId: SalesPathId,
   recordId: string,
+  imagePath: string,
 ): Promise<RecordImageActionState> {
   const path = requireSalesPath(pathId);
   if (!path) return { error: UNKNOWN_PATH };
   if (!recordId) return { error: 'Save the record before removing an image.' };
+  if (!imagePath) return { error: 'Choose a photo to remove.' };
 
   const supabase = await createClient();
   const denied = await landSaleWriteDeniedMessage(supabase);
@@ -233,25 +234,25 @@ export async function removeRecordImageAction(
 
   const { data: existing, error: loadError } = await supabase
     .from(path.table)
-    .select(`"${RECORD_IMAGE_COLUMN}"`)
+    .select('*')
     .eq('id', recordId)
     .maybeSingle();
   if (loadError) return { error: loadError.message };
   if (!existing) return { error: 'That record no longer exists.' };
 
-  const previousPath = typeof existing[RECORD_IMAGE_COLUMN] === 'string'
-    ? existing[RECORD_IMAGE_COLUMN]
-    : null;
+  const current = readRecordImagesFromRow(existing as Record<string, unknown>);
+  if (!current.some(image => image.path === imagePath)) {
+    return { error: 'That photo is not attached to this record.' };
+  }
+  const next = removeRecordImageAtPath(current, imagePath);
 
   const { error } = await supabase
     .from(path.table)
-    .update({ [RECORD_IMAGE_COLUMN]: null })
+    .update({ [RECORD_IMAGES_COLUMN]: next })
     .eq('id', recordId);
   if (error) return { error: error.message };
 
-  if (previousPath) {
-    await supabase.storage.from(RECORD_IMAGE_BUCKET).remove([previousPath]);
-  }
+  await supabase.storage.from(RECORD_IMAGE_BUCKET).remove([imagePath]);
 
   await logAudit(supabase, 'Removed Record Image', `${path.label}: ${recordId}`);
   revalidatePath(`${path.basePath}/${recordId}`);
@@ -268,18 +269,18 @@ export async function deleteLandSale(pathId: SalesPathId, id: string): Promise<D
 
   const { data: existing } = await supabase
     .from(path.table)
-    .select(`"Property Address","Parcel Number 1 (Min)","${RECORD_IMAGE_COLUMN}"`)
+    .select(`"Property Address","Parcel Number 1 (Min)","${RECORD_IMAGES_COLUMN}"`)
     .eq('id', id)
     .maybeSingle();
 
   const { error } = await supabase.from(path.table).delete().eq('id', id);
   if (error) return { error: error.message };
 
-  const imagePath = existing && typeof existing[RECORD_IMAGE_COLUMN] === 'string'
-    ? existing[RECORD_IMAGE_COLUMN]
-    : null;
-  if (imagePath) {
-    await supabase.storage.from(RECORD_IMAGE_BUCKET).remove([imagePath]);
+  const imagePaths = existing
+    ? recordImageStoragePaths(readRecordImagesFromRow(existing as Record<string, unknown>))
+    : [];
+  if (imagePaths.length > 0) {
+    await supabase.storage.from(RECORD_IMAGE_BUCKET).remove(imagePaths);
   }
 
   await logAudit(supabase, 'Deleted Record', `${existing ? recordLabel(existing as Record<string, unknown>, id) : id} deleted`);
@@ -302,11 +303,10 @@ export async function deleteLandSales(pathId: SalesPathId, ids: string[]): Promi
   for (const chunk of chunkIds(unique)) {
     const { data } = await supabase
       .from(path.table)
-      .select(`"${RECORD_IMAGE_COLUMN}"`)
+      .select(`"${RECORD_IMAGES_COLUMN}"`)
       .in('id', chunk);
     for (const row of data ?? []) {
-      const imagePath = row[RECORD_IMAGE_COLUMN];
-      if (typeof imagePath === 'string' && imagePath) imagePaths.push(imagePath);
+      imagePaths.push(...recordImageStoragePaths(readRecordImagesFromRow(row as Record<string, unknown>)));
     }
   }
 

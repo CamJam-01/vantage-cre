@@ -51,17 +51,26 @@ describe('mergeVisibleUpdate', () => {
     assert.equal(merged.columns.Legacy, 'Keep me');
   });
 
-  it('applies the submitted image caption on Save', () => {
-    const withCaption = sale(existing.columns, {
+  it('applies submitted photo captions on Save', () => {
+    const withImages = sale(existing.columns, {
       saleDateRaw: existing.saleDateRaw,
-      recordImageCaption: 'Old caption',
+      recordImages: [
+        { path: 'a.jpg', caption: 'Old' },
+        { path: 'b.jpg', caption: 'Keep' },
+      ],
     });
     const merged = mergeVisibleUpdate(
-      withCaption,
-      { columns: { 'Property City': 'Dallas' }, recordImageCaption: 'New caption' },
+      withImages,
+      {
+        columns: { 'Property City': 'Dallas' },
+        recordImageCaptionUpdates: [{ path: 'a.jpg', caption: 'New' }],
+      },
       new Set(),
     );
-    assert.equal(merged.recordImageCaption, 'New caption');
+    assert.deepEqual(merged.recordImages, [
+      { path: 'a.jpg', caption: 'New' },
+      { path: 'b.jpg', caption: 'Keep' },
+    ]);
   });
 
   it('ignores crafted values for headers that are not in the catalog', () => {

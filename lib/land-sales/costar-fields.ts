@@ -1,5 +1,9 @@
 import type { SalesPathId } from './sales-path';
-import { RECORD_IMAGE_CAPTION_COLUMN, RECORD_IMAGE_COLUMN } from './record-image';
+import {
+  RECORD_IMAGE_CAPTION_COLUMN,
+  RECORD_IMAGE_COLUMN,
+  RECORD_IMAGES_COLUMN,
+} from './record-image';
 
 /** CoStar land-sale export headers — these are also the land_sales column names. */
 
@@ -42,14 +46,15 @@ export function costarColumnNames(headers?: readonly string[]): string[] {
 
 /** Non-catalog columns on land_sales / improved_sales. None is a CoStar field;
  * none may appear in the CSV template or export. `_sale_date_raw` holds the
- * original text of an unrecognized Sale Date. `_record_image_path` /
- * `_record_image_caption` hold the record photo and its caption (record UI;
- * path also feeds Print). */
+ * original text of an unrecognized Sale Date. `_record_images` holds zero or
+ * more photos with captions (record UI + Print). Legacy path/caption columns
+ * may still exist after migration and stay outside the catalog. */
 export const SALE_DATE_RAW_COLUMN = '_sale_date_raw';
-export { RECORD_IMAGE_CAPTION_COLUMN, RECORD_IMAGE_COLUMN };
+export { RECORD_IMAGE_CAPTION_COLUMN, RECORD_IMAGE_COLUMN, RECORD_IMAGES_COLUMN };
 export const LAND_SALES_SYSTEM_COLUMNS = [
   'id',
   SALE_DATE_RAW_COLUMN,
+  RECORD_IMAGES_COLUMN,
   RECORD_IMAGE_COLUMN,
   RECORD_IMAGE_CAPTION_COLUMN,
 ] as const;

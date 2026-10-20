@@ -146,15 +146,44 @@ export async function addRecordImageToDocx(
   return relationshipId;
 }
 
-/** Replaces every `{{ record_image }}` paragraph with an embedded drawing (or
- * blanks the tag when there is no image). The tag is expected on its own line
- * in the template — the usual Word placeholder layout. */
+export type RecordImageEmbed = {
+  relationshipId: string;
+  caption?: string;
+};
+
+function escapeXmlText(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function captionParagraph(caption: string): string {
+  return `<w:p><w:r><w:t>${escapeXmlText(caption)}</w:t></w:r></w:p>`;
+}
+
+function imageBlock(images: ReadonlyArray<RecordImageEmbed>, docPrIdStart: number): string {
+  let docPrId = docPrIdStart;
+  return images.map(image => {
+    const drawing = drawingParagraph(image.relationshipId, docPrId++);
+    const caption = image.caption?.trim();
+    return caption ? `${drawing}${captionParagraph(caption)}` : drawing;
+  }).join('');
+}
+
+/** Replaces every `{{ record_image }}` paragraph with embedded drawing(s) (or
+ * blanks the tag when there is no image). Multiple photos expand into stacked
+ * drawings with captions. The tag is expected on its own line in the template. */
 export function replaceRecordImageTags(
   xml: string,
-  relationshipId: string | null,
+  images: ReadonlyArray<RecordImageEmbed> | string | null,
   docPrIdBase = 1000,
 ): string {
-  let docPrId = docPrIdBase;
+  const embeds: ReadonlyArray<RecordImageEmbed> = typeof images === 'string'
+    ? [{ relationshipId: images }]
+    : (images ?? []);
+
   return xml.replace(PARAGRAPH_PATTERN, paragraph => {
     const plain = paragraphPlainText(paragraph);
     if (!plain.includes('{{')) return paragraph;
@@ -163,10 +192,10 @@ export function replaceRecordImageTags(
     const imageMatch = matches.find(match => match[1].toLowerCase() === RECORD_IMAGE_TAG_NAME);
     if (!imageMatch) return paragraph;
 
-    // Tag alone (aside from whitespace) → full drawing paragraph or empty.
+    // Tag alone (aside from whitespace) → drawings or empty.
     const withoutTag = plain.replace(imageMatch[0], '').trim();
     if (withoutTag === '') {
-      return relationshipId ? drawingParagraph(relationshipId, docPrId++) : '<w:p/>';
+      return embeds.length > 0 ? imageBlock(embeds, docPrIdBase) : '<w:p/>';
     }
 
     // Inline with other text: drop the tag; embedding mid-sentence is not supported.

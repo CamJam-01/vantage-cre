@@ -2,11 +2,15 @@ import {
   costarColumnNames,
   RECORD_IMAGE_CAPTION_COLUMN,
   RECORD_IMAGE_COLUMN,
+  RECORD_IMAGES_COLUMN,
   SALE_DATE_RAW_COLUMN,
 } from './costar-fields';
 import { costarColumnType, type CostarColumnType } from './costar-column-types';
 import { parseFlexibleDate } from './dates';
-import { normalizeRecordImageCaption } from './record-image';
+import {
+  parseRecordImageCaptionUpdates,
+  type RecordImageEntry,
+} from './record-image';
 
 /** A land-sale record is a header-keyed map of catalog columns, plus the uuid
  * identity carve-out and optional system stores. A catalog field *is* a header
@@ -14,8 +18,9 @@ import { normalizeRecordImageCaption } from './record-image';
 export type LandSaleInput = {
   columns: Record<string, unknown>;
   saleDateRaw?: string;
-  recordImagePath?: string;
-  recordImageCaption?: string;
+  recordImages?: RecordImageEntry[];
+  /** Caption edits submitted with Save; applied onto existing paths in merge. */
+  recordImageCaptionUpdates?: Array<{ path: string; caption: string }>;
 };
 
 export type LandSale = LandSaleInput & {
@@ -27,8 +32,7 @@ export function emptyLandSale(): LandSale {
     id: '',
     columns: {},
     saleDateRaw: undefined,
-    recordImagePath: undefined,
-    recordImageCaption: undefined,
+    recordImages: [],
   };
 }
 
@@ -119,7 +123,7 @@ export function columnsFromFormData(formData: FormData, hidden: ReadonlySet<stri
   }
   return {
     ...input,
-    recordImageCaption: normalizeRecordImageCaption(formData.get(RECORD_IMAGE_CAPTION_COLUMN)),
+    recordImageCaptionUpdates: parseRecordImageCaptionUpdates(formData),
   };
 }
 
@@ -158,6 +162,7 @@ export function isSystemColumn(name: string): boolean {
   return (
     name === 'id'
     || name === SALE_DATE_RAW_COLUMN
+    || name === RECORD_IMAGES_COLUMN
     || name === RECORD_IMAGE_COLUMN
     || name === RECORD_IMAGE_CAPTION_COLUMN
   );

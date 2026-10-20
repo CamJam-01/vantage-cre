@@ -1,11 +1,10 @@
 import {
   costarColumnNames,
   costarFields,
-  RECORD_IMAGE_CAPTION_COLUMN,
-  RECORD_IMAGE_COLUMN,
+  RECORD_IMAGES_COLUMN,
   SALE_DATE_RAW_COLUMN,
 } from './costar-fields';
-import { normalizeRecordImageCaption } from './record-image';
+import { readRecordImagesFromRow } from './record-image';
 import type { LandSale, LandSaleInput } from './schema';
 
 function asString(value: unknown): string {
@@ -24,13 +23,11 @@ export function landSaleFromRow(row: Record<string, unknown>): LandSale | null {
     columns[name] = row[name] ?? null;
   }
   const raw = row[SALE_DATE_RAW_COLUMN];
-  const imagePath = row[RECORD_IMAGE_COLUMN];
   return {
     id,
     columns,
     saleDateRaw: typeof raw === 'string' && raw.trim() ? raw.trim() : undefined,
-    recordImagePath: typeof imagePath === 'string' && imagePath.trim() ? imagePath.trim() : undefined,
-    recordImageCaption: normalizeRecordImageCaption(row[RECORD_IMAGE_CAPTION_COLUMN]),
+    recordImages: readRecordImagesFromRow(row),
   };
 }
 
@@ -46,21 +43,22 @@ export function projectVisibleLandSale(record: LandSale, visible: ReadonlySet<st
     id: record.id,
     columns,
     saleDateRaw: record.saleDateRaw,
-    recordImagePath: record.recordImagePath,
-    recordImageCaption: record.recordImageCaption,
+    recordImages: record.recordImages,
   };
 }
 
 /** Write a record back onto sales columns, including the raw-date store and
- * image caption. Image *path* is updated by its own Server Action so a catalog
- * Save cannot clear an attached photo. */
+ * image captions. Image *paths* are updated by their own Server Actions so a
+ * catalog Save cannot clear attached photos. */
 export function landSaleToRow(input: LandSaleInput): Record<string, unknown> {
   const columns: Record<string, unknown> = {};
   for (const name of costarColumnNames()) {
     columns[name] = input.columns[name] ?? null;
   }
   columns[SALE_DATE_RAW_COLUMN] = input.saleDateRaw ?? null;
-  columns[RECORD_IMAGE_CAPTION_COLUMN] = input.recordImageCaption ?? null;
+  if (input.recordImages) {
+    columns[RECORD_IMAGES_COLUMN] = input.recordImages;
+  }
   return columns;
 }
 

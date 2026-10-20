@@ -16,6 +16,7 @@ export type FieldVisibilityActionState =
       hiddenFieldIds: string[];
       fieldOrder: string[];
       fieldDividers: FieldDivider[];
+      recordImagePlacement: 'tab' | 'above';
     }
   | { status: 'error'; message: string }
   | null;
@@ -42,6 +43,7 @@ export async function saveFieldVisibilityAction(
       hidden_field_keys: submission.hiddenFieldIds,
       field_order: submission.fieldOrder,
       field_dividers: submission.fieldDividers,
+      record_image_placement: submission.recordImagePlacement,
       updated_at: new Date().toISOString(),
       updated_by: profile.id,
     }, { onConflict: 'database_key' });
@@ -67,5 +69,6 @@ export async function saveFieldVisibilityAction(
     hiddenFieldIds: submission.hiddenFieldIds,
     fieldOrder: submission.fieldOrder,
     fieldDividers: submission.fieldDividers,
+    recordImagePlacement: submission.recordImagePlacement,
   };
 }

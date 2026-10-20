@@ -7,8 +7,7 @@
  *
  * The live database is checked out-of-band, since a unit test has no
  * credentials. Run this and expect the same set of 277 catalog names plus
- * the documented carve-outs (`id`, `_sale_date_raw`, `_record_image_path`,
- * `_record_image_caption`),
+ * the documented carve-outs (`id`, `_sale_date_raw`, `_record_images`),
  * and nothing else, on both sales tables:
  *
  *   select json_agg(column_name order by ordinal_position)
@@ -26,6 +25,7 @@ import {
   COSTAR_HEADERS,
   RECORD_IMAGE_CAPTION_COLUMN,
   RECORD_IMAGE_COLUMN,
+  RECORD_IMAGES_COLUMN,
   SALE_DATE_RAW_COLUMN,
   costarColumnNames,
 } from './costar-fields.ts';
@@ -208,6 +208,16 @@ describe('system-column carve-out migrations', () => {
     assert.match(sql, new RegExp(`add column if not exists ${RECORD_IMAGE_CAPTION_COLUMN} text`));
     assert.equal(COSTAR_HEADERS.includes(RECORD_IMAGE_CAPTION_COLUMN), false);
     assert.equal(costarColumnNames().includes(RECORD_IMAGE_CAPTION_COLUMN), false);
+  });
+
+  it('adds _record_images as a system store, not a catalog header', () => {
+    const sql = readFileSync(
+      fileURLToPath(new URL('../../supabase/migrations/20261020210000_add_record_images_array.sql', import.meta.url)),
+      'utf8',
+    );
+    assert.match(sql, new RegExp(`add column if not exists ${RECORD_IMAGES_COLUMN} jsonb`));
+    assert.equal(COSTAR_HEADERS.includes(RECORD_IMAGES_COLUMN), false);
+    assert.equal(costarColumnNames().includes(RECORD_IMAGES_COLUMN), false);
   });
 });
 

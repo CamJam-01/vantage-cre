@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import type { ResultColumn } from '../land-sales/result-columns';
 import {
+  readRecordImagePlacement,
+  type RecordImagePlacement,
+} from '../land-sales/display-settings';
+import {
   DEFAULT_FIELD_DIVIDER_LABELS,
   FIELD_DIVIDER_LABEL_MAX_LENGTH,
   fieldDividerOrderId,
@@ -24,6 +28,7 @@ export type VisibilitySubmission =
       hiddenFieldIds: string[];
       fieldOrder: string[];
       fieldDividers: FieldDivider[];
+      recordImagePlacement: RecordImagePlacement;
     }
   | { ok: false; message: string };
 
@@ -98,5 +103,6 @@ export function parseVisibilitySubmission(
     fieldDividers: dividers.fieldDividers.filter(
       divider => placed.has(fieldDividerOrderId(divider)),
     ),
+    recordImagePlacement: readRecordImagePlacement(formData.get('record_image_placement')),
   };
 }

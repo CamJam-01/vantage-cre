@@ -105,6 +105,19 @@ describe('parseVisibilitySubmission', () => {
     assert.equal(result.ok, true);
     if (!result.ok) return;
     assert.deepEqual(result.fieldOrder, columns.map(fieldVisibilityId));
+    assert.equal(result.recordImagePlacement, 'tab');
+  });
+
+  it('accepts an Admin choice to place the record image above the details sheet', () => {
+    const result = parseVisibilitySubmission(formData([
+      ['database_key', 'sales'],
+      ['visible_field_id', 'Zoning'],
+      ['record_image_placement', 'above'],
+    ]), columns);
+
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.recordImagePlacement, 'above');
   });
 
   it('rejects an arrangement naming a field twice', () => {

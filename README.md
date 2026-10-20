@@ -95,9 +95,10 @@ These terms have precise meanings here. Use them; do not invent synonyms.
   "cleaned up." The catalog is **closed**: see §3A.
 
 **Field configuration (the *arrangement*)**
-: The Admin-owned, global answer to three questions: which fields are
-  **visible**, in what **order**, and how they are **divided** into pages and
-  groups on the record screen. It is stored data, not code. One arrangement per
+: The Admin-owned, global answer to which fields are **visible**, in what
+  **order**, how they are **divided** into pages and groups on the record
+  screen, and where the **record image** sits (Photos tab by default, or above
+  the details sheet). It is stored data, not code. One arrangement per
   database.
 
 **Divider**
@@ -122,10 +123,12 @@ These terms have precise meanings here. Use them; do not invent synonyms.
   1-based position in each generated document, resets for every merge, and is
   never stored or presented as a database field (§6.1, §6.7).
 
-**Record image**
-: One optional photo per sales record, with an optional caption, stored outside
-  the CoStar catalog and CSV. Shown on the add/edit record screen; Print embeds
-  the photo when the template uses `{{ record_image }}` (§3A carve-outs, §6.7).
+**Record images**
+: Zero or more photos per sales record, each with an optional caption, stored
+  outside the CoStar catalog and CSV. On the record screen they live in a
+  **Photos** tab by default; Admin field configuration may move them above the
+  details sheet. Print embeds every photo (with captions) when the template
+  uses `{{ record_image }}` (§3A carve-outs, §6.7).
 
 **Output Flow**
 : A named, Admin-owned DOCX output such as **Land Comps**. Each results table
@@ -179,27 +182,27 @@ to the product's contract with CoStar, and is out of scope for ordinary work
 (§5 "Changing this scope").
 
 **Display never touches storage.** What appears in the results table and on the
-record create/view/edit screens is the result of an Admin toggling visibility
-and reordering fields in settings (§3 *arrangement*). That configuration is
-presentation only. **It has no bearing whatsoever on the database columns, the
-import template, or the export file.** Hiding a field does not drop a column.
-Reordering fields does not reorder the CSV. Every export emits all header positions in its path's canonical sequence
+record create/view/edit screens is the result of an Admin toggling visibility,
+reordering fields, and choosing record-image placement in settings (§3
+*arrangement*). That configuration is presentation only. **It has no bearing
+whatsoever on the database columns, the import template, or the export file.**
+Hiding a field does not drop a column. Reordering fields does not reorder the
+CSV. Every export emits all header positions in its path's canonical sequence
 regardless of what any user can see.
 
 ### The carve-outs
 
 These things in the physical table are not catalog fields. All are documented
 here. **None may ever appear in the catalog, the import template, or the export
-file.** Only `_record_image_path` and `_record_image_caption` are shown in the
-record UI (upload control + caption, not as CoStar fields):
+file.** Only `_record_images` is shown in the record UI (upload controls +
+captions, not as CoStar fields):
 
 | | What | Why |
 | --- | --- | --- |
 | `id` | `uuid`, primary key | Row identity. CoStar's `Comp ID` is not unique — many rows share `0` or null — so it cannot serve as a key. |
 | Duplicate headers | one stored column per distinct name | Both paths repeat `Sprinklers`; Improved also repeats `Average Rental Rate Per kW`. Import keeps the last value and warns if repeated values differ. Export fills every matching position. **Accepted known lossiness** — do not add storage without a §5 decision. |
 | `_sale_date_raw` | `text`, system store | Holds the original text of an unrecognized `Sale Date` so ingest can flag the row for review and export can re-emit it. Named to be self-evidently outside the catalog. |
-| `_record_image_path` | `text`, storage path | One photo per record in the private `comp-images` bucket. Record UI only; Print embeds it via `{{ record_image }}`. Never CSV. |
-| `_record_image_caption` | `text`, caption | Optional caption for the record photo, edited on create/edit and saved with the record form. Never CSV. |
+| `_record_images` | `jsonb`, array of `{ path, caption }` | Zero or more photos in the private `comp-images` bucket. Record UI only; Print embeds them via `{{ record_image }}`. Never CSV. |
 
 Any future non-catalog storage column joins this table or it does not exist.
 
@@ -207,10 +210,10 @@ Any future non-catalog storage column joins this table or it does not exist.
 
 The distinct field names and types in Appendices A/B, the code catalog, and the
 live `land_sales` / `improved_sales` tables agree: 277 catalog columns plus
-system carve-outs (`id`, `_sale_date_raw`, `_record_image_path`,
-`_record_image_caption`). The physical database order remains unchanged. **Each
-appendix is the CSV contract; its code constant is the executable copy.** Tests
-must assert byte-identical header sequences and the shared field/type contract.
+system carve-outs (`id`, `_sale_date_raw`, `_record_images`). The physical
+database order remains unchanged. **Each appendix is the CSV contract; its code
+constant is the executable copy.** Tests must assert byte-identical header
+sequences and the shared field/type contract.
 
 ---
 
@@ -423,8 +426,8 @@ Two deliberate exceptions sit outside catalog-derived names. `{{ comp_number }}`
 is output structure: the merge computes it from each selected record's 1-based
 position, resets it for every generated document, and never stores, imports,
 exports, filters, arranges, or presents it as a field. `{{ record_image }}`
-embeds the non-catalog record photo into the Word package; the path lives in
-`_record_image_path` and must never enter CSV (§3A).
+embeds the non-catalog record photos into the Word package; paths and captions
+live in `_record_images` and must never enter CSV (§3A).
 
 Changing the catalog is therefore not ordinary work: it changes the product's
 contract with CoStar and with every previously exported file. It requires an
@@ -521,8 +524,8 @@ fidelity lives, and it is untouched by any of this.
 Two rules do carry over from §6.1. Every **field tag** is derived from
 `COSTAR_HEADER_ROW`, so a header added to the catalog gets a merge tag with no
 further work and no second field list to update. The approved non-field tags are
-`{{ comp_number }}` (sequence) and `{{ record_image }}` (embedded photo from
-`_record_image_path`). Neither enters CSV. And a template is **user content,
+`{{ comp_number }}` (sequence) and `{{ record_image }}` (embedded photos from
+`_record_images`). Neither enters CSV. And a template is **user content,
 not code** — an unrecognized tag is left visibly in place rather than silently
 blanked, so the author can see their own typo.
 

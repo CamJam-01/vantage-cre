@@ -139,14 +139,13 @@ Land and Improved share 277 distinct stored fields and types, but have separate 
 | `id` | `uuid` primary key | Row identity; `Comp ID` is not unique. |
 | Duplicate headers | `Sprinklers` in both paths; `Average Rental Rate Per kW` also in Improved | One column per name. Import keeps the last value and warns if duplicates differ; export writes it into every matching position. Accepted known lossiness. |
 | `_sale_date_raw` | `text` system store | Original text of an unrecognized `Sale Date`. Not a field. |
-| `_record_image_path` | `text` storage path | One photo per record (`comp-images` bucket). Record UI + `{{ record_image }}` Print embed only — never CSV. |
-| `_record_image_caption` | `text` caption | Optional caption for the record photo; edited on create/edit, saved with the record form — never CSV. |
+| `_record_images` | `jsonb` `{ path, caption }[]` | Zero or more photos (`comp-images` bucket). Record UI + `{{ record_image }}` Print embed only — never CSV. |
 
 Any new non-catalog storage column joins that table in README §3A, or it is not added.
 
-**Display never affects storage.** Field visibility and ordering are admin presentation configuration. Hiding a field never drops a column; reordering never reorders the CSV. Export always emits its path's full canonical sequence (Land 278; Improved 279), whatever the arrangement says.
+**Display never affects storage.** Field visibility, ordering, and record-image placement (`tab` default / `above`) are admin presentation configuration on `result_display_settings`. Hiding a field never drops a column; reordering never reorders the CSV. Export always emits its path's full canonical sequence (Land 278; Improved 279), whatever the arrangement says.
 
-**Required drift guard.** A test must assert that README Appendices A/B and their header constants agree byte-for-byte, and the live `land_sales` / `improved_sales` columns contain their 277 distinct fields plus system carve-outs (`id`, `_sale_date_raw`, `_record_image_path`, `_record_image_caption`). Physical database order is independent of CSV order; names and types must agree, and that `costar-column-types.ts` matches the live Postgres types. Without it, "single source of truth" is aspirational.
+**Required drift guard.** A test must assert that README Appendices A/B and their header constants agree byte-for-byte, and the live `land_sales` / `improved_sales` columns contain their 277 distinct fields plus system carve-outs (`id`, `_sale_date_raw`, `_record_images`). Physical database order is independent of CSV order; names and types must agree, and that `costar-column-types.ts` matches the live Postgres types. Without it, "single source of truth" is aspirational.
 
 ### 3.2 Validation
 
@@ -180,7 +179,7 @@ README §6.7 is the rule; these are its mechanics.
 
 **Field tags are derived, never listed.** `mergeTagName` in `lib/land-sales/merge-tags.ts` lowercases a catalog header and collapses non-alphanumeric runs to underscores — `Buyer (True) Company` → `{{ buyer_true_company }}`. The catalog's 277 distinct headers produce 277 distinct field tags, asserted by a test. This is §3.1's "never hand-maintain a second list of field names" applied to templates: do not add a curated field-tag list, an alias, or a per-field formatting exception keyed by header name.
 
-**Approved merge-only tags:** `{{ comp_number }}` (1-based position in the merge order; never stored) and `{{ record_image }}` (embeds `_record_image_path` into the DOCX via OPC media parts). Neither enters CSV, field configuration, or `COSTAR_HEADER_ROW`. Any additional computed tag is a README §5 scope decision, not an invitation to generalize a second field model. Image embed logic lives in `lib/land-sales/docx-image.ts`.
+**Approved merge-only tags:** `{{ comp_number }}` (1-based position in the merge order; never stored) and `{{ record_image }}` (embeds every entry in `_record_images` into the DOCX via OPC media parts, with captions). Neither enters CSV, field configuration, or `COSTAR_HEADER_ROW`. Any additional computed tag is a README §5 scope decision, not an invitation to generalize a second field model. Image embed logic lives in `lib/land-sales/docx-image.ts`.
 
 **Output Flows are Admin configuration for Print — exactly one per results table.** `docx_output_flows` stores the name and required default template (scoped by `database_key`); ordered rows in `docx_output_flow_rules` store exact catalog field names, `contains` / `equals` / `does_not_equal`, test text, and a routed template. Conditions are case-insensitive text comparisons, evaluated in position order with first match winning. The default handles every non-match. Print resolves the table's sole flow via `tableOutputFlow` — it does not accept a client-chosen flow id. Flow evaluation belongs in pure `lib/land-sales/output-flows.ts`, never as conditionals in the route or component. Active users read flows; active Admins mutate them; creating a second flow for a `database_key` is refused; every template reference uses `on delete restrict`.
 

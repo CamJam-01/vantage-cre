@@ -1,5 +1,6 @@
 import { costarColumnNames } from './costar-fields';
 import type { HiddenFieldIds } from './field-visibility';
+import { applyRecordImageCaptionUpdates } from './record-image';
 import type { LandSale, LandSaleInput } from './schema';
 
 export function mergeVisibleUpdate(
@@ -17,8 +18,11 @@ export function mergeVisibleUpdate(
   return {
     columns,
     saleDateRaw: hidden.has('Sale Date') ? existing.saleDateRaw : submitted.saleDateRaw,
-    // Caption rides the catalog Save (unlike the image path).
-    recordImageCaption: submitted.recordImageCaption,
+    // Captions ride the catalog Save; paths stay on their own actions.
+    recordImages: applyRecordImageCaptionUpdates(
+      existing.recordImages ?? [],
+      submitted.recordImageCaptionUpdates ?? [],
+    ),
   };
 }
 
@@ -34,6 +38,6 @@ export function sanitizeVisibleCreate(
   return {
     columns,
     saleDateRaw: hidden.has('Sale Date') ? undefined : submitted.saleDateRaw,
-    recordImageCaption: submitted.recordImageCaption,
+    recordImages: [],
   };
 }

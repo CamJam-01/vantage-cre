@@ -5,6 +5,7 @@ import {
   DisplaySettingsReadError,
   loadDisplaySettings,
   loadHiddenFieldIds,
+  readRecordImagePlacement,
 } from './display-settings.ts';
 
 type QueryResult = {
@@ -12,6 +13,7 @@ type QueryResult = {
     hidden_field_keys: string[] | null;
     field_order?: string[] | null;
     field_dividers?: unknown;
+    record_image_placement?: string | null;
   } | null;
   error: { message: string } | null;
 };
@@ -64,11 +66,20 @@ describe('loadHiddenFieldIds', () => {
   });
 });
 
+describe('readRecordImagePlacement', () => {
+  it('defaults to the Photos tab for missing or unknown values', () => {
+    assert.equal(readRecordImagePlacement(undefined), 'tab');
+    assert.equal(readRecordImagePlacement('nope'), 'tab');
+    assert.equal(readRecordImagePlacement('above'), 'above');
+    assert.equal(readRecordImagePlacement('tab'), 'tab');
+  });
+});
+
 describe('loadDisplaySettings', () => {
   it('returns an empty arrangement when no settings row exists', async () => {
     assert.deepEqual(
       await loadDisplaySettings(fakeClient({ data: null, error: null }), 'sales'),
-      { hidden: new Set(), fieldOrder: [], fieldDividers: [] },
+      { hidden: new Set(), fieldOrder: [], fieldDividers: [], recordImagePlacement: 'tab' },
     );
   });
 
@@ -78,6 +89,7 @@ describe('loadDisplaySettings', () => {
         data: {
           hidden_field_keys: ['extra:Zoning'],
           field_order: ['extra:Market', 'extra:Zoning'],
+          record_image_placement: 'above',
         },
         error: null,
       }),
@@ -85,6 +97,7 @@ describe('loadDisplaySettings', () => {
     );
     assert.deepEqual([...settings.hidden], ['Zoning']);
     assert.deepEqual(settings.fieldOrder, ['Market', 'Zoning']);
+    assert.equal(settings.recordImagePlacement, 'above');
   });
 
   it('treats a null arrangement as no saved order', async () => {
@@ -93,6 +106,7 @@ describe('loadDisplaySettings', () => {
       'sales',
     );
     assert.deepEqual(settings.fieldOrder, []);
+    assert.equal(settings.recordImagePlacement, 'tab');
   });
 });
 

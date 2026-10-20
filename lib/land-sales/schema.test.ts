@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { coerceColumnValue, coerceLandSaleInput, columnsFromFormData, flaggedSaleDateRaw, isSystemColumn } from './schema.ts';
-import { RECORD_IMAGE_CAPTION_COLUMN, RECORD_IMAGE_COLUMN, SALE_DATE_RAW_COLUMN } from './costar-fields.ts';
+import { RECORD_IMAGE_COLUMN, RECORD_IMAGES_COLUMN, SALE_DATE_RAW_COLUMN } from './costar-fields.ts';
 
 describe('coerceColumnValue', () => {
   it('strips currency from numbers and yields null rather than an error', () => {
@@ -52,11 +52,17 @@ describe('columnsFromFormData', () => {
     assert.equal(input.saleDateRaw, 'not-a-date');
   });
 
-  it('reads the record-image caption carve-out from the form', () => {
+  it('reads per-photo caption updates from the form', () => {
     const form = new FormData();
-    form.set(RECORD_IMAGE_CAPTION_COLUMN, '  Facing north  ');
+    form.append('record_image_path', 'land_sales/1/a.jpg');
+    form.append('record_image_caption', '  Facing north  ');
+    form.append('record_image_path', 'land_sales/1/b.jpg');
+    form.append('record_image_caption', 'Rear');
     const input = columnsFromFormData(form, new Set());
-    assert.equal(input.recordImageCaption, 'Facing north');
+    assert.deepEqual(input.recordImageCaptionUpdates, [
+      { path: 'land_sales/1/a.jpg', caption: 'Facing north' },
+      { path: 'land_sales/1/b.jpg', caption: 'Rear' },
+    ]);
   });
 });
 
@@ -78,8 +84,8 @@ describe('system columns', () => {
   it('recognizes only the documented carve-outs as system stores', () => {
     assert.equal(isSystemColumn('id'), true);
     assert.equal(isSystemColumn(SALE_DATE_RAW_COLUMN), true);
+    assert.equal(isSystemColumn(RECORD_IMAGES_COLUMN), true);
     assert.equal(isSystemColumn(RECORD_IMAGE_COLUMN), true);
-    assert.equal(isSystemColumn(RECORD_IMAGE_CAPTION_COLUMN), true);
     assert.equal(isSystemColumn('Sale Date'), false);
     assert.equal(isSystemColumn('Sprinklers'), false);
   });

@@ -25,6 +25,12 @@ import { costarColumnType } from '@/lib/land-sales/costar-column-types';
 import { formatCatalogValue } from '@/lib/land-sales/format';
 import type { SalesPath } from '@/lib/land-sales/sales-path';
 import { RecordImageField } from '@/components/land-sales/record-image-field';
+import {
+  DEFAULT_RECORD_IMAGE_PLACEMENT,
+  RECORD_PHOTOS_PAGE_ID,
+  RECORD_PHOTOS_PAGE_TITLE,
+  type RecordImagePlacement,
+} from '@/lib/land-sales/display-settings';
 
 const initialState: CreateFormState = null;
 
@@ -95,7 +101,8 @@ export function RecordDetails({
   hiddenFieldIds = [],
   fieldOrder = [],
   fieldDividers = [],
-  imageSignedUrl = null,
+  recordImagePlacement = DEFAULT_RECORD_IMAGE_PLACEMENT,
+  imageSignedUrls = {},
 }: {
   path: SalesPath;
   record: LandSale;
@@ -109,7 +116,8 @@ export function RecordDetails({
   hiddenFieldIds?: string[];
   fieldOrder?: string[];
   fieldDividers?: FieldDivider[];
-  imageSignedUrl?: string | null;
+  recordImagePlacement?: RecordImagePlacement;
+  imageSignedUrls?: Record<string, string>;
 }) {
   if (!canEdit) {
     return (
@@ -126,7 +134,8 @@ export function RecordDetails({
         hiddenFieldIds={hiddenFieldIds}
         fieldOrder={fieldOrder}
         fieldDividers={fieldDividers}
-        imageSignedUrl={imageSignedUrl}
+        recordImagePlacement={recordImagePlacement}
+        imageSignedUrls={imageSignedUrls}
       />
     );
   }
@@ -144,7 +153,8 @@ export function RecordDetails({
       hiddenFieldIds={hiddenFieldIds}
       fieldOrder={fieldOrder}
       fieldDividers={fieldDividers}
-      imageSignedUrl={imageSignedUrl}
+      recordImagePlacement={recordImagePlacement}
+      imageSignedUrls={imageSignedUrls}
     />
   );
 }
@@ -161,7 +171,8 @@ function BoundRecordDetailsForm({
   hiddenFieldIds,
   fieldOrder,
   fieldDividers,
-  imageSignedUrl,
+  recordImagePlacement,
+  imageSignedUrls,
 }: {
   path: SalesPath;
   record: LandSale;
@@ -174,7 +185,8 @@ function BoundRecordDetailsForm({
   hiddenFieldIds: string[];
   fieldOrder: string[];
   fieldDividers: FieldDivider[];
-  imageSignedUrl: string | null;
+  recordImagePlacement: RecordImagePlacement;
+  imageSignedUrls: Record<string, string>;
 }) {
   const [state, formAction, pending] = useActionState(updateLandSale.bind(null, path.id, record.id), initialState);
   return (
@@ -194,7 +206,8 @@ function BoundRecordDetailsForm({
       hiddenFieldIds={hiddenFieldIds}
       fieldOrder={fieldOrder}
       fieldDividers={fieldDividers}
-      imageSignedUrl={imageSignedUrl}
+      recordImagePlacement={recordImagePlacement}
+      imageSignedUrls={imageSignedUrls}
     />
   );
 }
@@ -288,7 +301,8 @@ export function RecordDetailsForm({
   hiddenFieldIds = [],
   fieldOrder = [],
   fieldDividers = [],
-  imageSignedUrl = null,
+  recordImagePlacement = DEFAULT_RECORD_IMAGE_PLACEMENT,
+  imageSignedUrls = {},
 }: {
   path: SalesPath;
   record: LandSale;
@@ -306,15 +320,33 @@ export function RecordDetailsForm({
   hiddenFieldIds?: string[];
   fieldOrder?: string[];
   fieldDividers?: FieldDivider[];
-  imageSignedUrl?: string | null;
+  recordImagePlacement?: RecordImagePlacement;
+  imageSignedUrls?: Record<string, string>;
 }) {
   const router = useRouter();
   const hidden = new Set(hiddenFieldIds);
   const rows = fieldDisplayRows(resultColumns({ pathId: path.id }), fieldOrder, fieldDividers);
   const pages = buildRecordDisplayPages(rows, hidden);
   const tabbedPages = pages.filter(page => page.title !== null);
+  const imageInTab = recordImagePlacement === 'tab';
+  const navTabs = [
+    ...tabbedPages.map(page => ({ id: page.id, title: page.title as string })),
+    ...(imageInTab
+      ? [{ id: RECORD_PHOTOS_PAGE_ID, title: RECORD_PHOTOS_PAGE_TITLE }]
+      : []),
+  ];
   const editing = canEdit || createMode;
-  const [activePage, setActivePage] = useState(tabbedPages[0]?.id ?? '');
+  const [activePage, setActivePage] = useState(navTabs[0]?.id ?? '');
+
+  const imageField = (
+    <RecordImageField
+      pathId={path.id}
+      recordId={record.id}
+      initialImages={record.recordImages ?? []}
+      imageSignedUrls={imageSignedUrls}
+      canEdit={editing}
+    />
+  );
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -514,17 +546,11 @@ export function RecordDetailsForm({
               )}
             </div>
 
-            <RecordImageField
-              pathId={path.id}
-              recordId={record.id}
-              initialSignedUrl={imageSignedUrl}
-              initialCaption={record.recordImageCaption ?? ''}
-              canEdit={editing}
-            />
+            {!imageInTab && imageField}
 
-            {tabbedPages.length > 0 && (
+            {navTabs.length > 0 && (
               <div className="record-tabs" role="tablist" aria-label="Record pages">
-                {tabbedPages.map(page => (
+                {navTabs.map(page => (
                   <button
                     key={page.id}
                     type="button"
@@ -578,6 +604,26 @@ export function RecordDetailsForm({
 
               </section>
             ))}
+
+            {imageInTab && (
+              <section
+                id={`record-sheet-${RECORD_PHOTOS_PAGE_ID}`}
+                role="tabpanel"
+                aria-labelledby={`record-tab-${RECORD_PHOTOS_PAGE_ID}`}
+                className="record-panel"
+                hidden={activePage !== RECORD_PHOTOS_PAGE_ID}
+                onInvalidCapture={() => {
+                  if (activePage !== RECORD_PHOTOS_PAGE_ID) {
+                    flushSync(() => setActivePage(RECORD_PHOTOS_PAGE_ID));
+                  }
+                }}
+              >
+                <div className="record-panel-title">
+                  <h2>{RECORD_PHOTOS_PAGE_TITLE}</h2>
+                </div>
+                {imageField}
+              </section>
+            )}
 
             {editing && state?.message && (
               <div className="record-error" style={{ marginBottom: 'var(--space-4)' }}>{state.message}</div>

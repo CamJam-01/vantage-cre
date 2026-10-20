@@ -39,7 +39,8 @@ export async function SalesRecordPage({
   const resultsParams = new URLSearchParams(from ?? '');
   const filters = decodeFilters(resultsParams);
   const sort = decodeSort(resultsParams.get('sort'), resultsParams.get('dir'));
-  const [{ prevId, nextId, position, total }, imageSignedUrl] = await Promise.all([
+  const images = r.recordImages ?? [];
+  const [{ prevId, nextId, position, total }, imageSignedUrls] = await Promise.all([
     fetchAdjacentLandSaleIds(
       supabase,
       filters,
@@ -48,12 +49,20 @@ export async function SalesRecordPage({
       r.columns[sort.column],
       path.table,
     ),
-    r.recordImagePath
-      ? supabase.storage
+    Promise.all(
+      images.map(image =>
+        supabase.storage
           .from(RECORD_IMAGE_BUCKET)
-          .createSignedUrl(r.recordImagePath, 60 * 60)
-          .then(({ data }) => data?.signedUrl ?? null)
-      : Promise.resolve(null),
+          .createSignedUrl(image.path, 60 * 60)
+          .then(({ data }) => ({ path: image.path, url: data?.signedUrl ?? null })),
+      ),
+    ).then(entries => {
+      const map: Record<string, string> = {};
+      for (const entry of entries) {
+        if (entry.url) map[entry.path] = entry.url;
+      }
+      return map;
+    }),
   ]);
 
   return (
@@ -70,7 +79,8 @@ export async function SalesRecordPage({
       hiddenFieldIds={[...display.hidden]}
       fieldOrder={display.fieldOrder}
       fieldDividers={display.fieldDividers}
-      imageSignedUrl={imageSignedUrl}
+      recordImagePlacement={display.recordImagePlacement}
+      imageSignedUrls={imageSignedUrls}
     />
   );
 }

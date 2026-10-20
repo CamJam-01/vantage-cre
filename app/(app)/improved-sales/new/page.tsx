@@ -18,6 +18,7 @@ export default async function NewImprovedSalePage() {
       hiddenFieldIds={[...display.hidden]}
       fieldOrder={display.fieldOrder}
       fieldDividers={display.fieldDividers}
+      recordImagePlacement={display.recordImagePlacement}
     />
   );
 }

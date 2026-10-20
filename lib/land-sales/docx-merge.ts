@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import { addRecordImageToDocx, replaceRecordImageTags } from './docx-image';
+import { addRecordImageToDocx, replaceRecordImageTags, type RecordImageEmbed } from './docx-image';
 import {
   combineMergedDocuments,
   combineRoutedDocuments,
@@ -47,12 +47,13 @@ type LoadedDocx = {
 export type RecordImageBytes = {
   bytes: Uint8Array;
   mimeType: string;
+  caption?: string;
 };
 
 export type RoutedDocxRecord = {
   templateBytes: ArrayBuffer | Uint8Array;
   values: Readonly<Record<string, string>>;
-  image?: RecordImageBytes | null;
+  images?: ReadonlyArray<RecordImageBytes> | null;
 };
 
 async function loadDocx(bytes: ArrayBuffer | Uint8Array): Promise<LoadedDocx> {
@@ -157,7 +158,7 @@ async function assertRoutedTemplateCompatibility(
 export async function mergeDocx(
   templateBytes: ArrayBuffer | Uint8Array,
   valuesPerRecord: ReadonlyArray<Readonly<Record<string, string>>>,
-  imagesPerRecord: ReadonlyArray<RecordImageBytes | null | undefined> = [],
+  imagesPerRecord: ReadonlyArray<ReadonlyArray<RecordImageBytes> | null | undefined> = [],
 ): Promise<Uint8Array> {
   if (valuesPerRecord.length === 0) {
     throw new DocxTemplateError('Select at least one record to merge.');
@@ -175,39 +176,46 @@ export async function mergeDocx(
     throw new DocxTemplateError('This template is not a Word document (no word/document.xml).');
   }
 
-  const imageRelationshipIds: Array<string | null> = [];
+  const imageEmbedsPerRecord: RecordImageEmbed[][] = [];
   for (let index = 0; index < valuesPerRecord.length; index += 1) {
-    const image = imagesPerRecord[index];
-    if (!image) {
-      imageRelationshipIds.push(null);
-      continue;
+    const images = imagesPerRecord[index] ?? [];
+    const embeds: RecordImageEmbed[] = [];
+    for (let imageIndex = 0; imageIndex < images.length; imageIndex += 1) {
+      const image = images[imageIndex];
+      try {
+        embeds.push({
+          relationshipId: await addRecordImageToDocx(
+            zip,
+            image.bytes,
+            image.mimeType,
+            `record-image-${index + 1}-${imageIndex + 1}`,
+          ),
+          caption: image.caption,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not embed a record image.';
+        throw new DocxTemplateError(message);
+      }
     }
-    try {
-      imageRelationshipIds.push(
-        await addRecordImageToDocx(zip, image.bytes, image.mimeType, `record-image-${index + 1}`),
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not embed a record image.';
-      throw new DocxTemplateError(message);
-    }
+    imageEmbedsPerRecord.push(embeds);
   }
 
   const documentXml = await documentFile.async('string');
   try {
-    zip.file(DOCUMENT_PART, combineMergedDocuments(documentXml, valuesPerRecord, imageRelationshipIds));
+    zip.file(DOCUMENT_PART, combineMergedDocuments(documentXml, valuesPerRecord, imageEmbedsPerRecord));
   } catch (error) {
     if (error instanceof DocxStructureError) throw new DocxTemplateError(error.message);
     throw error;
   }
 
   const firstRecord = valuesPerRecord[0];
-  const firstImageId = imageRelationshipIds[0] ?? null;
+  const firstImages = imageEmbedsPerRecord[0] ?? [];
   for (const path of Object.keys(zip.files)) {
     if (!HEADER_FOOTER_PATTERN.test(path)) continue;
     const part = zip.file(path);
     if (!part) continue;
     const filled = replaceMergeTags(
-      replaceRecordImageTags(await part.async('string'), firstImageId, 2000),
+      replaceRecordImageTags(await part.async('string'), firstImages, 2000),
       firstRecord,
     );
     zip.file(path, filled);
@@ -235,21 +243,28 @@ export async function mergeRoutedDocx(
   const routed = await Promise.all(records.map(record => loadDocx(record.templateBytes)));
   await Promise.all(routed.map(template => assertRoutedTemplateCompatibility(base, template)));
 
-  const imageRelationshipIds: Array<string | null> = [];
+  const imageEmbedsPerRecord: RecordImageEmbed[][] = [];
   for (let index = 0; index < records.length; index += 1) {
-    const image = records[index].image;
-    if (!image) {
-      imageRelationshipIds.push(null);
-      continue;
+    const images = records[index].images ?? [];
+    const embeds: RecordImageEmbed[] = [];
+    for (let imageIndex = 0; imageIndex < images.length; imageIndex += 1) {
+      const image = images[imageIndex];
+      try {
+        embeds.push({
+          relationshipId: await addRecordImageToDocx(
+            base.zip,
+            image.bytes,
+            image.mimeType,
+            `record-image-${index + 1}-${imageIndex + 1}`,
+          ),
+          caption: image.caption,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Could not embed a record image.';
+        throw new DocxTemplateError(message);
+      }
     }
-    try {
-      imageRelationshipIds.push(
-        await addRecordImageToDocx(base.zip, image.bytes, image.mimeType, `record-image-${index + 1}`),
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not embed a record image.';
-      throw new DocxTemplateError(message);
-    }
+    imageEmbedsPerRecord.push(embeds);
   }
 
   try {
@@ -258,7 +273,7 @@ export async function mergeRoutedDocx(
       routed.map((template, index) => ({
         xml: template.documentXml,
         values: records[index].values,
-        imageRelationshipId: imageRelationshipIds[index],
+        imageEmbeds: imageEmbedsPerRecord[index],
       })),
     ));
   } catch (error) {
@@ -267,13 +282,13 @@ export async function mergeRoutedDocx(
   }
 
   const firstRecord = records[0].values;
-  const firstImageId = imageRelationshipIds[0] ?? null;
+  const firstImages = imageEmbedsPerRecord[0] ?? [];
   for (const path of Object.keys(base.zip.files)) {
     if (!HEADER_FOOTER_PATTERN.test(path)) continue;
     const part = base.zip.file(path);
     if (!part) continue;
     const filled = replaceMergeTags(
-      replaceRecordImageTags(await part.async('string'), firstImageId, 2000),
+      replaceRecordImageTags(await part.async('string'), firstImages, 2000),
       firstRecord,
     );
     base.zip.file(path, filled);
