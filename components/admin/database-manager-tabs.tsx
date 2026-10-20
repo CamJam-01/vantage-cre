@@ -8,13 +8,14 @@ import { DATABASE_CATEGORIES } from '@/lib/admin/database-descriptor';
 import { UserAccessTable } from '@/components/profile/user-access-table';
 import type { UserProfile } from '@/lib/users/roles';
 
-type Tab = 'connections' | 'databases' | 'audit' | 'users';
+type Tab = 'connections' | 'databases' | 'audit' | 'users' | 'ai-chat';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'databases', label: 'Databases' },
   { key: 'users', label: 'Users' },
   { key: 'audit', label: 'Audit Log' },
   { key: 'connections', label: 'Connections' },
+  { key: 'ai-chat', label: 'AI Chat' },
 ];
 
 /** Connections is deferred (README §5) — visible, disabled, not a live product surface. */
@@ -82,6 +83,35 @@ export function DatabaseManagerTabs({
               ))}
             </tbody>
           </table>
+        </Blueprint>
+      )}
+
+      {tab === 'ai-chat' && (
+        <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', padding: 'var(--space-6)', background: 'var(--color-neutral-100)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-4)' }}>
+            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, fontWeight: 600, color: 'var(--color-text)' }}>AI Chat</div>
+            <Button variant="primary" disabled title="Coming in a later phase">Save</Button>
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--color-neutral-700)', marginTop: 0 }}>
+            Coming in a later phase. The floating chat badge is live as a placeholder; wiring an AI
+            service and enabling these settings arrive together.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: 480 }}>
+            <div className="field">
+              <label htmlFor="aiChatProvider">Provider</label>
+              <select id="aiChatProvider" className="input" disabled title="Coming in a later phase" defaultValue="">
+                <option value="">Select a provider…</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="aiChatEndpoint">Endpoint URL</label>
+              <input id="aiChatEndpoint" className="input" type="url" disabled title="Coming in a later phase" placeholder="https://" />
+            </div>
+            <div className="field">
+              <label htmlFor="aiChatApiKey">API key</label>
+              <input id="aiChatApiKey" className="input" type="password" disabled title="Coming in a later phase" placeholder="••••••••" autoComplete="off" />
+            </div>
+          </div>
         </Blueprint>
       )}
 

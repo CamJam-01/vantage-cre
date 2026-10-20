@@ -1,4 +1,5 @@
 import { NavHeader } from '@/components/ui/nav-header';
+import { ChatWidget } from '@/components/chat/chat-widget';
 import { FeedbackNamePrefill } from '@/components/feedback/feedback-name-prefill';
 import { ResultsSelectionProvider } from '@/components/land-sales/results-selection';
 import { createClient } from '@/lib/supabase/server';
@@ -40,6 +41,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div style={{ minHeight: '100vh', width: '100%', fontFamily: 'var(--font-body)', display: 'flex', flexDirection: 'column' }}>
       <NavHeader profile={profile} />
       <ResultsSelectionProvider>{children}</ResultsSelectionProvider>
+      <ChatWidget />
       <FeedbackNamePrefill name={submitterName} />
     </div>
   );

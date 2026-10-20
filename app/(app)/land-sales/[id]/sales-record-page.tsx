@@ -8,6 +8,7 @@ import { fetchAdjacentLandSaleIds } from '@/lib/land-sales/query';
 import { decodeFilters } from '@/lib/land-sales/search-params';
 import { decodeSort } from '@/lib/land-sales/results-sort';
 import type { SalesPath } from '@/lib/land-sales/sales-path';
+import { RECORD_IMAGE_BUCKET } from '@/lib/land-sales/record-image';
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -38,14 +39,22 @@ export async function SalesRecordPage({
   const resultsParams = new URLSearchParams(from ?? '');
   const filters = decodeFilters(resultsParams);
   const sort = decodeSort(resultsParams.get('sort'), resultsParams.get('dir'));
-  const { prevId, nextId, position, total } = await fetchAdjacentLandSaleIds(
-    supabase,
-    filters,
-    sort,
-    r.id,
-    r.columns[sort.column],
-    path.table,
-  );
+  const [{ prevId, nextId, position, total }, imageSignedUrl] = await Promise.all([
+    fetchAdjacentLandSaleIds(
+      supabase,
+      filters,
+      sort,
+      r.id,
+      r.columns[sort.column],
+      path.table,
+    ),
+    r.recordImagePath
+      ? supabase.storage
+          .from(RECORD_IMAGE_BUCKET)
+          .createSignedUrl(r.recordImagePath, 60 * 60)
+          .then(({ data }) => data?.signedUrl ?? null)
+      : Promise.resolve(null),
+  ]);
 
   return (
     <RecordDetails
@@ -61,6 +70,7 @@ export async function SalesRecordPage({
       hiddenFieldIds={[...display.hidden]}
       fieldOrder={display.fieldOrder}
       fieldDividers={display.fieldDividers}
+      imageSignedUrl={imageSignedUrl}
     />
   );
 }

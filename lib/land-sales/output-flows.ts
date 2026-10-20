@@ -79,6 +79,22 @@ export function resolveOutputTemplateId(
   return match?.templateId ?? flow.defaultTemplateId;
 }
 
+/** Print uses exactly one Output Flow per results table. Zero or many means
+ * Admin must fix configuration before a document can be generated. */
+export function tableOutputFlow<T>(flows: readonly T[]): T | null {
+  return flows.length === 1 ? flows[0]! : null;
+}
+
+export function tableOutputFlowSetupMessage(flowCount: number): string {
+  if (flowCount === 0) {
+    return 'No Output Flow is set up for this table yet. An admin can create one under Database Manager → Set templates.';
+  }
+  if (flowCount > 1) {
+    return 'This table has more than one Output Flow. An admin must keep exactly one before printing.';
+  }
+  return '';
+}
+
 /** Shared client/server validation. Template ids are checked against the
  * caller's current saved-template set so stale or crafted references fail. */
 export function outputFlowDraftError(

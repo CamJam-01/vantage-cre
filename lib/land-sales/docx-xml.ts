@@ -1,3 +1,4 @@
+import { replaceRecordImageTags } from './docx-image';
 import { MERGE_TAG_PATTERN } from './merge-tags';
 
 /** WordprocessingML surgery for the merge. A .docx is a zip of XML parts; this
@@ -189,15 +190,20 @@ export function splitDocumentBody(xml: string): DocumentBody {
 export function combineMergedDocuments(
   xml: string,
   valuesPerRecord: ReadonlyArray<Readonly<Record<string, string>>>,
+  imageRelationshipIds: ReadonlyArray<string | null> = [],
 ): string {
   const { head, content, sectPr, tail } = splitDocumentBody(xml);
-  const sections = valuesPerRecord.map(values => replaceMergeTags(content, values));
+  const sections = valuesPerRecord.map((values, index) => {
+    const withImage = replaceRecordImageTags(content, imageRelationshipIds[index] ?? null, 1000 + index * 10);
+    return replaceMergeTags(withImage, values);
+  });
   return head + sections.join(PAGE_BREAK_PARAGRAPH) + sectPr + tail;
 }
 
 export type RoutedDocumentSection = {
   xml: string;
   values: Readonly<Record<string, string>>;
+  imageRelationshipId?: string | null;
 };
 
 /** Combines bodies from compatible templates while the default document owns
@@ -207,9 +213,14 @@ export function combineRoutedDocuments(
   sections: ReadonlyArray<RoutedDocumentSection>,
 ): string {
   const { head, sectPr, tail } = splitDocumentBody(defaultXml);
-  const bodies = sections.map(section => {
+  const bodies = sections.map((section, index) => {
     const source = splitDocumentBody(section.xml);
-    return replaceMergeTags(source.content, section.values);
+    const withImage = replaceRecordImageTags(
+      source.content,
+      section.imageRelationshipId ?? null,
+      1000 + index * 10,
+    );
+    return replaceMergeTags(withImage, section.values);
   });
   return head + bodies.join(PAGE_BREAK_PARAGRAPH) + sectPr + tail;
 }

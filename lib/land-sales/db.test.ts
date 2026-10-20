@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { landSaleFromRow, landSaleToRow, projectVisibleLandSale } from './db.ts';
-import { SALE_DATE_RAW_COLUMN } from './costar-fields.ts';
+import { RECORD_IMAGE_CAPTION_COLUMN, RECORD_IMAGE_COLUMN, SALE_DATE_RAW_COLUMN } from './costar-fields.ts';
 
 describe('landSaleFromRow', () => {
   it('requires the uuid id and does not fall back to Comp ID', () => {
@@ -59,7 +59,7 @@ describe('projectVisibleLandSale', () => {
 });
 
 describe('landSaleToRow', () => {
-  it('writes header-keyed columns onto exact CoStar names plus the raw-date store', () => {
+  it('writes header-keyed columns onto exact CoStar names plus system stores for date and caption', () => {
     const row = landSaleToRow({
       columns: {
         'Property Address': '123 Main St',
@@ -67,11 +67,16 @@ describe('landSaleToRow', () => {
         'Sale Price': 1000,
       },
       saleDateRaw: 'not a date',
+      recordImageCaption: 'Facing north',
+      recordImagePath: 'land_sales/1/photo.jpg',
     });
     assert.equal(row['Property Address'], '123 Main St');
     assert.equal(row['Property City'], 'Wendell');
     assert.equal(row['Sale Price'], 1000);
     assert.equal(row[SALE_DATE_RAW_COLUMN], 'not a date');
+    assert.equal(row[RECORD_IMAGE_CAPTION_COLUMN], 'Facing north');
+    // Image path has its own Server Action — Save must not touch it.
+    assert.equal(RECORD_IMAGE_COLUMN in row, false);
     assert.equal('parcel_id' in row, false);
     assert.equal('address' in row, false);
   });

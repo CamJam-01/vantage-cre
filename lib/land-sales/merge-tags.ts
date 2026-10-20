@@ -37,12 +37,12 @@ export type MergeTagDescriptor = MergeTagDescriptorBase & (
     }
   | {
       source: 'merge';
-      type: 'sequence';
+      type: 'sequence' | 'image';
     }
 );
 
-/** The sole merge-only tag. It numbers output sections without pretending the
- * sequence is a stored field or allowing it into the closed CoStar catalog. */
+/** Numbers output sections without pretending the sequence is a stored field
+ * or allowing it into the closed CoStar catalog. */
 export const COMP_NUMBER_MERGE_TAG: MergeTagDescriptor = {
   tag: '{{ comp_number }}',
   name: 'comp_number',
@@ -51,8 +51,18 @@ export const COMP_NUMBER_MERGE_TAG: MergeTagDescriptor = {
   type: 'sequence',
 };
 
-/** Every tag a template may use. The merge-only sequence comes first for
- * discoverability; database-field tags retain canonical catalog order. */
+/** Embeds the record photo from `_record_image_path` into the DOCX. Not a
+ * catalog field and never CSV — see README §3A carve-outs. */
+export const RECORD_IMAGE_MERGE_TAG: MergeTagDescriptor = {
+  tag: '{{ record_image }}',
+  name: 'record_image',
+  header: 'Record Image',
+  source: 'merge',
+  type: 'image',
+};
+
+/** Every tag a template may use. Merge-only tags come first for discoverability;
+ * database-field tags retain canonical catalog order. */
 export function mergeTagCatalog(): MergeTagDescriptor[] {
   const catalogTags: MergeTagDescriptor[] = costarColumnNames().map(header => ({
     tag: mergeTag(header),
@@ -61,7 +71,7 @@ export function mergeTagCatalog(): MergeTagDescriptor[] {
     source: 'catalog',
     type: costarColumnType(header),
   }));
-  return [COMP_NUMBER_MERGE_TAG, ...catalogTags];
+  return [COMP_NUMBER_MERGE_TAG, RECORD_IMAGE_MERGE_TAG, ...catalogTags];
 }
 
 /** One field's merged text. Formatting is `formatCatalogValue` — the same

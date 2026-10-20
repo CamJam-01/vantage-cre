@@ -227,16 +227,35 @@ figcaption {
   border-radius: var(--radius-md);
 }
 .btn svg { display: block; }
-.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+/* Disabled stays fully opaque — muted ramp steps, never opacity, so content
+   behind a filled control cannot show through. */
+.btn:disabled {
+  cursor: not-allowed;
+  color: var(--color-neutral-500);
+}
 .btn-primary { background: var(--color-accent); color: var(--color-bg); }
 .btn-primary:hover { background: var(--color-accent-600); }
 .btn-primary:active { background: var(--color-accent-700); }
+.btn-primary:disabled {
+  background: var(--color-neutral-200);
+  border-color: var(--color-neutral-200);
+  color: var(--color-neutral-500);
+}
 .btn-secondary { border-color: var(--color-divider); }
 .btn-secondary:hover { background: rgba(var(--color-text-rgb), 0.07); }
 .btn-secondary:active { background: rgba(var(--color-text-rgb), 0.14); }
+.btn-secondary:disabled {
+  background: var(--color-neutral-100);
+  border-color: var(--color-neutral-300);
+  color: var(--color-neutral-400);
+}
 .btn-ghost { color: var(--color-accent); padding-inline: var(--space-1); }
 .btn-ghost:hover { background: rgba(var(--color-accent-rgb), 0.1); }
 .btn-ghost:active { background: rgba(var(--color-accent-rgb), 0.18); }
+.btn-ghost:disabled {
+  color: var(--color-neutral-400);
+  background: transparent;
+}
 .btn-icon { width: 36px; height: 36px; padding: 0; }
 .btn-block { width: 100%; margin-top: var(--space-2); }
 
@@ -558,19 +577,36 @@ textarea.input { min-height: 90px; resize: vertical; }
 
 /* — land sales results: search filters as a left slide-out modal. The
    table uses the full results-shell width; a floating dock at the
-   bottom-left of the viewport holds Add, Export, and Filters. */
+   bottom-left of the viewport holds Add, Save, and Filters. */
+/* Shared by the left results dock and the right chat badge so they stay
+   on one horizontal line at the bottom of the viewport. */
+:root {
+  --app-fab-inset: var(--space-6);
+  --app-fab-size: 40px;
+}
 .results-shell {
+  --results-fab-height: var(--app-fab-size);
+  /* Dock height + its bottom inset + a gap, so the table scrollport
+     (and its horizontal scrollbar) stay visually above the dock. */
+  --results-fab-clearance: calc(var(--results-fab-height) + var(--app-fab-inset) + var(--space-3));
   align-items: stretch;
-  padding: 0 var(--space-6) calc(var(--space-2) * 3);
+  padding: 0 var(--space-6) var(--results-fab-clearance);
 }
 .results-fab-dock {
   position: fixed;
-  left: var(--space-6);
-  bottom: var(--space-6);
+  left: var(--app-fab-inset);
+  bottom: var(--app-fab-inset);
   z-index: 42;
   display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+/* Horizontal track stays present; max-height clears the fixed fab dock so the
+   scrollbar sits above it rather than under the controls. */
+.results-table-scroll {
+  overflow-x: scroll;
+  overflow-y: auto;
+  max-height: calc(100dvh - 250px - var(--results-fab-clearance));
 }
 .results-sidebar-badge {
   display: inline-flex;
@@ -590,7 +626,10 @@ textarea.input { min-height: 90px; resize: vertical; }
 .results-sidebar-badge:hover { background: var(--color-neutral-200); }
 .results-sidebar-badge[hidden] { display: none; }
 .results-sidebar-badge:disabled {
-  opacity: 0.45;
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-400);
+  border-color: var(--color-neutral-300);
+  box-shadow: none;
   cursor: not-allowed;
 }
 .results-sidebar-badge:disabled:hover { background: var(--color-neutral-100); }
@@ -624,7 +663,14 @@ textarea.input { min-height: 90px; resize: vertical; }
 }
 .results-delete-badge:hover { background: var(--color-danger-600); }
 .results-delete-badge:active { background: var(--color-danger-700); }
-.results-delete-badge:disabled:hover { background: var(--color-danger-500); }
+.results-delete-badge:disabled,
+.results-delete-badge:disabled:hover {
+  background: var(--color-danger-200);
+  border-color: var(--color-danger-200);
+  color: var(--color-danger-400);
+  box-shadow: none;
+  cursor: not-allowed;
+}
 .results-add-dropdown {
   display: none;
   position: absolute;
@@ -662,9 +708,71 @@ textarea.input { min-height: 90px; resize: vertical; }
   background: rgba(var(--color-text-rgb), 0.06);
 }
 .results-add-dropdown button:disabled {
-  opacity: 0.45;
+  color: var(--color-neutral-400);
   cursor: not-allowed;
 }
+/* — chat widget: floating badge + placeholder panel (README §5). Same
+   bottom inset and control height as `.results-fab-dock` so the two stay
+   inline across the viewport. */
+.chat-widget {
+  position: fixed;
+  right: var(--app-fab-inset);
+  bottom: var(--app-fab-inset);
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+.chat-fab {
+  width: var(--app-fab-size);
+  height: var(--app-fab-size);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-accent);
+  color: var(--color-paper);
+  border: 1px solid var(--color-accent);
+  cursor: pointer;
+}
+.chat-fab:hover { background: var(--color-accent-600); border-color: var(--color-accent-600); }
+.chat-fab:active { background: var(--color-accent-700); border-color: var(--color-accent-700); }
+.chat-panel {
+  width: min(360px, calc(100vw - var(--space-6) * 2));
+  display: flex;
+  flex-direction: column;
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+}
+.chat-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+}
+.chat-panel-title {
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 18px;
+  color: var(--color-text);
+}
+.chat-panel-body {
+  padding: var(--space-4);
+  font-size: 14px;
+  color: var(--color-text);
+  min-height: 140px;
+}
+.chat-panel-composer {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-divider);
+}
+.chat-panel-composer .input { flex: 1; min-width: 0; }
+
 .results-sidebar-backdrop {
   position: fixed;
   inset: 0;
@@ -789,12 +897,6 @@ textarea.input { min-height: 90px; resize: vertical; }
   background: var(--color-accent); border-color: var(--color-accent); color: var(--color-bg);
 }
 .record-bar .btn-primary:hover:not(:disabled) { background: var(--color-accent-600); }
-.record-bar .btn-primary:disabled {
-  background: var(--color-neutral-200);
-  border-color: var(--color-neutral-200);
-  color: var(--color-neutral-500);
-  opacity: 1;
-}
 .record-bar .btn-secondary {
   border-color: var(--color-divider);
   color: var(--color-text);
@@ -803,6 +905,15 @@ textarea.input { min-height: 90px; resize: vertical; }
 
 /* Masthead — reads directly off the ground, no panel behind it. */
 .record-head { margin-bottom: var(--space-6); }
+.record-image-field {
+  margin: 0 0 var(--space-6);
+  max-width: 420px;
+}
+.record-image-caption {
+  font-size: 14px;
+  color: var(--color-neutral-700);
+  line-height: 1.4;
+}
 .record-delete {
   display: block;
   margin-top: 2rem;

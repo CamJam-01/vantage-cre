@@ -5,7 +5,7 @@ import { parseExportIds } from '@/lib/land-sales/export-ids';
 import { fetchLandSalesByIds } from '@/lib/land-sales/query';
 import { makeCsv } from '@/lib/land-sales/csv';
 import type { SalesPath } from '@/lib/land-sales/sales-path';
-import { DocxTemplateError, mergeRoutedDocx } from '@/lib/land-sales/docx-merge';
+import { DocxTemplateError, mergeRoutedDocx, type RecordImageBytes } from '@/lib/land-sales/docx-merge';
 import { mergeValuesForRecord } from '@/lib/land-sales/merge-tags';
 import {
   DOCX_MIME_TYPE,
@@ -16,7 +16,26 @@ import {
   mergedFileName,
 } from '@/lib/land-sales/docx-templates';
 import { listDocxOutputFlows } from '@/lib/land-sales/output-flow-store';
-import { resolveOutputTemplateId } from '@/lib/land-sales/output-flows';
+import {
+  resolveOutputTemplateId,
+  tableOutputFlow,
+  tableOutputFlowSetupMessage,
+} from '@/lib/land-sales/output-flows';
+import { RECORD_IMAGE_BUCKET, recordImageContentType } from '@/lib/land-sales/record-image';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+async function loadRecordImageBytes(
+  supabase: SupabaseClient,
+  path: string | undefined,
+): Promise<RecordImageBytes | null> {
+  if (!path) return null;
+  const { data, error } = await supabase.storage.from(RECORD_IMAGE_BUCKET).download(path);
+  if (error || !data) return null;
+  return {
+    bytes: new Uint8Array(await data.arrayBuffer()),
+    mimeType: recordImageContentType(path),
+  };
+}
 
 export function makeExportPost(path: SalesPath) {
   return async function POST(request: Request) {
@@ -63,20 +82,15 @@ export function makeMergePost(path: SalesPath) {
     try {
       body = await request.json();
     } catch {
-      return NextResponse.json({ error: 'Merge selection was not readable.' }, { status: 400 });
+      return NextResponse.json({ error: 'Print selection was not readable.' }, { status: 400 });
     }
 
     const fields = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
-    const flowId = typeof fields.flowId === 'string' ? fields.flowId.trim() : '';
-    if (!flowId) {
-      return NextResponse.json({ error: 'Choose an Output Flow to merge with.' }, { status: 400 });
-    }
-
     const ids = parseExportIds(fields.ids);
     if (!ids.length) return NextResponse.json({ error: 'No records selected.' }, { status: 400 });
     if (ids.length > MERGE_RECORD_LIMIT) {
       return NextResponse.json(
-        { error: `Merge up to ${MERGE_RECORD_LIMIT} records at a time.` },
+        { error: `Print up to ${MERGE_RECORD_LIMIT} records at a time.` },
         { status: 400 },
       );
     }
@@ -87,11 +101,16 @@ export function makeMergePost(path: SalesPath) {
     ]).then(([flows, records]) => ({ flowResult: flows, recordResult: records }))
       .catch((error: unknown) => ({
         flowResult: null,
-        recordResult: { records: [], error: error instanceof Error ? error.message : 'Could not load merge data.' },
+        recordResult: { records: [], error: error instanceof Error ? error.message : 'Could not load print data.' },
       }));
     if (!flowResult) return NextResponse.json({ error: recordResult.error }, { status: 500 });
-    const flow = flowResult.find(candidate => candidate.id === flowId);
-    if (!flow) return NextResponse.json({ error: 'That Output Flow no longer exists.' }, { status: 404 });
+    const flow = tableOutputFlow(flowResult);
+    if (!flow) {
+      return NextResponse.json(
+        { error: tableOutputFlowSetupMessage(flowResult.length) },
+        { status: 422 },
+      );
+    }
 
     const { records, error } = recordResult;
     if (error) return NextResponse.json({ error }, { status: 500 });
@@ -145,10 +164,15 @@ export function makeMergePost(path: SalesPath) {
       return NextResponse.json({ error: 'Could not open the default template.' }, { status: 500 });
     }
 
+    const images = await Promise.all(
+      records.map(record => loadRecordImageBytes(supabase, record.recordImagePath)),
+    );
+
     try {
       const merged = await mergeRoutedDocx(defaultTemplateBytes, records.map((record, index) => ({
         templateBytes: bytesByTemplateId.get(routedTemplateIds[index]) as Uint8Array,
         values: mergeValuesForRecord(record.columns, index + 1),
+        image: images[index],
       })));
       return new NextResponse(Buffer.from(merged), {
         status: 200,

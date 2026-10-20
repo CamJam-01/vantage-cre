@@ -24,6 +24,7 @@ import {
 import { costarColumnType } from '@/lib/land-sales/costar-column-types';
 import { formatCatalogValue } from '@/lib/land-sales/format';
 import type { SalesPath } from '@/lib/land-sales/sales-path';
+import { RecordImageField } from '@/components/land-sales/record-image-field';
 
 const initialState: CreateFormState = null;
 
@@ -94,6 +95,7 @@ export function RecordDetails({
   hiddenFieldIds = [],
   fieldOrder = [],
   fieldDividers = [],
+  imageSignedUrl = null,
 }: {
   path: SalesPath;
   record: LandSale;
@@ -107,6 +109,7 @@ export function RecordDetails({
   hiddenFieldIds?: string[];
   fieldOrder?: string[];
   fieldDividers?: FieldDivider[];
+  imageSignedUrl?: string | null;
 }) {
   if (!canEdit) {
     return (
@@ -123,6 +126,7 @@ export function RecordDetails({
         hiddenFieldIds={hiddenFieldIds}
         fieldOrder={fieldOrder}
         fieldDividers={fieldDividers}
+        imageSignedUrl={imageSignedUrl}
       />
     );
   }
@@ -140,6 +144,7 @@ export function RecordDetails({
       hiddenFieldIds={hiddenFieldIds}
       fieldOrder={fieldOrder}
       fieldDividers={fieldDividers}
+      imageSignedUrl={imageSignedUrl}
     />
   );
 }
@@ -156,6 +161,7 @@ function BoundRecordDetailsForm({
   hiddenFieldIds,
   fieldOrder,
   fieldDividers,
+  imageSignedUrl,
 }: {
   path: SalesPath;
   record: LandSale;
@@ -168,6 +174,7 @@ function BoundRecordDetailsForm({
   hiddenFieldIds: string[];
   fieldOrder: string[];
   fieldDividers: FieldDivider[];
+  imageSignedUrl: string | null;
 }) {
   const [state, formAction, pending] = useActionState(updateLandSale.bind(null, path.id, record.id), initialState);
   return (
@@ -187,6 +194,7 @@ function BoundRecordDetailsForm({
       hiddenFieldIds={hiddenFieldIds}
       fieldOrder={fieldOrder}
       fieldDividers={fieldDividers}
+      imageSignedUrl={imageSignedUrl}
     />
   );
 }
@@ -280,6 +288,7 @@ export function RecordDetailsForm({
   hiddenFieldIds = [],
   fieldOrder = [],
   fieldDividers = [],
+  imageSignedUrl = null,
 }: {
   path: SalesPath;
   record: LandSale;
@@ -297,6 +306,7 @@ export function RecordDetailsForm({
   hiddenFieldIds?: string[];
   fieldOrder?: string[];
   fieldDividers?: FieldDivider[];
+  imageSignedUrl?: string | null;
 }) {
   const router = useRouter();
   const hidden = new Set(hiddenFieldIds);
@@ -493,16 +503,24 @@ export function RecordDetailsForm({
             <div className="record-head">
               {createMode ? (
                 <>
-                  <h1>Add Land Sale Record</h1>
+                  <h1>Add {path.label} Record</h1>
                   <p className="sub">Manually enter a comp not covered by CSV import.</p>
                 </>
               ) : (
                 <>
-                  <h1>{address || location || 'Land Sale Record'}</h1>
+                  <h1>{address || location || `${path.label} Record`}</h1>
                   {subtitle && <p className="sub">{subtitle}</p>}
                 </>
               )}
             </div>
+
+            <RecordImageField
+              pathId={path.id}
+              recordId={record.id}
+              initialSignedUrl={imageSignedUrl}
+              initialCaption={record.recordImageCaption ?? ''}
+              canEdit={editing}
+            />
 
             {tabbedPages.length > 0 && (
               <div className="record-tabs" role="tablist" aria-label="Record pages">

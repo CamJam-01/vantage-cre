@@ -132,19 +132,21 @@ Land and Improved share 277 distinct stored fields and types, but have separate 
 - The count `278` is asserted in the migration. If it changes, that assertion changes with it, deliberately.
 - **The catalog is closed.** Adding, removing, renaming, or reordering a header is a contract change requiring a §5 decision, then constant + applicable appendix + tests together, with a migration only when storage changes. Sequence-only changes never require rebuilding a table.
 
-**Three carve-outs** — none is a catalog field, and none may reach the catalog, the template, the export, or the UI:
+**Carve-outs** — none is a catalog field; none may reach the catalog, the CSV template, or the export:
 
 | | What | Why |
 | --- | --- | --- |
 | `id` | `uuid` primary key | Row identity; `Comp ID` is not unique. |
 | Duplicate headers | `Sprinklers` in both paths; `Average Rental Rate Per kW` also in Improved | One column per name. Import keeps the last value and warns if duplicates differ; export writes it into every matching position. Accepted known lossiness. |
 | `_sale_date_raw` | `text` system store | Original text of an unrecognized `Sale Date`. Not a field. |
+| `_record_image_path` | `text` storage path | One photo per record (`comp-images` bucket). Record UI + `{{ record_image }}` Print embed only — never CSV. |
+| `_record_image_caption` | `text` caption | Optional caption for the record photo; edited on create/edit, saved with the record form — never CSV. |
 
 Any new non-catalog storage column joins that table in README §3A, or it is not added.
 
 **Display never affects storage.** Field visibility and ordering are admin presentation configuration. Hiding a field never drops a column; reordering never reorders the CSV. Export always emits its path's full canonical sequence (Land 278; Improved 279), whatever the arrangement says.
 
-**Required drift guard.** A test must assert that README Appendices A/B and their header constants agree byte-for-byte, and the live `land_sales` / `improved_sales` columns contain their 277 distinct fields plus `id` and `_sale_date_raw`. Physical database order is independent of CSV order; names and types must agree, and that `costar-column-types.ts` matches the live Postgres types. Without it, "single source of truth" is aspirational.
+**Required drift guard.** A test must assert that README Appendices A/B and their header constants agree byte-for-byte, and the live `land_sales` / `improved_sales` columns contain their 277 distinct fields plus system carve-outs (`id`, `_sale_date_raw`, `_record_image_path`, `_record_image_caption`). Physical database order is independent of CSV order; names and types must agree, and that `costar-column-types.ts` matches the live Postgres types. Without it, "single source of truth" is aspirational.
 
 ### 3.2 Validation
 
@@ -178,9 +180,9 @@ README §6.7 is the rule; these are its mechanics.
 
 **Field tags are derived, never listed.** `mergeTagName` in `lib/land-sales/merge-tags.ts` lowercases a catalog header and collapses non-alphanumeric runs to underscores — `Buyer (True) Company` → `{{ buyer_true_company }}`. The catalog's 277 distinct headers produce 277 distinct field tags, asserted by a test. This is §3.1's "never hand-maintain a second list of field names" applied to templates: do not add a curated field-tag list, an alias, or a per-field formatting exception keyed by header name.
 
-**`{{ comp_number }}` is the sole merge-only tag.** It is an explicit descriptor outside the field catalog and resolves to each record's 1-based position in the selected merge order. It resets for every generated document and must never enter storage, database queries, import/export, field configuration, or `COSTAR_HEADER_ROW`. Any additional computed tag is a README §5 scope decision, not an invitation to generalize a second field model.
+**Approved merge-only tags:** `{{ comp_number }}` (1-based position in the merge order; never stored) and `{{ record_image }}` (embeds `_record_image_path` into the DOCX via OPC media parts). Neither enters CSV, field configuration, or `COSTAR_HEADER_ROW`. Any additional computed tag is a README §5 scope decision, not an invitation to generalize a second field model. Image embed logic lives in `lib/land-sales/docx-image.ts`.
 
-**Output Flows are the user-facing merge choice.** `docx_output_flows` stores the name and required default template; ordered rows in `docx_output_flow_rules` store exact catalog field names, `contains` / `equals` / `does_not_equal`, test text, and a routed template. Conditions are case-insensitive text comparisons, evaluated in position order with first match winning. The default handles every non-match. Flow evaluation belongs in pure `lib/land-sales/output-flows.ts`, never as conditionals in the route or component. Both tables are global Admin configuration: active users read them, active Admins mutate them, and every template reference uses `on delete restrict`.
+**Output Flows are Admin configuration for Print — exactly one per results table.** `docx_output_flows` stores the name and required default template (scoped by `database_key`); ordered rows in `docx_output_flow_rules` store exact catalog field names, `contains` / `equals` / `does_not_equal`, test text, and a routed template. Conditions are case-insensitive text comparisons, evaluated in position order with first match winning. The default handles every non-match. Print resolves the table's sole flow via `tableOutputFlow` — it does not accept a client-chosen flow id. Flow evaluation belongs in pure `lib/land-sales/output-flows.ts`, never as conditionals in the route or component. Active users read flows; active Admins mutate them; creating a second flow for a `database_key` is refused; every template reference uses `on delete restrict`.
 
 **Merged values come from `formatCatalogValue`** — the same function the results table renders cells with, so a document reads as the screen it was selected from. The single deliberate divergence is the blank: a cell shows `—`, a merged tag shows nothing. Changing how a column formats is a `format.ts` change affecting both surfaces, never a merge-side special case.
 
@@ -261,10 +263,11 @@ The interface is built against the **Industry** design system, which lives entir
 - **Tonal ramps**: every role carries `100`–`900` steps on one shared perceptual lightness scale. Use `100`–`300` for tinted fills, hovers and subtle borders, `500` as the role's base, and `700`–`900` for text on tinted fills and pressed states. Prefer a ramp step for tinted colors. When alpha is needed, use `rgba(var(--color-*-rgb), alpha)` from the canonical RGB channel tokens; `color-mix()` serializes as `color(srgb ...)`, which the feedback screenshot renderer cannot parse. Elevation comes from `--shadow-sm/md/lg`, never a hand-rolled `box-shadow`. Danger and warning use `--color-danger-*` and `--color-warning-*`; input fills and paper surfaces use `--color-paper`.
 - **Contrast caveat**: the accent-to-ground pair is tuned to ~3:1 — enough for icons, large text and chrome, *not* for body copy. For paragraph-size text in the accent use a deep step (`--color-accent-700`).
 - The palette is mono: `--color-accent-2-*` is a machine-derived stand-in that resolves to the same role as the accent. Treat them as one; do not build a two-accent design on it.
-- Hover, pressed, `:focus-visible`, and disabled states are built into the system. Do not restyle them per screen.
+- Hover, pressed, `:focus-visible`, and disabled states are built into the system. Do not restyle them per screen. Disabled controls stay fully opaque and use muted ramp steps (never `opacity`) so content behind a filled button cannot show through.
 - **Don't**: round cards, figures, or buttons; give cards or figures a surface fill (they are line drawings — the solid accent primary button is the one deliberate exception); drop the registration marks from a framed element; or add decorative color beyond the steel accent.
 - **Inline `style={{}}` objects referencing `var(--token)` are the established pattern.** It is fine. Do not introduce Tailwind, CSS-in-JS, or a component library — that would be a stack change, not a refactor.
-- Deferred features render **visible, disabled, and titled `"Coming in a later phase"`** (README §5). Do not hide them and do not enable them.
+- Deferred features render **visible, disabled, and titled `"Coming in a later phase"`** (README §5). Do not hide them and do not enable them. The chat composer and Admin **AI Chat** settings follow that rule; the floating chat badge itself stays interactive and only opens the placeholder panel.
+- **Chat widget** lives in `components/chat/chat-widget.tsx`, mounted from the authenticated app layout. It is in-repo design-system UI (unlike the third-party feedback widget). It shares `--app-fab-inset` and `--app-fab-size` with `.results-fab-dock` so the chat badge stays inline with the results controls.
 
 ---
 

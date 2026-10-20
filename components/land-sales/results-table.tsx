@@ -248,8 +248,7 @@ export function ResultsToolbar({
         <ResultsExportMenu
           disabled={selectedCount < 1 || exporting}
           onExportCsv={() => { void exportCsv(); }}
-          onMergeDocx={() => setMergeOpen(true)}
-          hasOutputFlows={outputFlows.length > 0}
+          onPrint={() => setMergeOpen(true)}
         />
       </div>
 
@@ -422,7 +421,7 @@ function ResultsBody({
     <div className="results-shell" style={{ flex: 1, display: 'flex', gap: 'var(--space-6)', boxSizing: 'border-box', background: 'var(--color-accent-2-200)' }}>
       <main style={{ flex: 1, minWidth: 0, paddingTop: 0, boxSizing: 'border-box' }}>
         <div style={{ width: '100%' }}>
-          <Blueprint elevation="sm" style={{ position: 'relative', boxSizing: 'border-box', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 250px)', background: 'var(--color-accent-2-100)' }}>
+          <Blueprint elevation="sm" className="results-table-scroll" style={{ position: 'relative', boxSizing: 'border-box', background: 'var(--color-accent-2-100)' }}>
             <table ref={tableRef} className="table results-table" style={{ width: tableWidth, tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: ROW_NUMBER_WIDTH_PX }} />

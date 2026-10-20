@@ -39,16 +39,16 @@ describe('mergeTagCatalog', () => {
     assert.equal(fieldTags.every(tag => headers.has(tag.header)), true);
   });
 
-  it('advertises comp_number as the sole merge-only tag', () => {
+  it('advertises the approved merge-only tags', () => {
     const mergeOnly = mergeTagCatalog().filter(tag => tag.source === 'merge');
-    assert.deepEqual(mergeOnly, [COMP_NUMBER_MERGE_TAG]);
+    assert.deepEqual(mergeOnly.map(tag => tag.name), ['comp_number', 'record_image']);
     assert.equal(costarColumnNames().includes(COMP_NUMBER_MERGE_TAG.header), false);
   });
 
   it('gives every field and merge-only value a distinct tag', () => {
     const names = mergeTagCatalog().map(tag => tag.name);
     assert.equal(new Set(names).size, names.length);
-    assert.equal(names.length, costarColumnNames().length + 1);
+    assert.equal(names.length, costarColumnNames().length + 2);
   });
 
   it('carries each column type from costarColumnType', () => {
@@ -65,7 +65,7 @@ describe('mergeValue', () => {
     assert.equal(mergeValue('Sale Price', 1250000), '$1,250,000');
     assert.equal(mergeValue('Land Area SF', 12500), '12,500');
     assert.equal(mergeValue('Assessed Value', 2350950), '$2,350,950');
-    assert.equal(mergeValue('Price Per SF Land', '10.2500'), '$10.2500');
+    assert.equal(mergeValue('Price Per SF Land', '10.2500'), '$10.25');
     assert.equal(mergeValue('PropertyID', 9866427), '9866427');
     assert.equal(mergeValue('Buyer (True) Phone', '9195762500'), '(919) 576-2500');
     assert.equal(mergeValue('Sale Date', '2025-08-14T00:00:00'), '08/14/2025');

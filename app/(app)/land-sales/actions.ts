@@ -19,6 +19,14 @@ import { chunkIds } from '@/lib/land-sales/export-ids';
 import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
 import { mergeVisibleUpdate, sanitizeVisibleCreate } from '@/lib/land-sales/visible-record-input';
 import { salesPathFromId, type SalesPath, type SalesPathId } from '@/lib/land-sales/sales-path';
+import {
+  RECORD_IMAGE_BUCKET,
+  RECORD_IMAGE_COLUMN,
+  recordImageFileErrorMessage,
+  recordImageObjectPath,
+  recordImageObjectsToRemove,
+  validateRecordImageFile,
+} from '@/lib/land-sales/record-image';
 
 export async function signOutAction() {
   const supabase = await createClient();
@@ -142,6 +150,113 @@ export async function updateLandSale(
 }
 
 export type DeleteFormState = { error?: string } | null;
+export type RecordImageActionState = { error?: string; path?: string | null; signedUrl?: string | null } | null;
+
+export async function updateRecordImageAction(
+  pathId: SalesPathId,
+  recordId: string,
+  formData: FormData,
+): Promise<RecordImageActionState> {
+  const path = requireSalesPath(pathId);
+  if (!path) return { error: UNKNOWN_PATH };
+  if (!recordId) return { error: 'Save the record before uploading an image.' };
+
+  const file = formData.get('image');
+  if (!(file instanceof Blob) || file.size === 0) {
+    return { error: 'Choose an image to upload.' };
+  }
+
+  const invalid = validateRecordImageFile(file);
+  if (invalid) return { error: recordImageFileErrorMessage(invalid) };
+
+  const supabase = await createClient();
+  const denied = await landSaleWriteDeniedMessage(supabase);
+  if (denied) return { error: denied };
+
+  const { data: existing, error: loadError } = await supabase
+    .from(path.table)
+    .select(`"${RECORD_IMAGE_COLUMN}"`)
+    .eq('id', recordId)
+    .maybeSingle();
+  // A missing carve-out column also yields null data — surface that error
+  // instead of claiming the row is gone.
+  if (loadError) return { error: loadError.message };
+  if (!existing) return { error: 'That record no longer exists.' };
+
+  const previousPath = typeof existing[RECORD_IMAGE_COLUMN] === 'string'
+    ? existing[RECORD_IMAGE_COLUMN]
+    : null;
+  const objectPath = recordImageObjectPath(path.table, recordId, file.type, crypto.randomUUID());
+  const { error: uploadError } = await supabase.storage.from(RECORD_IMAGE_BUCKET).upload(objectPath, file, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (uploadError) return { error: uploadError.message };
+
+  const { error } = await supabase
+    .from(path.table)
+    .update({ [RECORD_IMAGE_COLUMN]: objectPath })
+    .eq('id', recordId);
+
+  const stale = recordImageObjectsToRemove({
+    previousPath,
+    table: path.table,
+    recordId,
+    newPath: objectPath,
+    rowUpdated: !error,
+  });
+  if (stale.length > 0) {
+    await supabase.storage.from(RECORD_IMAGE_BUCKET).remove(stale);
+  }
+  if (error) return { error: error.message };
+
+  const { data: signed } = await supabase.storage
+    .from(RECORD_IMAGE_BUCKET)
+    .createSignedUrl(objectPath, 60 * 60);
+
+  await logAudit(supabase, 'Updated Record Image', `${path.label}: ${recordId}`);
+  revalidatePath(`${path.basePath}/${recordId}`);
+  return { path: objectPath, signedUrl: signed?.signedUrl ?? null };
+}
+
+export async function removeRecordImageAction(
+  pathId: SalesPathId,
+  recordId: string,
+): Promise<RecordImageActionState> {
+  const path = requireSalesPath(pathId);
+  if (!path) return { error: UNKNOWN_PATH };
+  if (!recordId) return { error: 'Save the record before removing an image.' };
+
+  const supabase = await createClient();
+  const denied = await landSaleWriteDeniedMessage(supabase);
+  if (denied) return { error: denied };
+
+  const { data: existing, error: loadError } = await supabase
+    .from(path.table)
+    .select(`"${RECORD_IMAGE_COLUMN}"`)
+    .eq('id', recordId)
+    .maybeSingle();
+  if (loadError) return { error: loadError.message };
+  if (!existing) return { error: 'That record no longer exists.' };
+
+  const previousPath = typeof existing[RECORD_IMAGE_COLUMN] === 'string'
+    ? existing[RECORD_IMAGE_COLUMN]
+    : null;
+
+  const { error } = await supabase
+    .from(path.table)
+    .update({ [RECORD_IMAGE_COLUMN]: null })
+    .eq('id', recordId);
+  if (error) return { error: error.message };
+
+  if (previousPath) {
+    await supabase.storage.from(RECORD_IMAGE_BUCKET).remove([previousPath]);
+  }
+
+  await logAudit(supabase, 'Removed Record Image', `${path.label}: ${recordId}`);
+  revalidatePath(`${path.basePath}/${recordId}`);
+  return { path: null, signedUrl: null };
+}
 
 export async function deleteLandSale(pathId: SalesPathId, id: string): Promise<DeleteFormState> {
   const path = requireSalesPath(pathId);
@@ -153,12 +268,19 @@ export async function deleteLandSale(pathId: SalesPathId, id: string): Promise<D
 
   const { data: existing } = await supabase
     .from(path.table)
-    .select('"Property Address","Parcel Number 1 (Min)"')
+    .select(`"Property Address","Parcel Number 1 (Min)","${RECORD_IMAGE_COLUMN}"`)
     .eq('id', id)
     .maybeSingle();
 
   const { error } = await supabase.from(path.table).delete().eq('id', id);
   if (error) return { error: error.message };
+
+  const imagePath = existing && typeof existing[RECORD_IMAGE_COLUMN] === 'string'
+    ? existing[RECORD_IMAGE_COLUMN]
+    : null;
+  if (imagePath) {
+    await supabase.storage.from(RECORD_IMAGE_BUCKET).remove([imagePath]);
+  }
 
   await logAudit(supabase, 'Deleted Record', `${existing ? recordLabel(existing as Record<string, unknown>, id) : id} deleted`);
   revalidateSalesPath(path);
@@ -176,11 +298,27 @@ export async function deleteLandSales(pathId: SalesPathId, ids: string[]): Promi
   const unique = [...new Set(ids.filter(Boolean))];
   if (!unique.length) return { error: 'No records selected.' };
 
+  const imagePaths: string[] = [];
+  for (const chunk of chunkIds(unique)) {
+    const { data } = await supabase
+      .from(path.table)
+      .select(`"${RECORD_IMAGE_COLUMN}"`)
+      .in('id', chunk);
+    for (const row of data ?? []) {
+      const imagePath = row[RECORD_IMAGE_COLUMN];
+      if (typeof imagePath === 'string' && imagePath) imagePaths.push(imagePath);
+    }
+  }
+
   // Same chunking as the export read path: a selection spanning several pages
   // of uuids overflows PostgREST's URL limit when sent as one `in` filter.
   for (const chunk of chunkIds(unique)) {
     const { error } = await supabase.from(path.table).delete().in('id', chunk);
     if (error) return { error: error.message };
+  }
+
+  if (imagePaths.length > 0) {
+    await supabase.storage.from(RECORD_IMAGE_BUCKET).remove(imagePaths);
   }
 
   await logAudit(

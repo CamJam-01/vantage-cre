@@ -1,13 +1,21 @@
-import { costarColumnNames, SALE_DATE_RAW_COLUMN } from './costar-fields';
+import {
+  costarColumnNames,
+  RECORD_IMAGE_CAPTION_COLUMN,
+  RECORD_IMAGE_COLUMN,
+  SALE_DATE_RAW_COLUMN,
+} from './costar-fields';
 import { costarColumnType, type CostarColumnType } from './costar-column-types';
 import { parseFlexibleDate } from './dates';
+import { normalizeRecordImageCaption } from './record-image';
 
 /** A land-sale record is a header-keyed map of catalog columns, plus the uuid
- * identity carve-out and the optional raw-date system store. A field *is* a
- * header string — there is no second name. */
+ * identity carve-out and optional system stores. A catalog field *is* a header
+ * string — there is no second name. */
 export type LandSaleInput = {
   columns: Record<string, unknown>;
   saleDateRaw?: string;
+  recordImagePath?: string;
+  recordImageCaption?: string;
 };
 
 export type LandSale = LandSaleInput & {
@@ -15,7 +23,13 @@ export type LandSale = LandSaleInput & {
 };
 
 export function emptyLandSale(): LandSale {
-  return { id: '', columns: {}, saleDateRaw: undefined };
+  return {
+    id: '',
+    columns: {},
+    saleDateRaw: undefined,
+    recordImagePath: undefined,
+    recordImageCaption: undefined,
+  };
 }
 
 function asIsoDate(value: unknown): string | null {
@@ -103,7 +117,10 @@ export function columnsFromFormData(formData: FormData, hidden: ReadonlySet<stri
   for (const header of hidden) {
     delete input.columns[header];
   }
-  return input;
+  return {
+    ...input,
+    recordImageCaption: normalizeRecordImageCaption(formData.get(RECORD_IMAGE_CAPTION_COLUMN)),
+  };
 }
 
 /** The original text of a `Sale Date` that ingest could not parse, or undefined
@@ -138,5 +155,10 @@ export function fieldInputId(header: string): string {
 }
 
 export function isSystemColumn(name: string): boolean {
-  return name === 'id' || name === SALE_DATE_RAW_COLUMN;
+  return (
+    name === 'id'
+    || name === SALE_DATE_RAW_COLUMN
+    || name === RECORD_IMAGE_COLUMN
+    || name === RECORD_IMAGE_CAPTION_COLUMN
+  );
 }

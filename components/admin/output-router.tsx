@@ -326,7 +326,8 @@ export function OutputRouter({
           <Button
             type="button"
             variant="primary"
-            disabled={templates.length === 0 || Boolean(loadError)}
+            disabled={templates.length === 0 || Boolean(loadError) || flows.length >= 1}
+            title={flows.length >= 1 ? 'This table already has an Output Flow. Edit or delete it first.' : undefined}
             onClick={() => {
               setStatus(null);
               setDraft(emptyDraft(templates));
@@ -338,10 +339,11 @@ export function OutputRouter({
         )}
       </div>
       <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: '0 0 var(--space-4)' }}>
-        Give users one output choice, then route each selected record to a saved template. Conditions
-        run from top to bottom; the first match wins, and the default handles every other record.
-        Build alternate templates from the same Word base; the default supplies shared styles,
-        page setup, headers, and footers.
+        Each results table has exactly one Output Flow. Print uses it automatically; conditions
+        route each selected record to a saved template. Conditions run from top to bottom; the
+        first match wins, and the default handles every other record. Build alternate templates
+        from the same Word base; the default supplies shared styles, page setup, headers, and
+        footers.
       </p>
 
       {loadError ? (
@@ -358,10 +360,15 @@ export function OutputRouter({
         />
       ) : flows.length === 0 ? (
         <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
-          No Output Flows yet. Upload the needed templates, then create an output such as “Land Comps.”
+          No Output Flow yet. Upload the needed templates, then create one such as “Land Comps.”
         </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          {flows.length > 1 && (
+            <p className="record-error" style={{ margin: 0 }}>
+              This table has more than one Output Flow. Print requires exactly one — delete the extras.
+            </p>
+          )}
           {flows.map(flow => (
             <div key={flow.id} style={{ borderTop: '1px solid var(--color-neutral-300)', paddingTop: 'var(--space-3)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
@@ -428,7 +435,8 @@ export function OutputRouter({
         }
       >
         <p style={{ margin: 0 }}>
-          Delete “{deleting?.name}”? It will no longer appear as a DOCX output choice.
+          Delete “{deleting?.name}”? Print will be unavailable for this table until another Output
+          Flow is created.
         </p>
       </Dialog>
     </Blueprint>

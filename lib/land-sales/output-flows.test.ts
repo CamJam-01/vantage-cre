@@ -4,6 +4,8 @@ import {
   outputFlowConditionMatches,
   outputFlowDraftError,
   resolveOutputTemplateId,
+  tableOutputFlow,
+  tableOutputFlowSetupMessage,
   type DocxOutputFlow,
   type OutputFlowDraft,
 } from './output-flows.ts';
@@ -79,5 +81,19 @@ describe('outputFlowDraftError', () => {
       conditions: [{ ...draft.conditions[0], field: 'Invented Field' }],
     }, templates) ?? '', /valid database field/);
     assert.match(outputFlowDraftError({ ...draft, defaultTemplateId: 'missing' }, templates) ?? '', /default/);
+  });
+});
+
+describe('tableOutputFlow', () => {
+  it('returns the sole flow and refuses zero or many', () => {
+    assert.equal(tableOutputFlow([]), null);
+    assert.equal(tableOutputFlow([flow]), flow);
+    assert.equal(tableOutputFlow([flow, { ...flow, id: 'flow-2' }]), null);
+  });
+
+  it('explains zero and many for Print setup', () => {
+    assert.match(tableOutputFlowSetupMessage(0), /No Output Flow/);
+    assert.match(tableOutputFlowSetupMessage(2), /more than one/);
+    assert.equal(tableOutputFlowSetupMessage(1), '');
   });
 });

@@ -17,6 +17,8 @@ export function mergeVisibleUpdate(
   return {
     columns,
     saleDateRaw: hidden.has('Sale Date') ? existing.saleDateRaw : submitted.saleDateRaw,
+    // Caption rides the catalog Save (unlike the image path).
+    recordImageCaption: submitted.recordImageCaption,
   };
 }
 
@@ -32,5 +34,6 @@ export function sanitizeVisibleCreate(
   return {
     columns,
     saleDateRaw: hidden.has('Sale Date') ? undefined : submitted.saleDateRaw,
+    recordImageCaption: submitted.recordImageCaption,
   };
 }

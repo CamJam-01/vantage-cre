@@ -7,8 +7,9 @@
  *
  * The live database is checked out-of-band, since a unit test has no
  * credentials. Run this and expect the same set of 277 catalog names plus
- * the documented carve-outs (`id`, `_sale_date_raw`), and nothing else, on
- * both sales tables:
+ * the documented carve-outs (`id`, `_sale_date_raw`, `_record_image_path`,
+ * `_record_image_caption`),
+ * and nothing else, on both sales tables:
  *
  *   select json_agg(column_name order by ordinal_position)
  *   from information_schema.columns
@@ -20,7 +21,14 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { COSTAR_HEADER_ROW, COSTAR_HEADERS, SALE_DATE_RAW_COLUMN, costarColumnNames } from './costar-fields.ts';
+import {
+  COSTAR_HEADER_ROW,
+  COSTAR_HEADERS,
+  RECORD_IMAGE_CAPTION_COLUMN,
+  RECORD_IMAGE_COLUMN,
+  SALE_DATE_RAW_COLUMN,
+  costarColumnNames,
+} from './costar-fields.ts';
 import { costarColumnType, type CostarColumnType } from './costar-column-types.ts';
 
 const README = readFileSync(fileURLToPath(new URL('../../README.md', import.meta.url)), 'utf8')
@@ -179,6 +187,27 @@ describe('system-column carve-out migrations', () => {
     );
     assert.match(sql, new RegExp(`add column if not exists ${SALE_DATE_RAW_COLUMN} text`));
     assert.equal(COSTAR_HEADERS.includes(SALE_DATE_RAW_COLUMN), false);
+  });
+
+  it('adds _record_image_path as a system store, not a catalog header', () => {
+    const sql = readFileSync(
+      fileURLToPath(new URL('../../supabase/migrations/20261020180000_add_record_image.sql', import.meta.url)),
+      'utf8',
+    );
+    assert.match(sql, new RegExp(`add column if not exists ${RECORD_IMAGE_COLUMN} text`));
+    assert.match(sql, /comp-images/);
+    assert.equal(COSTAR_HEADERS.includes(RECORD_IMAGE_COLUMN), false);
+    assert.equal(costarColumnNames().includes(RECORD_IMAGE_COLUMN), false);
+  });
+
+  it('adds _record_image_caption as a system store, not a catalog header', () => {
+    const sql = readFileSync(
+      fileURLToPath(new URL('../../supabase/migrations/20261020190000_add_record_image_caption.sql', import.meta.url)),
+      'utf8',
+    );
+    assert.match(sql, new RegExp(`add column if not exists ${RECORD_IMAGE_CAPTION_COLUMN} text`));
+    assert.equal(COSTAR_HEADERS.includes(RECORD_IMAGE_CAPTION_COLUMN), false);
+    assert.equal(costarColumnNames().includes(RECORD_IMAGE_CAPTION_COLUMN), false);
   });
 });
 

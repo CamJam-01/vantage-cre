@@ -6,13 +6,11 @@ import { Download } from 'lucide-react';
 export function ResultsExportMenu({
   disabled,
   onExportCsv,
-  onMergeDocx,
-  hasOutputFlows,
+  onPrint,
 }: {
   disabled: boolean;
   onExportCsv: () => void;
-  onMergeDocx: () => void;
-  hasOutputFlows: boolean;
+  onPrint: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -51,16 +49,26 @@ export function ResultsExportMenu({
         aria-expanded={open}
         aria-controls={menuId}
         disabled={disabled}
-        title={disabled ? 'Select records to export' : 'Export'}
+        title={disabled ? 'Select records to save' : 'Save'}
         onClick={event => {
           event.stopPropagation();
           setOpen(current => !current);
         }}
       >
         <Download size={16} strokeWidth={1.5} aria-hidden />
-        Export
+        Save
       </button>
       <div id={menuId} className="results-add-dropdown" role="menu">
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            onPrint();
+            setOpen(false);
+          }}
+        >
+          Print
+        </button>
         <button
           type="button"
           role="menuitem"
@@ -69,19 +77,7 @@ export function ResultsExportMenu({
             setOpen(false);
           }}
         >
-          Export CSV
-        </button>
-        <button
-          type="button"
-          role="menuitem"
-          disabled={!hasOutputFlows}
-          title={hasOutputFlows ? undefined : 'An admin needs to create an Output Flow in Database Manager first'}
-          onClick={() => {
-            onMergeDocx();
-            setOpen(false);
-          }}
-        >
-          Merge to DOCX
+          CSV
         </button>
       </div>
     </div>

@@ -5,7 +5,11 @@ import Link from 'next/link';
 import { Dialog } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { MERGE_RECORD_LIMIT } from '@/lib/land-sales/docx-templates';
-import type { DocxOutputFlow } from '@/lib/land-sales/output-flows';
+import {
+  tableOutputFlow,
+  tableOutputFlowSetupMessage,
+  type DocxOutputFlow,
+} from '@/lib/land-sales/output-flows';
 import type { SalesPath } from '@/lib/land-sales/sales-path';
 
 /** Uses the filename the route handler chose, so the download is named after
@@ -15,11 +19,11 @@ function filenameFrom(disposition: string | null, fallback: string): string {
   return match ? match[1] : fallback;
 }
 
-function mergeFailureMessage(payload: unknown): string {
+function printFailureMessage(payload: unknown): string {
   if (payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string') {
     return payload.error;
   }
-  return 'Could not merge the selected records.';
+  return 'Could not print the selected records.';
 }
 
 export function MergeDocxDialog({
@@ -35,13 +39,11 @@ export function MergeDocxDialog({
   outputFlows: DocxOutputFlow[];
   recordIds: string[];
 }) {
-  const [chosenId, setChosenId] = useState('');
-  const [merging, setMerging] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Derived rather than synced in an effect: a flow deleted since this
-  // dialog last opened simply falls back to the first one still listed.
-  const flowId = outputFlows.some(flow => flow.id === chosenId) ? chosenId : outputFlows[0]?.id ?? '';
+  const flow = tableOutputFlow(outputFlows);
+  const setupMessage = tableOutputFlowSetupMessage(outputFlows.length);
   const overLimit = recordIds.length > MERGE_RECORD_LIMIT;
 
   function close() {
@@ -49,18 +51,18 @@ export function MergeDocxDialog({
     onClose();
   }
 
-  async function merge() {
-    setMerging(true);
+  async function print() {
+    setPrinting(true);
     setError(null);
     try {
       const response = await fetch(`${path.basePath}/merge-docx`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ flowId, ids: recordIds }),
+        body: JSON.stringify({ ids: recordIds }),
       });
       if (!response.ok) {
         const payload: unknown = await response.json().catch(() => null);
-        setError(mergeFailureMessage(payload));
+        setError(printFailureMessage(payload));
         return;
       }
 
@@ -68,69 +70,72 @@ export function MergeDocxDialog({
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = filenameFrom(response.headers.get('Content-Disposition'), 'merge.docx');
+      link.download = filenameFrom(response.headers.get('Content-Disposition'), 'print.docx');
       link.click();
       URL.revokeObjectURL(url);
       close();
     } catch {
-      setError('Could not merge the selected records.');
+      setError('Could not print the selected records.');
     } finally {
-      setMerging(false);
+      setPrinting(false);
     }
   }
 
-  const canMerge = Boolean(flowId) && recordIds.length > 0 && !overLimit && !merging;
+  const canPrint = Boolean(flow) && recordIds.length > 0 && !overLimit && !printing;
 
   return (
     <Dialog
       open={open}
-      onClose={merging ? () => {} : close}
-      title="Merge to DOCX"
+      onClose={printing ? () => {} : close}
+      title="Print"
       actions={
         <>
-          <button type="button" className="btn btn-ghost" disabled={merging} onClick={close}>
+          <button type="button" className="btn btn-ghost" disabled={printing} onClick={close}>
             Cancel
           </button>
-          <Button variant="primary" disabled={!canMerge} onClick={() => { void merge(); }}>
-            {merging ? 'Merging…' : 'Merge'}
+          <Button variant="primary" disabled={!canPrint} onClick={() => { void print(); }}>
+            {printing ? 'Printing…' : 'Print'}
           </Button>
         </>
       }
     >
       <p style={{ fontSize: 14, color: 'var(--color-text)', margin: '0 0 var(--space-4)' }}>
-        {recordIds.length} record{recordIds.length === 1 ? '' : 's'} selected. Each one fills its own
-        routed template body, all in a single document and in this selection order.
+        {recordIds.length} record{recordIds.length === 1 ? '' : 's'} selected.
       </p>
 
-      {outputFlows.length === 0 ? (
+      {!flow && (
         <p style={{ fontSize: 14, color: 'var(--color-text)', margin: 0 }}>
-          No Output Flows have been set up yet. An admin can create one under{' '}
-          <Link href="/admin/database-manager/templates?db=sales" className="btn btn-ghost" style={{ padding: 0 }}>
-            Database Manager → Set templates
-          </Link>
-          .
+          {outputFlows.length === 0 ? (
+            <>
+              No Output Flow is set up for this table yet. An admin can create one under{' '}
+              <Link
+                href={`/admin/database-manager/templates?db=${path.databaseKey}`}
+                className="btn btn-ghost"
+                style={{ padding: 0 }}
+              >
+                Database Manager → Set templates
+              </Link>
+              .
+            </>
+          ) : (
+            <>
+              {setupMessage}{' '}
+              <Link
+                href={`/admin/database-manager/templates?db=${path.databaseKey}`}
+                className="btn btn-ghost"
+                style={{ padding: 0 }}
+              >
+                Database Manager → Set templates
+              </Link>
+              .
+            </>
+          )}
         </p>
-      ) : (
-        <div className="field">
-          <label htmlFor="mergeOutputFlow">Output</label>
-          <select
-            id="mergeOutputFlow"
-            className="input"
-            value={flowId}
-            disabled={merging}
-            onChange={event => setChosenId(event.target.value)}
-            style={{ backgroundColor: 'var(--color-paper)', cursor: 'pointer' }}
-          >
-            {outputFlows.map(flow => (
-              <option key={flow.id} value={flow.id}>{flow.name}</option>
-            ))}
-          </select>
-        </div>
       )}
 
       {overLimit && (
         <p className="record-error" style={{ marginTop: 'var(--space-3)', marginBottom: 0 }}>
-          Merge up to {MERGE_RECORD_LIMIT} records at a time — {recordIds.length} are selected.
+          Print up to {MERGE_RECORD_LIMIT} records at a time — {recordIds.length} are selected.
         </p>
       )}
       {error && (

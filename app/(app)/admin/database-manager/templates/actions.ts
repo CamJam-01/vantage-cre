@@ -119,7 +119,7 @@ export async function uploadTemplateAction(
 
   await logAudit(supabase, 'Added Merge Template', `${pathLabel(databaseKey)}: ${name}`);
   refreshTemplateConsumers(databaseKey);
-  return { status: 'success', message: `“${name}” is ready to use in Merge to DOCX.` };
+  return { status: 'success', message: `“${name}” is ready to use for Print.` };
 }
 
 export async function renameTemplateAction(id: string, name: string): Promise<TemplateActionState> {
@@ -202,6 +202,23 @@ export async function saveOutputFlowAction(
   const templateIds = new Set((templates ?? []).map(template => String(template.id)));
   const validationError = outputFlowDraftError(draft, templateIds);
   if (validationError) return { status: 'error', message: validationError };
+
+  // Print uses exactly one Output Flow per table — creating a second is refused.
+  if (!draft.id) {
+    const { count, error: countError } = await supabase
+      .from('docx_output_flows')
+      .select('id', { count: 'exact', head: true })
+      .eq('database_key', databaseKey);
+    if (countError) {
+      return { status: 'error', message: `Could not check existing output flows: ${countError.message}` };
+    }
+    if ((count ?? 0) >= 1) {
+      return {
+        status: 'error',
+        message: 'This table already has an Output Flow. Edit or delete it before creating another.',
+      };
+    }
+  }
 
   const { error } = await supabase.rpc('save_docx_output_flow', {
     p_flow_id: draft.id,

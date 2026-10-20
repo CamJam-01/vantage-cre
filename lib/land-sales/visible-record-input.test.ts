@@ -4,7 +4,7 @@ import { mergeVisibleUpdate, sanitizeVisibleCreate } from './visible-record-inpu
 import type { LandSale, LandSaleInput } from './schema.ts';
 
 function sale(columns: Record<string, unknown>, extras: Partial<LandSale> = {}): LandSale {
-  return { id: '1', columns, saleDateRaw: extras.saleDateRaw };
+  return { id: '1', columns, ...extras };
 }
 
 function input(columns: Record<string, unknown>, saleDateRaw?: string): LandSaleInput {
@@ -49,6 +49,19 @@ describe('mergeVisibleUpdate', () => {
       new Set(),
     );
     assert.equal(merged.columns.Legacy, 'Keep me');
+  });
+
+  it('applies the submitted image caption on Save', () => {
+    const withCaption = sale(existing.columns, {
+      saleDateRaw: existing.saleDateRaw,
+      recordImageCaption: 'Old caption',
+    });
+    const merged = mergeVisibleUpdate(
+      withCaption,
+      { columns: { 'Property City': 'Dallas' }, recordImageCaption: 'New caption' },
+      new Set(),
+    );
+    assert.equal(merged.recordImageCaption, 'New caption');
   });
 
   it('ignores crafted values for headers that are not in the catalog', () => {

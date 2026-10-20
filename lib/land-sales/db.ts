@@ -1,4 +1,11 @@
-import { costarColumnNames, costarFields, SALE_DATE_RAW_COLUMN } from './costar-fields';
+import {
+  costarColumnNames,
+  costarFields,
+  RECORD_IMAGE_CAPTION_COLUMN,
+  RECORD_IMAGE_COLUMN,
+  SALE_DATE_RAW_COLUMN,
+} from './costar-fields';
+import { normalizeRecordImageCaption } from './record-image';
 import type { LandSale, LandSaleInput } from './schema';
 
 function asString(value: unknown): string {
@@ -17,14 +24,17 @@ export function landSaleFromRow(row: Record<string, unknown>): LandSale | null {
     columns[name] = row[name] ?? null;
   }
   const raw = row[SALE_DATE_RAW_COLUMN];
+  const imagePath = row[RECORD_IMAGE_COLUMN];
   return {
     id,
     columns,
     saleDateRaw: typeof raw === 'string' && raw.trim() ? raw.trim() : undefined,
+    recordImagePath: typeof imagePath === 'string' && imagePath.trim() ? imagePath.trim() : undefined,
+    recordImageCaption: normalizeRecordImageCaption(row[RECORD_IMAGE_CAPTION_COLUMN]),
   };
 }
 
-/** Results-table projection: keep identity and the raw-date flag, drop catalog
+/** Results-table projection: keep identity and system stores, drop catalog
  * values the Admin has hidden. Export re-fetches the full row; this must never
  * be the export path. */
 export function projectVisibleLandSale(record: LandSale, visible: ReadonlySet<string>): LandSale {
@@ -32,17 +42,25 @@ export function projectVisibleLandSale(record: LandSale, visible: ReadonlySet<st
   for (const name of visible) {
     columns[name] = record.columns[name] ?? null;
   }
-  return { id: record.id, columns, saleDateRaw: record.saleDateRaw };
+  return {
+    id: record.id,
+    columns,
+    saleDateRaw: record.saleDateRaw,
+    recordImagePath: record.recordImagePath,
+    recordImageCaption: record.recordImageCaption,
+  };
 }
 
-/** Write a record back onto land_sales columns, including the raw-date store.
- * Catalog headers only — system columns other than `_sale_date_raw` stay out. */
+/** Write a record back onto sales columns, including the raw-date store and
+ * image caption. Image *path* is updated by its own Server Action so a catalog
+ * Save cannot clear an attached photo. */
 export function landSaleToRow(input: LandSaleInput): Record<string, unknown> {
   const columns: Record<string, unknown> = {};
   for (const name of costarColumnNames()) {
     columns[name] = input.columns[name] ?? null;
   }
   columns[SALE_DATE_RAW_COLUMN] = input.saleDateRaw ?? null;
+  columns[RECORD_IMAGE_CAPTION_COLUMN] = input.recordImageCaption ?? null;
   return columns;
 }
 

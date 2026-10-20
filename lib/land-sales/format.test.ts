@@ -82,12 +82,18 @@ describe('formatCatalogValue', () => {
     assert.equal(formatDate(undefined), '—');
   });
 
-  it('preserves every stored decimal digit in per-unit price columns', () => {
+  it('rounds every Price Per SF column to two decimal places', () => {
+    assert.equal(formatCatalogValue('Price Per SF Land', 0.6), '$0.60');
     assert.equal(formatCatalogValue('Price Per SF Land', 10.25), '$10.25');
-    assert.equal(formatCatalogValue('Price Per SF Land', '10.2500'), '$10.2500');
-    assert.equal(formatCatalogValue('Price Per SF Land', '1234.56789'), '$1,234.56789');
+    assert.equal(formatCatalogValue('Price Per SF Land', '10.2500'), '$10.25');
+    assert.equal(formatCatalogValue('Price Per SF Land', '1234.56789'), '$1,234.57');
+    assert.equal(formatCatalogValue('Price Per SF Land Net', '12.5'), '$12.50');
+    assert.equal(formatCatalogValue('Price Per SF', 8.1), '$8.10');
+    assert.equal(formatCatalogValue('Price Per SF (Net)', '9.999'), '$10.00');
+  });
+
+  it('preserves every stored decimal digit in per-acre price columns', () => {
     assert.equal(formatCatalogValue('Price Per AC Land', '250000.5'), '$250,000.5');
     assert.equal(formatCatalogValue('Price Per AC Land Net', '1000.25'), '$1,000.25');
-    assert.equal(formatCatalogValue('Price Per SF Land Net', '12.5'), '$12.5');
   });
 });

@@ -1,6 +1,12 @@
 import { costarColumnType } from './costar-column-types';
 
 const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+const currencyTwoDecimals = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 const number = new Intl.NumberFormat('en-US');
 const acres = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -22,13 +28,16 @@ const WHOLE_DOLLAR_COLUMNS = new Set([
   'Asking Price',
 ]);
 
-/** Per-unit prices — keep every stored fractional digit. */
+/** Per-acre prices — keep every stored fractional digit. */
 const PRECISE_CURRENCY_COLUMNS = new Set([
   'Price Per AC Land',
-  'Price Per SF Land',
   'Price Per AC Land Net',
-  'Price Per SF Land Net',
 ]);
+
+/** Price Per SF* columns round to cents for display (form, table, and Print). */
+function isPricePerSfColumn(header: string): boolean {
+  return /Price Per SF/i.test(header);
+}
 
 /** Quantities shown with thousands separators (no forced decimals). */
 const GROUPED_NUMBER_COLUMNS = new Set([
@@ -100,6 +109,7 @@ export function formatCatalogValue(header: string, value: unknown): string {
   if (typeof value === 'number' || /^-?\d+(\.\d+)?$/.test(text)) {
     const n = typeof value === 'number' ? value : Number(text);
     if (!Number.isFinite(n)) return text;
+    if (isPricePerSfColumn(header)) return currencyTwoDecimals.format(n);
     if (header === 'Land Area AC') return acres.format(n);
     if (WHOLE_DOLLAR_COLUMNS.has(header) || isMoneyColumn(header)) return formatCurrency(n);
     if (GROUPED_NUMBER_COLUMNS.has(header)) return formatNumber(n);

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { coerceColumnValue, coerceLandSaleInput, columnsFromFormData, flaggedSaleDateRaw, isSystemColumn } from './schema.ts';
-import { SALE_DATE_RAW_COLUMN } from './costar-fields.ts';
+import { RECORD_IMAGE_CAPTION_COLUMN, RECORD_IMAGE_COLUMN, SALE_DATE_RAW_COLUMN } from './costar-fields.ts';
 
 describe('coerceColumnValue', () => {
   it('strips currency from numbers and yields null rather than an error', () => {
@@ -51,6 +51,13 @@ describe('columnsFromFormData', () => {
     assert.equal('Zoning' in input.columns, false);
     assert.equal(input.saleDateRaw, 'not-a-date');
   });
+
+  it('reads the record-image caption carve-out from the form', () => {
+    const form = new FormData();
+    form.set(RECORD_IMAGE_CAPTION_COLUMN, '  Facing north  ');
+    const input = columnsFromFormData(form, new Set());
+    assert.equal(input.recordImageCaption, 'Facing north');
+  });
 });
 
 describe('flaggedSaleDateRaw', () => {
@@ -71,6 +78,8 @@ describe('system columns', () => {
   it('recognizes only the documented carve-outs as system stores', () => {
     assert.equal(isSystemColumn('id'), true);
     assert.equal(isSystemColumn(SALE_DATE_RAW_COLUMN), true);
+    assert.equal(isSystemColumn(RECORD_IMAGE_COLUMN), true);
+    assert.equal(isSystemColumn(RECORD_IMAGE_CAPTION_COLUMN), true);
     assert.equal(isSystemColumn('Sale Date'), false);
     assert.equal(isSystemColumn('Sprinklers'), false);
   });

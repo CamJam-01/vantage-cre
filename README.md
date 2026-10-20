@@ -118,15 +118,26 @@ These terms have precise meanings here. Use them; do not invent synonyms.
   written down separately (§6.1, §6.7).
 
 **Merge sequence tag**
-: `{{ comp_number }}`, the sole merge-only tag. It resolves to the selected
-  record's 1-based position in each generated document, resets for every merge,
-  and is never stored or presented as a database field (§6.1, §6.7).
+: `{{ comp_number }}`, a merge-only tag. It resolves to the selected record's
+  1-based position in each generated document, resets for every merge, and is
+  never stored or presented as a database field (§6.1, §6.7).
+
+**Record image**
+: One optional photo per sales record, with an optional caption, stored outside
+  the CoStar catalog and CSV. Shown on the add/edit record screen; Print embeds
+  the photo when the template uses `{{ record_image }}` (§3A carve-outs, §6.7).
 
 **Output Flow**
-: A named, Admin-owned DOCX output such as **Land Comps**. It has one required
-  default template and an ordered list of field conditions that may route each
-  selected record to another saved template. Users choose the Output Flow, not
-  its implementation templates (§6.7).
+: A named, Admin-owned DOCX output such as **Land Comps**. Each results table
+  has exactly one. It has one required default template and an ordered list of
+  field conditions that may route each selected record to another saved
+  template. **Print** uses that flow automatically; appraisers never pick a
+  flow or its implementation templates (§6.7).
+
+**Print**
+: The Viewer action that turns the selected result rows into one Word `.docx`
+  via the table's Output Flow. Same permission as CSV export; a deliverable,
+  not the provider format (§4 spine step 6, §6.7).
 
 **Feedback widget**
 : The hosted, third-party panel behind the "Feedback" badge in the corner of
@@ -134,6 +145,11 @@ These terms have precise meanings here. Use them; do not invent synonyms.
   and tells it what name to start its "Name" field with. It is not part of the
   comp loop, holds no records, and is never a place to put product
   functionality (§5).
+
+**Chat widget**
+: The design-system floating badge (speech bubble) on signed-in app pages. It
+  opens a placeholder message panel. Connecting a live AI chat service, and the
+  Admin settings that will configure it, are deferred (§5).
 
 **The provider format**
 : The CoStar CSV export — a fixed, ordered header row. It is simultaneously the
@@ -172,23 +188,27 @@ regardless of what any user can see.
 
 ### The carve-outs
 
-Exactly three things in the physical table are not catalog fields. All are
-required, all are documented here, and **none may ever appear in the
-catalog, the import template, the export file, or the UI as a field**:
+These things in the physical table are not catalog fields. All are documented
+here. **None may ever appear in the catalog, the import template, or the export
+file.** Only `_record_image_path` and `_record_image_caption` are shown in the
+record UI (upload control + caption, not as CoStar fields):
 
 | | What | Why |
 | --- | --- | --- |
 | `id` | `uuid`, primary key | Row identity. CoStar's `Comp ID` is not unique — many rows share `0` or null — so it cannot serve as a key. |
 | Duplicate headers | one stored column per distinct name | Both paths repeat `Sprinklers`; Improved also repeats `Average Rental Rate Per kW`. Import keeps the last value and warns if repeated values differ. Export fills every matching position. **Accepted known lossiness** — do not add storage without a §5 decision. |
 | `_sale_date_raw` | `text`, system store | Holds the original text of an unrecognized `Sale Date` so ingest can flag the row for review and export can re-emit it. Named to be self-evidently outside the catalog. |
+| `_record_image_path` | `text`, storage path | One photo per record in the private `comp-images` bucket. Record UI only; Print embeds it via `{{ record_image }}`. Never CSV. |
+| `_record_image_caption` | `text`, caption | Optional caption for the record photo, edited on create/edit and saved with the record form. Never CSV. |
 
 Any future non-catalog storage column joins this table or it does not exist.
 
 ### Verified state
 
 The distinct field names and types in Appendices A/B, the code catalog, and the
-live `land_sales` / `improved_sales` tables agree: 277 catalog columns plus `id`
-and `_sale_date_raw`. The physical database order remains unchanged. **Each
+live `land_sales` / `improved_sales` tables agree: 277 catalog columns plus
+system carve-outs (`id`, `_sale_date_raw`, `_record_image_path`,
+`_record_image_caption`). The physical database order remains unchanged. **Each
 appendix is the CSV contract; its code constant is the executable copy.** Tests
 must assert byte-identical header sequences and the shared field/type contract.
 
@@ -257,14 +277,13 @@ Seven capabilities. A change either extends one of these or is out of scope.
    only. Export is a Viewer-level capability: reading and taking away what you
    read are the same permission.
 
-   The same selection can instead be **merged into a Word document**. The user
-   chooses one Admin-defined Output Flow; its ordered conditions route each
-   full record to a saved template, then the records return as one `.docx` in
-   selected order. Merge is the same Viewer-level permission as CSV export and
-   reads the full record, not just visible fields — but it is a *deliverable*,
-   not the provider format, and does not round-trip (§6.7). A template may use
-   `{{ comp_number }}` to number the records continuously across template
-   changes.
+   The same selection can instead be **printed to a Word document**. The table's
+   single Admin-defined Output Flow routes each full record to a saved template,
+   then the records return as one `.docx` in selected order. Print is the same
+   Viewer-level permission as CSV export and reads the full record, not just
+   visible fields — but it is a *deliverable*, not the provider format, and does
+   not round-trip (§6.7). A template may use `{{ comp_number }}` to number the
+   records continuously across template changes.
 
 7. **Get records in.** Two paths, both Editor-level:
    - **Bulk import** of a provider-format CSV, whose header row must match the
@@ -288,11 +307,13 @@ Authentication and roles · `Sales → Land` and `Sales → Improved` end to end
 search as arrangement-driven record-style sheets with typed field filters and dependent suggestion
 comboboxes · per-field filtering on results · results table with sort, selection, temporary column
 resizing, and CSV export · record detail with in-place editing · CSV import with per-row validation ·
-manual record entry · global field visibility, ordering, and dividers · **document (DOCX)
-merge through admin-managed Output Flows, conditional template routing, and
-sequential comp numbering** · user administration · audit log · user profiles
-with avatars · an embedded third-party feedback widget · path-specific CoStar CSV sequences
-(278 positions for Land, 279 for Improved).
+manual record entry · global field visibility, ordering, and dividers · **Print to
+DOCX through one admin-managed Output Flow per results table, conditional
+template routing, and sequential comp numbering** · user administration · audit
+log · user profiles with avatars · an embedded third-party feedback widget ·
+a floating **chat widget** placeholder (badge + panel; no live AI yet) ·
+**one record image per comp** (UI + Print embed; excluded from CSV) ·
+path-specific CoStar CSV sequences (278 positions for Land, 279 for Improved).
 
 **The feedback widget** loads on every page, signed in or not, and opens a
 panel for sending a comment to the people who maintain this tool. Its "Name"
@@ -304,11 +325,18 @@ leave with a bug report; that is the user's action, not a transfer this system
 performs. The widget is a reporting channel, not a step in the spine (§4), and
 it is the one surface outside the design system (§6.5).
 
+**The chat widget** loads on signed-in app pages as a design-system badge in
+the bottom-right area. Clicking it shows or hides a placeholder panel; message
+send stays disabled until an AI service is connected. It is not a step in the
+spine (§4).
+
 ### Deliberately deferred
 
 Rentals, Expenses, and Costs databases · Ground Lease path ·
 live schema editing (adding, retyping, or removing fields from the database
-itself, as opposed to configuring their display).
+itself, as opposed to configuring their display) · **live AI chat service and
+Admin AI Chat configuration** (provider, endpoint, credentials) — the floating
+badge and panel are built; the connection is not.
 
 **Deferred features are shown, disabled, and labeled "Coming in a later
 phase" — not hidden.** This is intentional and is a product decision, not an
@@ -391,10 +419,12 @@ answer. Earlier versions of this project carried a hand-picked "core field"
 layer of renamed headers — it is a deprecated prototype relic, not a design, and
 any surviving trace of it is a defect to remove rather than a pattern to follow.
 
-The sole narrow exception is the merge-only `{{ comp_number }}` placeholder.
-It is output structure, not record data: the merge computes it from each
-selected record's 1-based position, resets it for every generated document, and
-never stores, imports, exports, filters, arranges, or presents it as a field.
+Two deliberate exceptions sit outside catalog-derived names. `{{ comp_number }}`
+is output structure: the merge computes it from each selected record's 1-based
+position, resets it for every generated document, and never stores, imports,
+exports, filters, arranges, or presents it as a field. `{{ record_image }}`
+embeds the non-catalog record photo into the Word package; the path lives in
+`_record_image_path` and must never enter CSV (§3A).
 
 Changing the catalog is therefore not ordinary work: it changes the product's
 contract with CoStar and with every previously exported file. It requires an
@@ -490,21 +520,21 @@ fidelity lives, and it is untouched by any of this.
 
 Two rules do carry over from §6.1. Every **field tag** is derived from
 `COSTAR_HEADER_ROW`, so a header added to the catalog gets a merge tag with no
-further work and no second field list to update. The one non-field tag is
-`{{ comp_number }}`: it is generated in memory as 1, 2, 3… in selected merge
-order and resets with each document; it never touches storage or the provider
-format. And a template is **user content, not code** — an unrecognized tag is
-left visibly in place rather than silently blanked, so the author can see their
-own typo.
+further work and no second field list to update. The approved non-field tags are
+`{{ comp_number }}` (sequence) and `{{ record_image }}` (embedded photo from
+`_record_image_path`). Neither enters CSV. And a template is **user content,
+not code** — an unrecognized tag is left visibly in place rather than silently
+blanked, so the author can see their own typo.
 
-An Output Flow makes the user-facing output stable while templates vary. Every
-flow has a required default template, then zero or more conditions evaluated
-top-to-bottom against each record's stored catalog values. Comparisons are
-case-insensitive text comparisons; the first match wins and the default makes
-routing total. Routing always preserves the selected-record order, and
-`{{ comp_number }}` increments across the whole output rather than restarting
+An Output Flow makes Print stable while templates vary. Each results table has
+exactly one flow. That flow has a required default template, then zero or more
+conditions evaluated top-to-bottom against each record's stored catalog values.
+Comparisons are case-insensitive text comparisons; the first match wins and the
+default makes routing total. Routing always preserves the selected-record order,
+and `{{ comp_number }}` increments across the whole output rather than restarting
 when the template changes. Hidden fields remain eligible because routing reads
-the full record.
+the full record. Zero or more than one flow for a table is a configuration error
+— Print refuses until Admin keeps exactly one.
 
 One DOCX package can only have one coherent set of package-wide resources. The
 flow's default template therefore owns page setup, headers, footers, styles,
@@ -529,12 +559,13 @@ Enough to orient; the details belong in `AGENTS.md`.
 | Filter encoding/decoding and query construction | `lib/land-sales/` (search-params, query, field-filters, search-sheet) |
 | The arrangement: visibility, ordering, dividers, page layout | `lib/land-sales/` (field-visibility, display-settings) |
 | Import/export, validation, duplicate detection | `lib/land-sales/` (csv, schema, dates) |
-| DOCX merge: tags, Output Flow routing, WordprocessingML surgery, template metadata | `lib/land-sales/` (merge-tags, output-flows, docx-xml, docx-merge, docx-templates) |
+| Print / DOCX merge: tags, Output Flow routing, WordprocessingML surgery, template metadata | `lib/land-sales/` (merge-tags, output-flows, docx-xml, docx-merge, docx-templates) |
 | Roles, permissions, user profiles | `lib/users/` |
 | Admin descriptors and configuration handling | `lib/admin/` |
 | Audit logging | `lib/audit/` |
 | Feature components, grouped by area | `components/` |
 | The feedback widget loader and its name prefill | `components/feedback/` |
+| Chat widget placeholder (badge + panel) | `components/chat/` |
 | Shared primitives built on the design system | `components/ui/` |
 | Database schema history | `supabase/migrations/` |
 | The design system — tokens and component classes, the only stylesheet | `styles/main.css` |
@@ -569,14 +600,16 @@ Match the request to its shape before writing anything.
 | "Make field X filterable" | Confirm the column's Postgres type is classified correctly; the filter tier follows from that type. Nothing else is required — every catalog field is equally a field. |
 | "Only export the columns we're actually using" | **No.** Export is always the selected path's full canonical sequence (§4.6, §3A). |
 | "Add a merge tag for field X" | **Nothing to do.** Every catalog field already has one, derived from its header (§3 *Merge tag*). If a tag seems missing, the header is not what you think it is. |
-| "Add a computed/non-field merge tag" | **A scope decision.** `{{ comp_number }}` is the sole approved merge-only tag and must stay output-only; another requires the §5 process and must not silently create a second field model. |
-| "Route different records to different DOCX templates" | **Output Flow configuration.** Define a default and ordered conditions in the Admin Output Router; do not hard-code a field or template choice in the merge route (§6.7). |
+| "Add a computed/non-field merge tag" | **A scope decision.** Only `{{ comp_number }}` and `{{ record_image }}` are approved merge-only tags; another requires the §5 process and must not silently create a second field model. |
+| "Route different records to different DOCX templates" | **Output Flow configuration.** Define the table's one flow — default plus ordered conditions — in the Admin Output Router; do not hard-code a field or template choice in the Print route (§6.7). |
+| "Let the user pick which Output Flow / template to print" | **No.** Each table has exactly one Output Flow; Print uses it. Multiple flows per table are a configuration error (§3 *Output Flow*, §6.7). |
 | "Make the merged document keep raw values" / "import a DOCX" | **No.** A merged document is a deliverable, not an interchange format (§6.7). Fidelity lives in the CSV export. |
 | "Add a Rentals/Ground Lease/… database" | **A new spine branch.** Substantial. Follow `Sales → Land` structurally; expect a new catalog, a new table, and a new arrangement, not a parameterized generalization of the existing one. Improved is already built: the same distinct fields as Land, with its own CSV sequence, table, and arrangement. |
 | "Change what import accepts" | Almost always wrong — re-read §6.1 and confirm the round trip survives before proceeding. |
 | "Let users customize their own view" | **Out of scope** as stated (§2, §5). Raise it rather than building it. |
 | "Change a color/spacing/border" | Through design-system tokens only (§6.5). |
 | "Change what the feedback widget asks for / looks like / does with a submission" | **Not here.** Only the loader tag and the name prefill live in this repository (`components/feedback/`); the panel's fields, categories, styling, and destination are configured in the widget vendor's dashboard. Do not rebuild any of it locally. |
+| "Connect a real AI chat backend" / "enable Admin AI Chat settings" | **Deferred (§5).** The floating badge and placeholder panel are built; wiring a service and enabling the Admin AI Chat tab requires a §5 decision to move them out of deferred. |
 | Anything not on this table and not in §5's "Built" list | **A possible scope change.** Ask before building, and if it is confirmed, amend this document as part of the work — see §5 "Changing this scope". |
 
 When a request is genuinely ambiguous, the tie-breaker is §1: which reading

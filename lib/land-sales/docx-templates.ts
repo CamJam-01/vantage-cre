@@ -1,5 +1,5 @@
 /** Shared shape and validation for the named .docx templates admins manage in
- * Database Manager and Output Flows reference during Merge to DOCX. Pure —
+ * Database Manager and Output Flows reference during Print. Pure —
  * imported by both the server actions and the client form. */
 
 export const DOCX_TEMPLATE_BUCKET = 'docx-templates';

@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { addRecordImageToDocx, replaceRecordImageTags } from './docx-image';
 import {
   combineMergedDocuments,
   combineRoutedDocuments,
@@ -43,9 +44,15 @@ type LoadedDocx = {
   documentXml: string;
 };
 
+export type RecordImageBytes = {
+  bytes: Uint8Array;
+  mimeType: string;
+};
+
 export type RoutedDocxRecord = {
   templateBytes: ArrayBuffer | Uint8Array;
   values: Readonly<Record<string, string>>;
+  image?: RecordImageBytes | null;
 };
 
 async function loadDocx(bytes: ArrayBuffer | Uint8Array): Promise<LoadedDocx> {
@@ -150,6 +157,7 @@ async function assertRoutedTemplateCompatibility(
 export async function mergeDocx(
   templateBytes: ArrayBuffer | Uint8Array,
   valuesPerRecord: ReadonlyArray<Readonly<Record<string, string>>>,
+  imagesPerRecord: ReadonlyArray<RecordImageBytes | null | undefined> = [],
 ): Promise<Uint8Array> {
   if (valuesPerRecord.length === 0) {
     throw new DocxTemplateError('Select at least one record to merge.');
@@ -167,20 +175,42 @@ export async function mergeDocx(
     throw new DocxTemplateError('This template is not a Word document (no word/document.xml).');
   }
 
+  const imageRelationshipIds: Array<string | null> = [];
+  for (let index = 0; index < valuesPerRecord.length; index += 1) {
+    const image = imagesPerRecord[index];
+    if (!image) {
+      imageRelationshipIds.push(null);
+      continue;
+    }
+    try {
+      imageRelationshipIds.push(
+        await addRecordImageToDocx(zip, image.bytes, image.mimeType, `record-image-${index + 1}`),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not embed a record image.';
+      throw new DocxTemplateError(message);
+    }
+  }
+
   const documentXml = await documentFile.async('string');
   try {
-    zip.file(DOCUMENT_PART, combineMergedDocuments(documentXml, valuesPerRecord));
+    zip.file(DOCUMENT_PART, combineMergedDocuments(documentXml, valuesPerRecord, imageRelationshipIds));
   } catch (error) {
     if (error instanceof DocxStructureError) throw new DocxTemplateError(error.message);
     throw error;
   }
 
   const firstRecord = valuesPerRecord[0];
+  const firstImageId = imageRelationshipIds[0] ?? null;
   for (const path of Object.keys(zip.files)) {
     if (!HEADER_FOOTER_PATTERN.test(path)) continue;
     const part = zip.file(path);
     if (!part) continue;
-    zip.file(path, replaceMergeTags(await part.async('string'), firstRecord));
+    const filled = replaceMergeTags(
+      replaceRecordImageTags(await part.async('string'), firstImageId, 2000),
+      firstRecord,
+    );
+    zip.file(path, filled);
   }
 
   return zip.generateAsync({
@@ -205,12 +235,30 @@ export async function mergeRoutedDocx(
   const routed = await Promise.all(records.map(record => loadDocx(record.templateBytes)));
   await Promise.all(routed.map(template => assertRoutedTemplateCompatibility(base, template)));
 
+  const imageRelationshipIds: Array<string | null> = [];
+  for (let index = 0; index < records.length; index += 1) {
+    const image = records[index].image;
+    if (!image) {
+      imageRelationshipIds.push(null);
+      continue;
+    }
+    try {
+      imageRelationshipIds.push(
+        await addRecordImageToDocx(base.zip, image.bytes, image.mimeType, `record-image-${index + 1}`),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not embed a record image.';
+      throw new DocxTemplateError(message);
+    }
+  }
+
   try {
     base.zip.file(DOCUMENT_PART, combineRoutedDocuments(
       base.documentXml,
       routed.map((template, index) => ({
         xml: template.documentXml,
         values: records[index].values,
+        imageRelationshipId: imageRelationshipIds[index],
       })),
     ));
   } catch (error) {
@@ -219,11 +267,16 @@ export async function mergeRoutedDocx(
   }
 
   const firstRecord = records[0].values;
+  const firstImageId = imageRelationshipIds[0] ?? null;
   for (const path of Object.keys(base.zip.files)) {
     if (!HEADER_FOOTER_PATTERN.test(path)) continue;
     const part = base.zip.file(path);
     if (!part) continue;
-    base.zip.file(path, replaceMergeTags(await part.async('string'), firstRecord));
+    const filled = replaceMergeTags(
+      replaceRecordImageTags(await part.async('string'), firstImageId, 2000),
+      firstRecord,
+    );
+    base.zip.file(path, filled);
   }
 
   return base.zip.generateAsync({
