@@ -7,7 +7,12 @@ import { useRouter } from 'next/navigation';
 import { TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { deleteLandSale, updateLandSale, type CreateFormState } from '@/app/(app)/land-sales/actions';
+import {
+  deleteLandSale,
+  landSaleIdAtResultPositionAction,
+  updateLandSale,
+  type CreateFormState,
+} from '@/app/(app)/land-sales/actions';
 import {
   fieldInputId,
   flaggedSaleDateRaw,
@@ -23,7 +28,7 @@ import {
 } from '@/lib/land-sales/field-visibility';
 import { costarColumnType } from '@/lib/land-sales/costar-column-types';
 import { formatCatalogValue } from '@/lib/land-sales/format';
-import type { SalesPath } from '@/lib/land-sales/sales-path';
+import type { SalesPath, SalesPathId } from '@/lib/land-sales/sales-path';
 import { RecordImageField } from '@/components/land-sales/record-image-field';
 import {
   DEFAULT_RECORD_IMAGE_PLACEMENT,
@@ -33,6 +38,75 @@ import {
 } from '@/lib/land-sales/display-settings';
 
 const initialState: CreateFormState = null;
+
+function RecordResultPositionInput({
+  pathId,
+  from,
+  position,
+  total,
+  onNavigate,
+  recordHref,
+}: {
+  pathId: SalesPathId;
+  from?: string;
+  position: number;
+  total: number;
+  onNavigate: (href: string) => void;
+  recordHref: (id: string) => string;
+}) {
+  const [draft, setDraft] = useState(String(position));
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    setDraft(String(position));
+  }, [position]);
+
+  async function goToDraft() {
+    const parsed = Number.parseInt(draft, 10);
+    if (!Number.isFinite(parsed)) {
+      setDraft(String(position));
+      return;
+    }
+    const next = Math.min(total, Math.max(1, Math.trunc(parsed)));
+    setDraft(String(next));
+    if (next === position || pending) return;
+    setPending(true);
+    try {
+      const result = await landSaleIdAtResultPositionAction(pathId, from, next);
+      if ('error' in result) {
+        setDraft(String(position));
+        return;
+      }
+      onNavigate(recordHref(result.id));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <label className="record-bar-nav-position" aria-live="polite">
+      <input
+        type="number"
+        className="input record-bar-nav-position-input"
+        inputMode="numeric"
+        min={1}
+        max={total}
+        value={draft}
+        disabled={pending}
+        aria-label={`Result position, ${position} of ${total}`}
+        onChange={event => setDraft(event.target.value)}
+        onBlur={() => setDraft(String(position))}
+        onKeyDown={event => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            void goToDraft();
+          }
+        }}
+      />
+      <span>/ {total}</span>
+    </label>
+  );
+}
 
 /** The Save controls live in the sticky action bar, outside the form, so
  * the form needs a stable id for their `form=` association. */
@@ -485,9 +559,14 @@ export function RecordDetailsForm({
                 Previous
               </button>
               {resultPosition != null && resultTotal > 0 && (
-                <span className="record-bar-nav-position" aria-live="polite">
-                  {resultPosition} / {resultTotal}
-                </span>
+                <RecordResultPositionInput
+                  pathId={path.id}
+                  from={from}
+                  position={resultPosition}
+                  total={resultTotal}
+                  onNavigate={href => attemptLeave(href)}
+                  recordHref={id => recordDetailsHref(path, id, from)}
+                />
               )}
               <button
                 type="button"

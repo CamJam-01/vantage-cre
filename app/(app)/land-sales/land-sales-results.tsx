@@ -45,19 +45,16 @@ export async function loadLandSalesPage(
   return { records, totalCount: count ?? 0 };
 }
 
-export function ResultsFallback() {
+export function ResultsFallback({ label = 'Results' }: { label?: string }) {
   return (
-    <main style={{
-      flex: 1,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 'var(--space-8) var(--space-6)',
-      boxSizing: 'border-box',
-      background: 'var(--color-accent-2-100)',
-    }}>
-      <p style={{ color: 'var(--color-neutral-600)' }}>Loading results…</p>
-    </main>
+    <div className="results-meta">
+      <div className="results-meta-top">
+        <div className="results-meta-heading">
+          <h1>{label} Results</h1>
+          <p>Loading…</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -140,7 +137,7 @@ export async function SalesResultsPage({
         sort={sort}
         outputFlows={outputFlows}
       />
-      <Suspense fallback={<ResultsFallback />}>
+      <Suspense fallback={<ResultsFallback label={path.label} />}>
         <LandSalesResults
           path={path}
           filters={filters}

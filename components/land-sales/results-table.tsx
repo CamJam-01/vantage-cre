@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronUp, ChevronsUpDown, Minus, TriangleAlert } from 'lucide-react';
@@ -210,25 +210,11 @@ export function ResultsToolbar({
     router.refresh();
   }
 
-  const selectionLabel = selectedCount === 0
-    ? 'No records selected'
-    : `${selectedCount} record${selectedCount === 1 ? '' : 's'} selected`;
-
   return (
     <>
-      <div style={{ width: '100%', boxSizing: 'border-box', padding: 'var(--space-6) var(--space-6) var(--space-4)', background: 'var(--color-accent-2-200)', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-          <h1 style={{ fontFamily: 'var(--font-heading)', fontSize: 32, fontWeight: 600, letterSpacing: '0.01em', color: 'var(--color-text)', margin: 0 }}>
-            {path.label} Results
-          </h1>
-          <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
-            {selectionLabel}
-          </p>
-          {(deleteError || exportError) && (
-            <p className="record-error" style={{ margin: 0 }}>{deleteError ?? exportError}</p>
-          )}
-        </div>
-      </div>
+      {(deleteError || exportError) && (
+        <p className="record-error results-toolbar-error">{deleteError ?? exportError}</p>
+      )}
 
       <div className="results-fab-dock">
         {canEdit && <ResultsAddMenu path={path} />}
@@ -323,6 +309,63 @@ export function ResultsTable({
   );
 }
 
+function ResultsPageInput({
+  page,
+  lastPage,
+  filters,
+  sort,
+  basePath,
+}: {
+  page: number;
+  lastPage: number;
+  filters: LandSaleFilters;
+  sort: ResultsSort;
+  basePath: string;
+}) {
+  const router = useRouter();
+  const [draft, setDraft] = useState(String(page));
+
+  useEffect(() => {
+    setDraft(String(page));
+  }, [page]);
+
+  function goToDraft() {
+    const parsed = Number.parseInt(draft, 10);
+    if (!Number.isFinite(parsed)) {
+      setDraft(String(page));
+      return;
+    }
+    const next = Math.min(lastPage, Math.max(1, Math.trunc(parsed)));
+    setDraft(String(next));
+    if (next === page) return;
+    router.push(landSalesPageHref(filters, next, sort, basePath));
+  }
+
+  return (
+    <label className="results-page-label">
+      <span>Page</span>
+      <input
+        type="number"
+        className="input results-page-input"
+        inputMode="numeric"
+        min={1}
+        max={lastPage}
+        value={draft}
+        aria-label={`Page number, ${page} of ${lastPage}`}
+        onChange={event => setDraft(event.target.value)}
+        onBlur={() => setDraft(String(page))}
+        onKeyDown={event => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            goToDraft();
+          }
+        }}
+      />
+      <span>of {lastPage}</span>
+    </label>
+  );
+}
+
 function ResultsCount({
   path,
   records,
@@ -338,25 +381,40 @@ function ResultsCount({
   filters: LandSaleFilters;
   sort: ResultsSort;
 }) {
+  const filtersKey = selectionFiltersKey(path, encodeFilters(filters).toString());
+  const { selectedCount } = useResultsSelection(filtersKey);
   const lastPage = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const prevPage = page > lastPage ? lastPage : page - 1;
   const showPager = lastPage > 1 || page > 1;
+  const selectionLabel = selectedCount === 0
+    ? 'No records selected'
+    : `${selectedCount} record${selectedCount === 1 ? '' : 's'} selected`;
 
   return (
-    <div style={{ width: '100%', boxSizing: 'border-box', padding: '0 var(--space-6) var(--space-3)', background: 'var(--color-accent-2-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-      <p style={{ fontSize: 14, color: 'var(--color-neutral-700)', margin: 0 }}>
-        {resultsRangeLabel(page, totalCount, records.length)} matching your search criteria
-      </p>
+    <div className="results-meta">
+      <div className="results-meta-top">
+        <div className="results-meta-heading">
+          <h1>{path.label} Results</h1>
+          <p>{selectionLabel}</p>
+        </div>
+        <p className="results-meta-range">
+          {resultsRangeLabel(page, totalCount, records.length)} matches
+        </p>
+      </div>
       {showPager && (
-        <nav aria-label="Results pages" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+        <nav aria-label="Results pages" className="results-pager">
           {page > 1 ? (
             <Link href={landSalesPageHref(filters, prevPage, sort, path.basePath)} className="btn btn-secondary">Previous</Link>
           ) : (
             <span className="btn btn-secondary" aria-disabled="true" style={{ pointerEvents: 'none', opacity: 0.45 }}>Previous</span>
           )}
-          <span style={{ fontSize: 14, color: 'var(--color-neutral-700)' }}>
-            Page {page} of {lastPage}
-          </span>
+          <ResultsPageInput
+            page={page}
+            lastPage={lastPage}
+            filters={filters}
+            sort={sort}
+            basePath={path.basePath}
+          />
           {page < lastPage ? (
             <Link href={landSalesPageHref(filters, page + 1, sort, path.basePath)} className="btn btn-secondary">Next</Link>
           ) : (

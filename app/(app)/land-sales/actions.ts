@@ -19,6 +19,9 @@ import { chunkIds } from '@/lib/land-sales/export-ids';
 import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
 import { mergeVisibleUpdate, sanitizeVisibleCreate } from '@/lib/land-sales/visible-record-input';
 import { salesPathFromId, type SalesPath, type SalesPathId } from '@/lib/land-sales/sales-path';
+import { decodeFilters } from '@/lib/land-sales/search-params';
+import { decodeSort } from '@/lib/land-sales/results-sort';
+import { fetchLandSaleIdAtPosition } from '@/lib/land-sales/query';
 import {
   RECORD_IMAGE_BUCKET,
   RECORD_IMAGES_COLUMN,
@@ -70,6 +73,32 @@ function revalidateSalesPath(path: SalesPath) {
   revalidatePath(path.basePath);
   revalidatePath(`${path.basePath}/new`);
   revalidatePath(`${path.basePath}/[id]`, 'page');
+}
+
+/** Jump to the Nth record in the filtered results order carried by `from`. */
+export async function landSaleIdAtResultPositionAction(
+  pathId: SalesPathId,
+  fromQuery: string | undefined,
+  position: number,
+): Promise<{ id: string } | { error: string }> {
+  const path = requireSalesPath(pathId);
+  if (!path) return { error: UNKNOWN_PATH };
+  if (!Number.isInteger(position) || position < 1) {
+    return { error: 'Enter a valid result position.' };
+  }
+
+  const params = new URLSearchParams(fromQuery ?? '');
+  const filters = decodeFilters(params);
+  const sort = decodeSort(params.get('sort'), params.get('dir'));
+  const supabase = await createClient();
+
+  try {
+    const id = await fetchLandSaleIdAtPosition(supabase, filters, sort, position, path.table);
+    if (!id) return { error: 'That result position is out of range.' };
+    return { id };
+  } catch (cause) {
+    return { error: cause instanceof Error ? cause.message : 'Could not open that result.' };
+  }
 }
 
 export async function createLandSale(

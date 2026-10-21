@@ -219,13 +219,11 @@ export function LandSalesSearchSheetClient({
           <ArrowLeft size={14} strokeWidth={1.5} />
           Back
         </Link>
-        <div />
-        <div className="record-bar-actions">
-          <button type="button" className="search-sheet-action" onClick={handleSearch}>
-            <span>SEARCH</span>
-            <Search size={16} strokeWidth={1.5} />
-          </button>
-        </div>
+        <button type="button" className="search-sheet-action" onClick={handleSearch}>
+          <span>SEARCH</span>
+          <Search size={16} strokeWidth={1.5} />
+        </button>
+        <div className="record-bar-actions" />
       </div>
 
       <main className="record-page">

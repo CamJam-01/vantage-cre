@@ -288,6 +288,31 @@ async function landSaleMatchesFilters(
   return (count ?? 0) > 0;
 }
 
+/** Resolve the record id at a 1-based index in the filtered + sorted set. */
+export async function fetchLandSaleIdAtPosition(
+  supabase: SupabaseClient,
+  filters: LandSaleFilters,
+  sort: ResultsSort,
+  position: number,
+  table: SalesTable = LAND_SALES_PATH.table,
+): Promise<string | null> {
+  if (!Number.isInteger(position) || position < 1) return null;
+  const from = position - 1;
+  const { data, error } = await applyLandSaleFilters(
+    supabase,
+    filters,
+    { from, to: from },
+    sort,
+    table,
+  );
+  if (error) {
+    if (isUnsatisfiableRangeError(error)) return null;
+    throw new Error(error.message);
+  }
+  const id = (data?.[0] as { id?: unknown } | undefined)?.id;
+  return typeof id === 'string' && id ? id : null;
+}
+
 /** Previous/next record ids and 1-based position in the filtered result set
  * the details page was opened from. Missing `from` still walks the full
  * catalog order. */

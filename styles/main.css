@@ -584,6 +584,80 @@ textarea.input { min-height: 90px; resize: vertical; }
   --app-fab-inset: var(--space-6);
   --app-fab-size: 40px;
 }
+.results-toolbar-error {
+  margin: 0;
+  padding: var(--space-3) var(--space-6) 0;
+  background: var(--color-accent-2-200);
+}
+.results-meta {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-6) var(--space-6) var(--space-3);
+  background: var(--color-accent-2-200);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.results-meta-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.results-meta-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.results-meta-heading h1 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--color-text);
+}
+.results-meta-heading p,
+.results-meta-range {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-neutral-700);
+}
+.results-meta-range {
+  margin-left: auto;
+  text-align: right;
+}
+.results-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.results-page-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-neutral-700);
+}
+.results-page-input {
+  width: 3rem;
+  min-height: 0;
+  padding: var(--space-1) var(--space-2);
+  text-align: center;
+  font-size: 14px;
+  /* Hide spinner affordances so the field reads as a page number. */
+  -moz-appearance: textfield;
+}
+.results-page-input::-webkit-outer-spin-button,
+.results-page-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 .results-shell {
   --results-fab-height: var(--app-fab-size);
   /* Dock height + its bottom inset + a gap, so the table scrollport
@@ -858,11 +932,30 @@ textarea.input { min-height: 90px; resize: vertical; }
   gap: var(--space-4);
 }
 .record-bar-nav-position {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
   font-size: 13px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--color-neutral-700);
   white-space: nowrap;
+}
+.record-bar-nav-position-input {
+  width: 3rem;
+  min-height: 0;
+  padding: 2px var(--space-1);
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+.record-bar-nav-position-input::-webkit-outer-spin-button,
+.record-bar-nav-position-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 .record-bar-nav-btn {
   display: inline-flex;
