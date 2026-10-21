@@ -28,6 +28,7 @@ import {
   recordImageObjectPath,
   recordImageStoragePaths,
   removeRecordImageAtPath,
+  resolveRecordImageMimeType,
   validateRecordImageFile,
 } from '@/lib/land-sales/record-image';
 
@@ -173,8 +174,10 @@ export async function addRecordImageAction(
     return { error: 'Choose an image to upload.' };
   }
 
-  const invalid = validateRecordImageFile(file);
-  if (invalid) return { error: recordImageFileErrorMessage(invalid) };
+  const fileName = file instanceof File ? file.name : undefined;
+  const mimeType = resolveRecordImageMimeType({ type: file.type, name: fileName });
+  const invalid = validateRecordImageFile({ type: file.type, size: file.size, name: fileName });
+  if (invalid || !mimeType) return { error: recordImageFileErrorMessage(invalid ?? 'type') };
 
   const supabase = await createClient();
   const denied = await landSaleWriteDeniedMessage(supabase);
@@ -189,12 +192,14 @@ export async function addRecordImageAction(
   if (!existing) return { error: 'That record no longer exists.' };
 
   const current = readRecordImagesFromRow(existing as Record<string, unknown>);
-  const objectPath = recordImageObjectPath(path.table, recordId, file.type, crypto.randomUUID());
+  const objectPath = recordImageObjectPath(path.table, recordId, mimeType, crypto.randomUUID());
   const appended = appendRecordImage(current, { path: objectPath, caption: '' });
   if (!appended.ok) return { error: appended.error };
 
   const { error: uploadError } = await supabase.storage.from(RECORD_IMAGE_BUCKET).upload(objectPath, file, {
-    contentType: file.type,
+    // Always pass an allow-listed type — the bucket rejects guesses like
+    // application/octet-stream even when the bytes are a valid image.
+    contentType: mimeType,
     upsert: false,
   });
   if (uploadError) {

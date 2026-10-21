@@ -13,6 +13,7 @@ import {
   recordImageObjectPath,
   recordImageObjectsToRemove,
   removeRecordImageAtPath,
+  resolveRecordImageMimeType,
   validateRecordImageFile,
 } from './record-image.ts';
 
@@ -33,6 +34,13 @@ describe('record-image', () => {
     assert.equal(validateRecordImageFile({ type: 'image/png', size: 1024 }), null);
     assert.equal(validateRecordImageFile({ type: 'application/pdf', size: 1024 }), 'type');
     assert.equal(validateRecordImageFile({ type: 'image/png', size: 6 * 1024 * 1024 }), 'size');
+  });
+
+  it('resolves MIME from the filename when the browser leaves type blank', () => {
+    assert.equal(resolveRecordImageMimeType({ type: '', name: 'site.JPG' }), 'image/jpeg');
+    assert.equal(resolveRecordImageMimeType({ type: 'application/octet-stream', name: 'a.png' }), 'image/png');
+    assert.equal(resolveRecordImageMimeType({ type: '', name: 'notes.pdf' }), null);
+    assert.equal(validateRecordImageFile({ type: '', size: 100, name: 'front.jpeg' }), null);
   });
 
   it('scopes object paths to table and record id', () => {

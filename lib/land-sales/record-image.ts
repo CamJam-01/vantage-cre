@@ -31,8 +31,40 @@ export function isRecordImageMimeType(type: string): type is RecordImageMimeType
   return (RECORD_IMAGE_MIME_TYPES as readonly string[]).includes(type);
 }
 
-export function validateRecordImageFile(file: { type: string; size: number }): RecordImageFileError | null {
-  if (!isRecordImageMimeType(file.type)) return 'type';
+/** Browsers often omit `File.type` (or send `application/octet-stream`) for
+ * otherwise valid images — fall back to the filename extension so Upload is
+ * not blocked by an empty Content-Type. */
+export function resolveRecordImageMimeType(file: {
+  type?: string;
+  name?: string;
+}): RecordImageMimeType | null {
+  const type = (file.type ?? '').trim().toLowerCase();
+  if (isRecordImageMimeType(type)) return type;
+
+  const name = (file.name ?? '').trim().toLowerCase();
+  const dot = name.lastIndexOf('.');
+  const ext = dot >= 0 ? name.slice(dot + 1) : '';
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    case 'webp':
+      return 'image/webp';
+    case 'gif':
+      return 'image/gif';
+    default:
+      return null;
+  }
+}
+
+export function validateRecordImageFile(file: {
+  type?: string;
+  size: number;
+  name?: string;
+}): RecordImageFileError | null {
+  if (!resolveRecordImageMimeType(file)) return 'type';
   if (file.size <= 0 || file.size > RECORD_IMAGE_MAX_BYTES) return 'size';
   return null;
 }

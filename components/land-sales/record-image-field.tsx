@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { ImagePlus, Trash2 } from 'lucide-react';
 import {
@@ -32,6 +32,7 @@ export function RecordImageField({
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
   const uploadLockRef = useRef(createRecordImageUploadLock());
   const [images, setImages] = useState(initialImages);
   const [signedUrls, setSignedUrls] = useState(imageSignedUrls);
@@ -39,9 +40,25 @@ export function RecordImageField({
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
 
+  // Keep local previews aligned after a Server Action `router.refresh()`.
+  // Compare by value — parents often pass a fresh `[]` / `{}` each render.
+  const imagesSignature = initialImages.map(image => `${image.path}\0${image.caption}`).join('\n');
+  const urlsSignature = Object.entries(imageSignedUrls).map(([path, url]) => `${path}\0${url}`).join('\n');
+  useEffect(() => {
+    setImages(initialImages);
+    setSignedUrls(imageSignedUrls);
+  }, [imagesSignature, urlsSignature, initialImages, imageSignedUrls]);
+
   const saved = Boolean(recordId);
   const editable = canEdit && saved;
   const atLimit = images.length >= RECORD_IMAGE_MAX_COUNT;
+
+  function showError(message: string) {
+    setError(message);
+    queueMicrotask(() => {
+      errorRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  }
 
   async function handleFiles(fileList: FileList | File[]) {
     if (!editable || !uploadLockRef.current.tryAcquire()) return;
@@ -57,12 +74,12 @@ export function RecordImageField({
     try {
       for (const file of files) {
         if (count >= RECORD_IMAGE_MAX_COUNT) {
-          setError(`At most ${RECORD_IMAGE_MAX_COUNT} photos per record.`);
+          showError(`At most ${RECORD_IMAGE_MAX_COUNT} photos per record.`);
           break;
         }
         const invalid = validateRecordImageFile(file);
         if (invalid) {
-          setError(recordImageFileErrorMessage(invalid));
+          showError(recordImageFileErrorMessage(invalid));
           continue;
         }
 
@@ -70,7 +87,7 @@ export function RecordImageField({
         formData.set('image', file);
         const result = await addRecordImageAction(pathId, recordId, formData);
         if (result?.error) {
-          setError(result.error);
+          showError(result.error);
           break;
         }
         if (result?.path) {
@@ -94,7 +111,7 @@ export function RecordImageField({
     try {
       const result = await removeRecordImageAction(pathId, recordId, path);
       if (result?.error) {
-        setError(result.error);
+        showError(result.error);
         return;
       }
       setImages(prev => prev.filter(image => image.path !== path));
@@ -276,7 +293,12 @@ export function RecordImageField({
       )}
 
       {error && (
-        <p role="status" className="record-error" style={{ margin: 'var(--space-3) 0 0' }}>
+        <p
+          ref={errorRef}
+          role="status"
+          className="record-error"
+          style={{ margin: 'var(--space-3) 0 0' }}
+        >
           {error}
         </p>
       )}
