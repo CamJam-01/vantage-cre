@@ -212,6 +212,25 @@ export function removeRecordImageAtPath(
   return images.filter(image => image.path !== path);
 }
 
+/** Swap one photo for another in place so carousel order stays stable. */
+export function replaceRecordImageAtPath(
+  images: ReadonlyArray<RecordImageEntry>,
+  previousPath: string,
+  next: RecordImageEntry,
+): { ok: true; images: RecordImageEntry[] } | { ok: false; error: string } {
+  const index = images.findIndex(image => image.path === previousPath);
+  if (index < 0) {
+    return { ok: false, error: 'That photo is not attached to this record.' };
+  }
+  if (next.path !== previousPath && images.some(image => image.path === next.path)) {
+    return { ok: false, error: 'That photo is already attached.' };
+  }
+  const replaced = images.map((image, imageIndex) => (
+    imageIndex === index ? { path: next.path, caption: next.caption } : image
+  ));
+  return { ok: true, images: replaced };
+}
+
 export function recordImageStoragePaths(images: ReadonlyArray<RecordImageEntry>): string[] {
   return images.map(image => image.path);
 }

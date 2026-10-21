@@ -23,11 +23,15 @@ import {
   RECORD_IMAGE_BUCKET,
   RECORD_IMAGES_COLUMN,
   appendRecordImage,
+  applyRecordImageCaptionUpdates,
+  normalizeRecordImageCaption,
   readRecordImagesFromRow,
   recordImageFileErrorMessage,
   recordImageObjectPath,
+  recordImageObjectsToRemove,
   recordImageStoragePaths,
   removeRecordImageAtPath,
+  replaceRecordImageAtPath,
   resolveRecordImageMimeType,
   validateRecordImageFile,
 } from '@/lib/land-sales/record-image';
@@ -271,6 +275,102 @@ export async function removeRecordImageAction(
   await logAudit(supabase, 'Removed Record Image', `${path.label}: ${recordId}`);
   revalidatePath(`${path.basePath}/${recordId}`);
   return { path: null, signedUrl: null };
+}
+
+/** Edit dialog: update caption and optionally replace the file, keeping order. */
+export async function updateRecordImageAction(
+  pathId: SalesPathId,
+  recordId: string,
+  imagePath: string,
+  formData: FormData,
+): Promise<RecordImageActionState> {
+  const path = requireSalesPath(pathId);
+  if (!path) return { error: UNKNOWN_PATH };
+  if (!recordId) return { error: 'Save the record before editing a photo.' };
+  if (!imagePath) return { error: 'Choose a photo to edit.' };
+
+  const caption = normalizeRecordImageCaption(formData.get('caption'));
+  const file = formData.get('image');
+  const replacing = file instanceof Blob && file.size > 0;
+
+  const supabase = await createClient();
+  const denied = await landSaleWriteDeniedMessage(supabase);
+  if (denied) return { error: denied };
+
+  const { data: existing, error: loadError } = await supabase
+    .from(path.table)
+    .select('*')
+    .eq('id', recordId)
+    .maybeSingle();
+  if (loadError) return { error: loadError.message };
+  if (!existing) return { error: 'That record no longer exists.' };
+
+  const current = readRecordImagesFromRow(existing as Record<string, unknown>);
+  if (!current.some(image => image.path === imagePath)) {
+    return { error: 'That photo is not attached to this record.' };
+  }
+
+  if (!replacing) {
+    const next = applyRecordImageCaptionUpdates(current, [{ path: imagePath, caption }]);
+    const { error } = await supabase
+      .from(path.table)
+      .update({ [RECORD_IMAGES_COLUMN]: next })
+      .eq('id', recordId);
+    if (error) return { error: error.message };
+
+    const { data: signed } = await supabase.storage
+      .from(RECORD_IMAGE_BUCKET)
+      .createSignedUrl(imagePath, 60 * 60);
+    await logAudit(supabase, 'Updated Record Image', `${path.label}: ${recordId}`);
+    revalidatePath(`${path.basePath}/${recordId}`);
+    return { path: imagePath, signedUrl: signed?.signedUrl ?? null };
+  }
+
+  const fileName = file instanceof File ? file.name : undefined;
+  const mimeType = resolveRecordImageMimeType({ type: file.type, name: fileName });
+  const invalid = validateRecordImageFile({ type: file.type, size: file.size, name: fileName });
+  if (invalid || !mimeType) return { error: recordImageFileErrorMessage(invalid ?? 'type') };
+
+  const objectPath = recordImageObjectPath(path.table, recordId, mimeType, crypto.randomUUID());
+  const replaced = replaceRecordImageAtPath(current, imagePath, { path: objectPath, caption });
+  if (!replaced.ok) return { error: replaced.error };
+
+  const { error: uploadError } = await supabase.storage.from(RECORD_IMAGE_BUCKET).upload(objectPath, file, {
+    contentType: mimeType,
+    upsert: false,
+  });
+  if (uploadError) {
+    if (/bucket not found|nosuchbucket/i.test(uploadError.message)) {
+      return {
+        error: 'Photo storage is not set up yet. An Admin needs to create the comp-images bucket (run the record-image storage migration).',
+      };
+    }
+    return { error: uploadError.message };
+  }
+
+  const { error } = await supabase
+    .from(path.table)
+    .update({ [RECORD_IMAGES_COLUMN]: replaced.images })
+    .eq('id', recordId);
+
+  const toRemove = recordImageObjectsToRemove({
+    previousPath: imagePath,
+    table: path.table,
+    recordId,
+    newPath: objectPath,
+    rowUpdated: !error,
+  });
+  if (toRemove.length > 0) {
+    await supabase.storage.from(RECORD_IMAGE_BUCKET).remove(toRemove);
+  }
+  if (error) return { error: error.message };
+
+  const { data: signed } = await supabase.storage
+    .from(RECORD_IMAGE_BUCKET)
+    .createSignedUrl(objectPath, 60 * 60);
+  await logAudit(supabase, 'Replaced Record Image', `${path.label}: ${recordId}`);
+  revalidatePath(`${path.basePath}/${recordId}`);
+  return { path: objectPath, signedUrl: signed?.signedUrl ?? null };
 }
 
 export async function deleteLandSale(pathId: SalesPathId, id: string): Promise<DeleteFormState> {

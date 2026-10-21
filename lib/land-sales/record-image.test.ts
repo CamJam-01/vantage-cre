@@ -13,6 +13,7 @@ import {
   recordImageObjectPath,
   recordImageObjectsToRemove,
   removeRecordImageAtPath,
+  replaceRecordImageAtPath,
   resolveRecordImageMimeType,
   validateRecordImageFile,
 } from './record-image.ts';
@@ -93,6 +94,25 @@ describe('record-image', () => {
     assert.equal(first.ok, true);
     if (!first.ok) return;
     assert.deepEqual(removeRecordImageAtPath(first.images, 'a.jpg'), []);
+  });
+
+  it('replaces a photo in place without reordering neighbors', () => {
+    const replaced = replaceRecordImageAtPath(
+      [
+        { path: 'a.jpg', caption: 'A' },
+        { path: 'b.jpg', caption: 'B' },
+        { path: 'c.jpg', caption: 'C' },
+      ],
+      'b.jpg',
+      { path: 'b2.jpg', caption: 'B2' },
+    );
+    assert.equal(replaced.ok, true);
+    if (!replaced.ok) return;
+    assert.deepEqual(replaced.images, [
+      { path: 'a.jpg', caption: 'A' },
+      { path: 'b2.jpg', caption: 'B2' },
+      { path: 'c.jpg', caption: 'C' },
+    ]);
   });
 
   it('removes the previous object after a successful replace', () => {

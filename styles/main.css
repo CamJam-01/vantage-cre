@@ -907,12 +907,298 @@ textarea.input { min-height: 90px; resize: vertical; }
 .record-head { margin-bottom: var(--space-6); }
 .record-image-field {
   margin: 0 0 var(--space-6);
-  max-width: 420px;
+  width: 100%;
+  max-width: none;
+}
+.record-image-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+}
+.record-image-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.record-image-carousel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+.record-image-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  /* Keep the frame at least as tall as a 16:9 box for the current width. */
+  aspect-ratio: 16 / 9;
+  background: var(--color-neutral-100);
+  border: 1px solid var(--color-divider);
+}
+.record-image-photo {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  margin-inline: auto;
+  object-fit: contain;
+}
+.record-image-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: var(--space-4);
+  color: var(--color-neutral-600);
+  font-size: 14px;
+}
+.record-image-stage-actions {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.record-image-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  background: var(--color-paper);
+}
+.record-image-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--color-danger-500);
+  background: var(--color-danger-500);
+  color: var(--color-paper);
+}
+.record-image-remove:hover {
+  background: var(--color-danger-600);
+  border-color: var(--color-danger-600);
+}
+.record-image-remove:active {
+  background: var(--color-danger-700);
+  border-color: var(--color-danger-700);
+}
+.record-image-remove:disabled {
+  background: var(--color-danger-200);
+  border-color: var(--color-danger-200);
+  color: var(--color-danger-400);
+}
+.record-image-nav {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-divider);
+  background: var(--color-paper);
+  color: var(--color-text);
+  cursor: pointer;
+}
+.record-image-nav:hover {
+  background: rgba(var(--color-text-rgb), 0.07);
+}
+.record-image-nav:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.record-image-carousel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.record-image-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+.record-image-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 1px solid var(--color-divider);
+  border-radius: 0;
+  background: var(--color-paper);
+  cursor: pointer;
+}
+.record-image-dot.is-active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.record-image-dot:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.record-image-view-all-row {
+  display: flex;
+  justify-content: center;
+}
+.record-image-view-all {
+  font-size: 13px;
 }
 .record-image-caption {
+  /* Always reserve one caption line between the stage and the dots,
+   * even when the active photo has no caption text. */
+  margin: 0;
+  min-height: calc(14px * 1.4);
   font-size: 14px;
   color: var(--color-neutral-700);
   line-height: 1.4;
+  text-align: center;
+}
+.record-image-upload {
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+}
+.record-image-dropzone {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-divider);
+  background: var(--color-paper);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.record-image-dropzone:hover:not(:disabled) {
+  background: rgba(var(--color-text-rgb), 0.04);
+}
+.record-image-dropzone:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.record-image-dropzone:disabled {
+  color: var(--color-neutral-500);
+  cursor: default;
+}
+.record-image-upload.is-dragging .record-image-dropzone {
+  border-color: var(--color-accent);
+  background: rgba(var(--color-accent-rgb), 0.06);
+}
+.record-image-limit {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+.record-image-edit-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.record-image-edit-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  background: var(--color-neutral-100);
+  border: 1px solid var(--color-divider);
+}
+.record-image-edit-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+}
+.record-image-edit-file {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-neutral-700);
+}
+.record-image-lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgba(var(--color-neutral-900-rgb), 0.72);
+}
+.record-image-lightbox {
+  display: flex;
+  flex-direction: column;
+  width: min(720px, 100%);
+  max-height: min(90vh, 900px);
+  background: var(--color-paper);
+  border: 1px solid var(--color-divider);
+  box-shadow: var(--shadow-lg);
+}
+.record-image-lightbox-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+}
+.record-image-lightbox-title {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-weight: var(--font-heading-weight);
+  font-size: 20px;
+}
+.record-image-lightbox-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-padding-block: 12vh;
+  padding: 12vh var(--space-4);
+}
+.record-image-lightbox-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-6);
+  min-height: 70vh;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+}
+.record-image-lightbox-item:last-child {
+  margin-bottom: 0;
+}
+.record-image-lightbox-item img {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  background: var(--color-neutral-100);
+  border: 1px solid var(--color-divider);
 }
 .record-delete {
   display: block;
