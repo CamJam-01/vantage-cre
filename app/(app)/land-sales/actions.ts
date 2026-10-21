@@ -197,7 +197,16 @@ export async function addRecordImageAction(
     contentType: file.type,
     upsert: false,
   });
-  if (uploadError) return { error: uploadError.message };
+  if (uploadError) {
+    // Storage 404s read as "Bucket not found" when the carve-out migration's
+    // bucket insert never landed — map that to an actionable message.
+    if (/bucket not found|nosuchbucket/i.test(uploadError.message)) {
+      return {
+        error: 'Photo storage is not set up yet. An Admin needs to create the comp-images bucket (run the record-image storage migration).',
+      };
+    }
+    return { error: uploadError.message };
+  }
 
   const { error } = await supabase
     .from(path.table)
