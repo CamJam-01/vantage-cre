@@ -87,8 +87,9 @@ These terms have precise meanings here. Use them; do not invent synonyms.
   catalog is not yet known.
 
 **Field**
-: One named attribute of a record. **A field *is* a CoStar header string** —
-  there is no other kind of field, and no field has a second name. The catalog
+: One named attribute of a record. **Provider fields retain their CoStar header strings in storage and CSV.**
+  Two approved app exceptions apply: `Transaction Notes` is labeled **Comments**
+  throughout the app and uses `{{ comments }}`; **Verified By** is app-only text. The catalog
   is *large* (277 distinct names; 278 Land positions and 279 Improved positions) because it is inherited
   wholesale from the provider's export format rather than designed here. Most
   fields are empty on most records. That is expected and must not be
@@ -113,10 +114,11 @@ These terms have precise meanings here. Use them; do not invent synonyms.
 
 **Merge tag**
 : The placeholder a template writes to pull in a field's value, in the form
-  `{{ comp_id }}`. A tag names a field the only way fields are named — by its
-  catalog header — mechanically lowercased with non-alphanumeric runs collapsed
-  to underscores. Field tags are *derived* from the catalog and are never
-  written down separately (§6.1, §6.7).
+  `{{ comp_id }}`. A tag names a field by its
+  app label — mechanically lowercased with non-alphanumeric runs collapsed
+  to underscores. Comments uses `{{ comments }}` and Verified By uses
+  `{{ verified_by }}`. Field tags are *derived* from the app field sequence
+  and labels, never written down separately (§6.1, §6.7).
 
 **Merge sequence tag**
 : `{{ comp_number }}`, a merge-only tag. It resolves to the selected record's
@@ -169,15 +171,17 @@ Land (278 positions); Appendix B defines Improved (279 positions), copied from
 `Costar Improved Sales Template.csv`. They contain the same 277 distinct field
 names and use the same Postgres types. The selected path's sequence governs its
 import template, import validation, export, and default display order. There
-are no aliases or app-specific field identifiers: a field is its header string.
+are no changes to provider identifiers: Comments retains `Transaction Notes`
+in storage and CSV. The app-only `_verified_by` column is excluded from CSV.
 
 The live `improved_sales` table already contains all 277 required fields. Its
 physical column order remains unchanged; CSV values bind by exact header name,
 so matching the provider sequence does not require rebuilding either table.
 
 **The catalog is closed.** No header may be added, removed, renamed, reordered,
-aliased, or given a display synonym — not in the database, not in the template,
-not in the export, not in code, not in the UI. A change to this list is a change
+aliased, or given a display synonym except the approved **Comments** label for
+`Transaction Notes`. CSVs always retain `Transaction Notes`; the app and merge
+tag catalog use Comments exclusively. A change to this list is a change
 to the product's contract with CoStar, and is out of scope for ordinary work
 (§5 "Changing this scope").
 
@@ -194,8 +198,8 @@ regardless of what any user can see.
 
 These things in the physical table are not catalog fields. All are documented
 here. **None may ever appear in the catalog, the import template, or the export
-file.** Only `_record_images` is shown in the record UI (upload controls +
-captions, not as CoStar fields):
+file.** Record images and Verified By have app controls outside the provider
+contract:
 
 | | What | Why |
 | --- | --- | --- |
@@ -203,6 +207,13 @@ captions, not as CoStar fields):
 | Duplicate headers | one stored column per distinct name | Both paths repeat `Sprinklers`; Improved also repeats `Average Rental Rate Per kW`. Import keeps the last value and warns if repeated values differ. Export fills every matching position. **Accepted known lossiness** — do not add storage without a §5 decision. |
 | `_sale_date_raw` | `text`, system store | Holds the original text of an unrecognized `Sale Date` so ingest can flag the row for review and export can re-emit it. Named to be self-evidently outside the catalog. |
 | `_record_images` | `jsonb`, array of `{ path, caption }` | Zero or more photos in the private `comp-images` bucket. Record UI only; Print embeds them via `{{ record_image }}`. Never CSV. |
+| `_verified_by` | nullable `text` | App-only **Verified By**; one optional text value. Active Editors/Admins may type custom text or choose an active profile username. The saved text survives profile changes. Available in Field Manager and as `{{ verified_by }}`, never CSV. |
+
+**Verified By** starts visible immediately after Comments on both sales paths,
+including existing arrangements, unless an Admin has explicitly placed or hidden
+it. It uses the same create/edit, display, text filtering, and sorting behavior as
+other text fields. CSV import leaves it blank for new records; export excludes it.
+A CSV round trip preserves provider data, not app-only annotations.
 
 Any future non-catalog storage column joins this table or it does not exist.
 
@@ -210,7 +221,7 @@ Any future non-catalog storage column joins this table or it does not exist.
 
 The distinct field names and types in Appendices A/B, the code catalog, and the
 live `land_sales` / `improved_sales` tables agree: 277 catalog columns plus
-system carve-outs (`id`, `_sale_date_raw`, `_record_images`). The physical
+system carve-outs (`id`, `_sale_date_raw`, `_record_images`, `_verified_by`). The physical
 database order remains unchanged. **Each appendix is the CSV contract; its code
 constant is the executable copy.** Tests must assert byte-identical header
 sequences and the shared field/type contract.
@@ -280,6 +291,8 @@ Seven capabilities. A change either extends one of these or is out of scope.
    only. Export is a Viewer-level capability: reading and taking away what you
    read are the same permission.
 
+   The **Reports** menu offers CSV export and Print for the same selection.
+
    The same selection can instead be **printed to a Word document**. The table's
    single Admin-defined Output Flow routes each full record to a saved template,
    then the records return as one `.docx` in selected order. Print is the same
@@ -315,8 +328,10 @@ DOCX through one admin-managed Output Flow per results table, conditional
 template routing, and sequential comp numbering** · user administration · audit
 log · user profiles with avatars · an embedded third-party feedback widget ·
 a floating **chat widget** placeholder (badge + panel; no live AI yet) ·
-**one record image per comp** (UI + Print embed; excluded from CSV) ·
-path-specific CoStar CSV sequences (278 positions for Land, 279 for Improved).
+**record images per comp** (UI + Print embed; excluded from CSV) ·
+path-specific CoStar CSV sequences (278 positions for Land, 279 for Improved) ·
+**Comments** as the app label and merge tag for provider Transaction Notes ·
+app-only **Verified By** text with active username suggestions and a merge tag.
 
 **The feedback widget** loads on every page, signed in or not, and opens a
 panel for sending a comment to the people who maintain this tool. Its "Name"
@@ -411,16 +426,18 @@ added, or missing column is a rejected file, never a guessed mapping. Export
 reproduces that header row exactly, in full, every time.
 
 The point is **lossless round-tripping**: a file exported from here must be
-re-importable here, and a record must survive the trip unchanged. When adding a
+re-importable here, and provider data must survive the trip unchanged. When adding a
 capability, ask what it does to the round trip before asking anything else.
 
-**There is no second field model.** No subset of the catalog gets its own names,
-types, labels, layout, or identifiers; no header is aliased, abbreviated, or
-retitled for display; no value is computed and then presented as though it were
-a field. If a question has an answer in the catalog, that column *is* the
-answer. Earlier versions of this project carried a hand-picked "core field"
-layer of renamed headers — it is a deprecated prototype relic, not a design, and
-any surviving trace of it is a defect to remove rather than a pattern to follow.
+**Provider identities remain canonical.** Every provider field keeps its exact
+CoStar name and type in storage and CSV. The approved app label **Comments**
+replaces `Transaction Notes` on all app surfaces and in the `{{ comments }}` tag.
+The old `{{ transaction_notes }}` tag is no longer recognized; existing Word
+templates using it must be updated. **Verified By** is the sole app-only data
+field (`_verified_by` text), configured alongside provider fields and merged via
+`{{ verified_by }}`, but never imported or exported in CSV. These exceptions do
+not permit general field aliases or live schema editing. Other provider fields
+continue deriving their labels and tags from their headers.
 
 Two deliberate exceptions sit outside catalog-derived names. `{{ comp_number }}`
 is output structure: the merge computes it from each selected record's 1-based
@@ -511,7 +528,7 @@ table and arrangement; a path with a *different* catalog is still a new spine.
 §6.1 makes the CSV round trip the system's central constraint: what this
 exports, this re-imports, unchanged. **DOCX merge is deliberately outside that
 rule**, and the distinction matters because both are reached from the same
-Export menu.
+Reports menu.
 
 A merged document is written for a person to read. Values are display-formatted
 exactly as the results table renders them, an empty field merges as nothing at
@@ -521,9 +538,10 @@ it**. Do not add a DOCX import path, do not extend the round-trip test to cover
 it, and do not "fix" the merge to preserve raw values — the CSV export is where
 fidelity lives, and it is untouched by any of this.
 
-Two rules do carry over from §6.1. Every **field tag** is derived from
-`COSTAR_HEADER_ROW`, so a header added to the catalog gets a merge tag with no
-further work and no second field list to update. The approved non-field tags are
+Two rules do carry over from §6.1. Every **field tag** derives from the app
+field sequence and labels: provider fields follow `COSTAR_HEADER_ROW`, with
+`{{ comments }}` for `Transaction Notes` and the app-only `{{ verified_by }}`.
+There is no second hand-maintained provider field list. The approved non-field tags are
 `{{ comp_number }}` (sequence) and `{{ record_image }}` (embedded photos from
 `_record_images`). Neither enters CSV. And a template is **user content,
 not code** — an unrecognized tag is left visibly in place rather than silently
@@ -585,9 +603,9 @@ Two things that will otherwise cost an agent time:
   outside the migration files present here. Do not infer that a table is absent
   because no migration creates it, and do not "restore" one by writing a
   creating migration without checking the live schema first.
-- **There is no configured test command.** Test files exist and are meaningful,
-  but running them requires resolver setup that the repository does not ship.
-  Type-checking and the production build are the checks that work as-is.
+- **Tests run through the resolver hook.** Test files are meaningful;
+  run them with `npm test`, which registers the repository resolver hook.
+  Type-checking and the production build are also required checks.
 
 ---
 
@@ -599,10 +617,10 @@ Match the request to its shape before writing anything.
 | --- | --- |
 | "Show field X on the record screen" / "reorder fields" / "group these together" | **Configuration.** Do it through the admin arrangement. No code. |
 | "Add field X to the database" / "rename this column" / "drop the fields we don't use" | **A change to a closed catalog (§3A).** Not ordinary work. Confirm under §5 first; if approved, the selected header constant, applicable appendix, and tests move together; migrate only if storage changes. |
-| "Field X should show as *Y* on screen" | **No.** A field's name is its header (§3A). Rename the *header* via the process above, or leave it. |
+| "Field X should show as *Y* on screen" | **A scope decision (§5).** Comments for `Transaction Notes` is the approved exception; all other provider labels remain their headers. |
 | "Make field X filterable" | Confirm the column's Postgres type is classified correctly; the filter tier follows from that type. Nothing else is required — every catalog field is equally a field. |
 | "Only export the columns we're actually using" | **No.** Export is always the selected path's full canonical sequence (§4.6, §3A). |
-| "Add a merge tag for field X" | **Nothing to do.** Every catalog field already has one, derived from its header (§3 *Merge tag*). If a tag seems missing, the header is not what you think it is. |
+| "Add a merge tag for field X" | Every app field already has a derived tag, including `{{ comments }}` and `{{ verified_by }}`. Additional app-only fields require a §5 decision. |
 | "Add a computed/non-field merge tag" | **A scope decision.** Only `{{ comp_number }}` and `{{ record_image }}` are approved merge-only tags; another requires the §5 process and must not silently create a second field model. |
 | "Route different records to different DOCX templates" | **Output Flow configuration.** Define the table's one flow — default plus ordered conditions — in the Admin Output Router; do not hard-code a field or template choice in the Print route (§6.7). |
 | "Let the user pick which Output Flow / template to print" | **No.** Each table has exactly one Output Flow; Print uses it. Multiple flows per table are a configuration error (§3 *Output Flow*, §6.7). |

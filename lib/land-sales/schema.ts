@@ -1,3 +1,4 @@
+import { appFieldNames, VERIFIED_BY_COLUMN } from './app-fields';
 import {
   costarColumnNames,
   RECORD_IMAGE_CAPTION_COLUMN,
@@ -12,9 +13,8 @@ import {
   type RecordImageEntry,
 } from './record-image';
 
-/** A land-sale record is a header-keyed map of catalog columns, plus the uuid
- * identity carve-out and optional system stores. A catalog field *is* a header
- * string — there is no second name. */
+/** Records keep exact provider keys plus approved app fields in `columns`;
+ * identity, raw import dates, and images retain their separate system stores. */
 export type LandSaleInput = {
   columns: Record<string, unknown>;
   saleDateRaw?: string;
@@ -110,12 +110,15 @@ export function coerceLandSaleInput(
 
 export function columnsFromFormData(formData: FormData, hidden: ReadonlySet<string>): LandSaleInput {
   const raw: Record<string, unknown> = {};
-  for (const header of costarColumnNames()) {
+  for (const header of appFieldNames()) {
     if (hidden.has(header)) continue;
     const value = formData.get(header);
     if (typeof value === 'string') raw[header] = value;
   }
   const { input } = coerceLandSaleInput(raw);
+  if (Object.hasOwn(raw, VERIFIED_BY_COLUMN)) {
+    input.columns[VERIFIED_BY_COLUMN] = coerceColumnValue(VERIFIED_BY_COLUMN, raw[VERIFIED_BY_COLUMN]);
+  }
   // coerce fills every catalog column; drop hidden keys so they are absent,
   // not null — merge/create must not treat them as submitted values.
   for (const header of hidden) {

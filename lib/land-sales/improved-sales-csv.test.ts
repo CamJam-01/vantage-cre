@@ -1,3 +1,4 @@
+import { appFieldNames } from './app-fields.ts';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -38,9 +39,9 @@ describe('Improved CoStar sequence', () => {
 
   it('uses unique Improved headers for default display while honoring saved arrangements', () => {
     const columns = resultColumns({ pathId: 'improved' });
-    assert.deepEqual(columns.map(column => column.key), costarColumnNames(IMPROVED_COSTAR_HEADERS));
+    assert.deepEqual(columns.map(column => column.key), appFieldNames('improved'));
     assert.equal(columns[4].key, 'Building SF');
-    assert.equal(columns.length, 277);
+    assert.equal(columns.length, 278);
     assert.equal(columns.filter(column => column.key === 'Average Rental Rate Per kW').length, 1);
     assert.equal(orderColumns(columns, ['Sale Date', 'Property Name'])[0].key, 'Sale Date');
   });

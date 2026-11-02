@@ -1,23 +1,26 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { costarColumnNames } from './costar-fields.ts';
+import { appFieldNames } from './app-fields.ts';
 import { resultColumns, resultSortValue } from './result-columns.ts';
 import type { LandSale } from './schema.ts';
 
 describe('resultColumns', () => {
-  it('lists every unique CoStar land_sales column in header order', () => {
+  it('lists all app fields in default order', () => {
     const keys = resultColumns().map(c => c.key);
-    assert.deepEqual(keys, costarColumnNames());
+    assert.deepEqual(keys, appFieldNames());
     assert.equal(keys[0], 'Property Address');
     assert.equal(keys.includes('parcel_id'), false);
     assert.equal(keys.includes('address'), false);
     assert.equal(keys.includes('price_per_acre'), false);
   });
 
-  it('labels every column with its catalog header — no display synonym', () => {
+  it('uses Comments and Verified By as the only display exceptions', () => {
     const market = resultColumns().find(c => c.key === 'Market');
     assert.equal(market?.label, 'Market');
-    assert.equal(resultColumns().every(c => c.key === c.label), true);
+    assert.deepEqual(resultColumns().filter(c => c.key !== c.label), [
+      { key: 'Transaction Notes', label: 'Comments' },
+      { key: '_verified_by', label: 'Verified By' },
+    ]);
   });
 
   it('preserves the parameterized API without letting records redefine the closed catalog', () => {
@@ -25,7 +28,7 @@ describe('resultColumns', () => {
       catalogLabels: ['Prototype Label'],
       records: [{ id: '1', columns: { prototype_field: 'ignored' } }],
     });
-    assert.deepEqual(columns.map(column => column.key), costarColumnNames());
+    assert.deepEqual(columns.map(column => column.key), appFieldNames());
     assert.equal(columns.some(column => column.key === 'prototype_field'), false);
     assert.notEqual(columns, resultColumns());
   });

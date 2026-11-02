@@ -49,14 +49,14 @@ export function ResultsExportMenu({
         aria-expanded={open}
         aria-controls={menuId}
         disabled={disabled}
-        title={disabled ? 'Select records to save' : 'Save'}
+        title={disabled ? 'Select records for reports' : 'Reports'}
         onClick={event => {
           event.stopPropagation();
           setOpen(current => !current);
         }}
       >
         <Download size={16} strokeWidth={1.5} aria-hidden />
-        Save
+        Reports
       </button>
       <div id={menuId} className="results-add-dropdown" role="menu">
         <button

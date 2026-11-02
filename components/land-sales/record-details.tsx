@@ -19,6 +19,8 @@ import {
   toInputString,
   type LandSale,
 } from '@/lib/land-sales/schema';
+import { VERIFIED_BY_COLUMN } from '@/lib/land-sales/app-fields';
+import { SearchSuggestCombobox } from '@/components/ui/search-suggest-combobox';
 import { resultColumns } from '@/lib/land-sales/result-columns';
 import {
   buildRecordDisplayPages,
@@ -177,6 +179,7 @@ export function RecordDetails({
   fieldDividers = [],
   recordImagePlacement = DEFAULT_RECORD_IMAGE_PLACEMENT,
   imageSignedUrls = {},
+  usernameSuggestions = [],
 }: {
   path: SalesPath;
   record: LandSale;
@@ -192,6 +195,7 @@ export function RecordDetails({
   fieldDividers?: FieldDivider[];
   recordImagePlacement?: RecordImagePlacement;
   imageSignedUrls?: Record<string, string>;
+  usernameSuggestions?: string[];
 }) {
   if (!canEdit) {
     return (
@@ -210,6 +214,7 @@ export function RecordDetails({
         fieldDividers={fieldDividers}
         recordImagePlacement={recordImagePlacement}
         imageSignedUrls={imageSignedUrls}
+        usernameSuggestions={usernameSuggestions}
       />
     );
   }
@@ -229,6 +234,7 @@ export function RecordDetails({
       fieldDividers={fieldDividers}
       recordImagePlacement={recordImagePlacement}
       imageSignedUrls={imageSignedUrls}
+      usernameSuggestions={usernameSuggestions}
     />
   );
 }
@@ -247,6 +253,7 @@ function BoundRecordDetailsForm({
   fieldDividers,
   recordImagePlacement,
   imageSignedUrls,
+  usernameSuggestions,
 }: {
   path: SalesPath;
   record: LandSale;
@@ -261,6 +268,7 @@ function BoundRecordDetailsForm({
   fieldDividers: FieldDivider[];
   recordImagePlacement: RecordImagePlacement;
   imageSignedUrls: Record<string, string>;
+  usernameSuggestions: string[];
 }) {
   const [state, formAction, pending] = useActionState(updateLandSale.bind(null, path.id, record.id), initialState);
   return (
@@ -282,7 +290,24 @@ function BoundRecordDetailsForm({
       fieldDividers={fieldDividers}
       recordImagePlacement={recordImagePlacement}
       imageSignedUrls={imageSignedUrls}
+      usernameSuggestions={usernameSuggestions}
     />
+  );
+}
+
+function VerifiedByControl({ initialValue, options }: { initialValue: string; options: string[] }) {
+  const [value, setValue] = useState(initialValue);
+  return (
+    <>
+      <input type="hidden" name={VERIFIED_BY_COLUMN} value={value} />
+      <SearchSuggestCombobox
+        id={fieldInputId(VERIFIED_BY_COLUMN)}
+        value={value}
+        options={options}
+        ariaLabel="Verified By"
+        onChange={setValue}
+      />
+    </>
   );
 }
 
@@ -290,10 +315,12 @@ function FieldControl({
   header,
   record,
   editing,
+  usernameSuggestions,
 }: {
   header: string;
   record: LandSale;
   editing: boolean;
+  usernameSuggestions: string[];
 }) {
   const id = fieldInputId(header);
   const kind = costarColumnType(header);
@@ -321,6 +348,9 @@ function FieldControl({
         )}
       </>
     );
+  }
+  if (header === VERIFIED_BY_COLUMN) {
+    return <VerifiedByControl initialValue={displayValue} options={usernameSuggestions} />;
   }
   if (kind === 'boolean') {
     const current = record.columns[header];
@@ -377,6 +407,7 @@ export function RecordDetailsForm({
   fieldDividers = [],
   recordImagePlacement = DEFAULT_RECORD_IMAGE_PLACEMENT,
   imageSignedUrls = {},
+  usernameSuggestions = [],
 }: {
   path: SalesPath;
   record: LandSale;
@@ -396,6 +427,7 @@ export function RecordDetailsForm({
   fieldDividers?: FieldDivider[];
   recordImagePlacement?: RecordImagePlacement;
   imageSignedUrls?: Record<string, string>;
+  usernameSuggestions?: string[];
 }) {
   const router = useRouter();
   const hidden = new Set(hiddenFieldIds);
@@ -675,7 +707,7 @@ export function RecordDetailsForm({
                     ) : (
                       <div key={item.column.key} className="record-field record-span-4">
                         <label htmlFor={editing ? fieldInputId(item.column.key) : undefined}>{item.column.label}</label>
-                        <FieldControl header={item.column.key} record={record} editing={editing} />
+                        <FieldControl header={item.column.key} record={record} editing={editing} usernameSuggestions={usernameSuggestions} />
                       </div>
                     )
                   ))}

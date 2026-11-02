@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { loadActiveUsernames } from '@/lib/supabase/usernames';
 import { RecordDetails } from '@/components/land-sales/record-details';
 import { landSaleFromRow } from '@/lib/land-sales/db';
 import { canDelete, canEdit, getCurrentUserProfile } from '@/lib/users/roles';
@@ -40,7 +41,7 @@ export async function SalesRecordPage({
   const filters = decodeFilters(resultsParams);
   const sort = decodeSort(resultsParams.get('sort'), resultsParams.get('dir'));
   const images = r.recordImages ?? [];
-  const [{ prevId, nextId, position, total }, imageSignedUrls] = await Promise.all([
+  const [{ prevId, nextId, position, total }, imageSignedUrls, usernameSuggestions] = await Promise.all([
     fetchAdjacentLandSaleIds(
       supabase,
       filters,
@@ -63,6 +64,7 @@ export async function SalesRecordPage({
       }
       return map;
     }),
+    editable ? loadActiveUsernames(supabase) : Promise.resolve([]),
   ]);
 
   return (
@@ -81,6 +83,7 @@ export async function SalesRecordPage({
       fieldDividers={display.fieldDividers}
       recordImagePlacement={display.recordImagePlacement}
       imageSignedUrls={imageSignedUrls}
+      usernameSuggestions={usernameSuggestions}
     />
   );
 }

@@ -329,7 +329,7 @@ export function DocxTemplatesManager({
         databaseKey={databaseKey}
         templates={templates}
         flows={flows}
-        fields={tags.filter(tag => tag.source === 'catalog').map(tag => tag.header)}
+        fields={tags.flatMap(tag => tag.source === 'catalog' ? [tag.column] : [])}
         loadError={flowLoadError}
       />
 

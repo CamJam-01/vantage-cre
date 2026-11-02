@@ -1,5 +1,7 @@
 'use client';
 
+import { fieldLabel } from '@/lib/land-sales/app-fields';
+
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -349,7 +351,7 @@ function RemoveFilterButton({ column, onRemove }: { column: string; onRemove: ()
     <button
       type="button"
       onClick={onRemove}
-      aria-label={`Remove ${column} filter`}
+      aria-label={`Remove ${fieldLabel(column)} filter`}
       style={removeFilterButtonStyle}
     >
       <X size={14} strokeWidth={1.5} />
@@ -368,7 +370,7 @@ function DraftFilterControl({
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>{item.column}</label>
+      <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-neutral-700)' }}>{fieldLabel(item.column)}</label>
       <DraftFilterFields item={item} onChange={onChange} onRemove={onRemove} />
     </div>
   );

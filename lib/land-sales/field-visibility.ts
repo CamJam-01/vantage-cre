@@ -1,3 +1,4 @@
+import { withDefaultVerifiedByOrder } from './app-fields';
 import type { ResultColumn } from './result-columns';
 
 export type DatabaseKey = 'sales' | 'improved-sales';
@@ -89,7 +90,7 @@ export function fieldDisplayRows(
   const placed = new Set<string>();
   const rows: FieldDisplayRow[] = [];
 
-  for (const rawId of order) {
+  for (const rawId of withDefaultVerifiedByOrder(order)) {
     const divider = dividersById.get(rawId);
     if (divider) {
       if (placed.has(rawId)) continue;
@@ -116,7 +117,7 @@ export function fieldDisplayRows(
 export function orderColumns(columns: ResultColumn[], order: FieldOrder): ResultColumn[] {
   if (!order.length) return columns;
   const rank = new Map<string, number>();
-  order.forEach((rawId, index) => {
+  withDefaultVerifiedByOrder(order).forEach((rawId, index) => {
     const id = canonicalFieldId(rawId);
     if (id && !rank.has(id)) rank.set(id, index);
   });

@@ -1,4 +1,4 @@
-import { costarColumnNames } from './costar-fields';
+import { appFieldNames } from './app-fields';
 
 export type ResultsSortDir = 'asc' | 'desc';
 
@@ -13,7 +13,7 @@ export type ResultsSort = {
  * "N active" badge. */
 export const DEFAULT_RESULTS_SORT: ResultsSort = { column: 'Sale Date', dir: 'desc' };
 
-const SORTABLE_COLUMNS = new Set(costarColumnNames());
+const SORTABLE_COLUMNS = new Set(appFieldNames());
 
 function firstString(input: unknown): string | undefined {
   const raw = Array.isArray(input) ? input[0] : input;
