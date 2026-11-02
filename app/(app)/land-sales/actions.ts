@@ -14,9 +14,12 @@ import {
 import {
   landSaleDeleteDeniedMessage,
   landSaleWriteDeniedMessage,
+  getCurrentUserProfile,
 } from '@/lib/users/roles';
 import { chunkIds } from '@/lib/land-sales/export-ids';
-import { loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
+import { loadDisplaySettings, loadHiddenFieldIds } from '@/lib/land-sales/display-settings';
+import { effectiveSearchFilters, searchFilterColumns } from '@/lib/land-sales/filter-visibility';
+import { resultColumns } from '@/lib/land-sales/result-columns';
 import { mergeVisibleUpdate, sanitizeVisibleCreate } from '@/lib/land-sales/visible-record-input';
 import { salesPathFromId, type SalesPath, type SalesPathId } from '@/lib/land-sales/sales-path';
 import { decodeFilters } from '@/lib/land-sales/search-params';
@@ -88,11 +91,17 @@ export async function landSaleIdAtResultPositionAction(
   }
 
   const params = new URLSearchParams(fromQuery ?? '');
-  const filters = decodeFilters(params);
   const sort = decodeSort(params.get('sort'), params.get('dir'));
   const supabase = await createClient();
+  const profile = await getCurrentUserProfile(supabase);
+  if (!profile || profile.is_suspended) return { error: 'You do not have permission to read records.' };
 
   try {
+    const display = await loadDisplaySettings(supabase, path.databaseKey);
+    const filters = effectiveSearchFilters(
+      decodeFilters(params),
+      searchFilterColumns(resultColumns({ pathId: path.id }), display.hidden, display.hiddenFilters),
+    );
     const id = await fetchLandSaleIdAtPosition(supabase, filters, sort, position, path.table);
     if (!id) return { error: 'That result position is out of range.' };
     return { id };

@@ -11,6 +11,7 @@ import {
 type QueryResult = {
   data: {
     hidden_field_keys: string[] | null;
+    hidden_filter_keys?: unknown;
     field_order?: string[] | null;
     field_dividers?: unknown;
     record_image_placement?: string | null;
@@ -79,7 +80,7 @@ describe('loadDisplaySettings', () => {
   it('returns an empty arrangement when no settings row exists', async () => {
     assert.deepEqual(
       await loadDisplaySettings(fakeClient({ data: null, error: null }), 'sales'),
-      { hidden: new Set(), fieldOrder: [], fieldDividers: [], recordImagePlacement: 'tab' },
+      { hidden: new Set(), hiddenFilters: new Set(), fieldOrder: [], fieldDividers: [], recordImagePlacement: 'tab' },
     );
   });
 
@@ -151,5 +152,22 @@ describe('loadDisplaySettings dividers', () => {
       'sales',
     );
     assert.deepEqual(settings.fieldDividers, []);
+  });
+});
+
+describe('loadDisplaySettings search filters', () => {
+  it('defaults to all displayed columns when filter preferences are absent', async () => {
+    const settings = await loadDisplaySettings(fakeClient({ data: { hidden_field_keys: ['Zoning'] }, error: null }), 'sales');
+    assert.deepEqual([...settings.hiddenFilters], []);
+    assert.deepEqual([...settings.hidden], ['Zoning']);
+  });
+
+  it('loads filter preferences independently and drops malformed or stale entries', async () => {
+    const settings = await loadDisplaySettings(fakeClient({ data: {
+      hidden_field_keys: ['Zoning'],
+      hidden_filter_keys: ['Market', 'Market', null, 'obsolete'],
+    }, error: null }), 'improved-sales');
+    assert.deepEqual([...settings.hiddenFilters], ['Market']);
+    assert.deepEqual([...settings.hidden], ['Zoning']);
   });
 });

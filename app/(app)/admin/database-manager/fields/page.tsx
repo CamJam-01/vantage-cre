@@ -2,11 +2,12 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUserProfile } from '@/lib/users/roles';
 import { Blueprint } from '@/components/ui/blueprint';
+import { SearchFilterVisibilityForm } from '@/components/admin/search-filter-visibility-form';
 import { FieldVisibilityForm } from '@/components/admin/field-visibility-form';
 import { DATABASE_CATEGORIES } from '@/lib/admin/database-descriptor';
 import { resultColumns } from '@/lib/land-sales/result-columns';
 import { loadDisplaySettings } from '@/lib/land-sales/display-settings';
-import { isDatabaseKey, type FieldDivider } from '@/lib/land-sales/field-visibility';
+import { filterVisibleColumns, orderColumns, isDatabaseKey, type FieldDivider } from '@/lib/land-sales/field-visibility';
 import { salesPathFromDatabaseKey } from '@/lib/land-sales/sales-path';
 
 type PageProps = { searchParams: Promise<{ db?: string }> };
@@ -27,13 +28,15 @@ export default async function DatabaseFieldsPage({ searchParams }: PageProps) {
     .then(loaded => ({ ...loaded, error: null as string | null }))
     .catch((error: unknown) => ({
       hidden: new Set<string>(),
+      hiddenFilters: new Set<string>(),
       fieldOrder: [] as string[],
       fieldDividers: [] as FieldDivider[],
       recordImagePlacement: 'tab' as const,
       error: error instanceof Error ? error.message : 'Could not load field visibility.',
     }));
   const columns = resultColumns({ pathId: path.id });
-  const disabledReason = settings.error ?? undefined;
+  const disabledReason = settings.error ?? (profile.is_suspended ? 'Suspended Admin users cannot change settings.' : undefined);
+  const filterCandidates = filterVisibleColumns(orderColumns(columns, settings.fieldOrder), settings.hidden);
 
   return (
     <main style={{
@@ -68,6 +71,22 @@ export default async function DatabaseFieldsPage({ searchParams }: PageProps) {
             initialFieldOrder={settings.fieldOrder}
             initialFieldDividers={settings.fieldDividers}
             initialRecordImagePlacement={settings.recordImagePlacement}
+            disabledReason={disabledReason}
+          />
+        </Blueprint>
+
+        <Blueprint elevation="sm" style={{ padding: 'var(--space-6)' }}>
+          <h2>Search Filters</h2>
+          <p>
+            Choose which filters appear on the search page and results sidebar for {category.name}.
+            Only displayed results columns are listed; save field configuration above to update this list.
+            Hiding a filter leaves data and columns unchanged and ignores it in bookmarked searches.
+          </p>
+          <SearchFilterVisibilityForm
+            key={JSON.stringify(filterCandidates.map(column => column.key))}
+            databaseKey={path.databaseKey}
+            columns={filterCandidates}
+            initialHiddenFilterIds={[...settings.hiddenFilters]}
             disabledReason={disabledReason}
           />
         </Blueprint>

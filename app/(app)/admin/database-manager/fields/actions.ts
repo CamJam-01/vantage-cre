@@ -8,6 +8,8 @@ import { resultColumns } from '@/lib/land-sales/result-columns';
 import type { FieldDivider } from '@/lib/land-sales/field-visibility';
 import { parseVisibilitySubmission } from '@/lib/admin/field-visibility-action';
 import { salesPathFromDatabaseKey } from '@/lib/land-sales/sales-path';
+import { loadDisplaySettings } from '@/lib/land-sales/display-settings';
+import { validateSearchFilterSelection } from '@/lib/land-sales/filter-visibility';
 
 export type FieldVisibilityActionState =
   | {
@@ -59,6 +61,7 @@ export async function saveFieldVisibilityAction(
   revalidatePath('/admin/database-manager/fields');
   if (path) {
     revalidatePath(path.basePath);
+    revalidatePath(path.searchPath);
     revalidatePath(`${path.basePath}/new`);
     revalidatePath(`${path.basePath}/[id]`, 'page');
   }
@@ -71,4 +74,55 @@ export async function saveFieldVisibilityAction(
     fieldDividers: submission.fieldDividers,
     recordImagePlacement: submission.recordImagePlacement,
   };
+}
+
+export type SearchFilterVisibilityActionState =
+  | { status: 'success'; message: string; hiddenFilterIds: string[] }
+  | { status: 'error'; message: string }
+  | null;
+
+export async function saveSearchFilterVisibilityAction(
+  _previousState: SearchFilterVisibilityActionState,
+  formData: FormData,
+): Promise<SearchFilterVisibilityActionState> {
+  const supabase = await createClient();
+  const profile = await getCurrentUserProfile(supabase);
+  if (!profile || profile.is_suspended || profile.role !== 'Admin') {
+    return { status: 'error', message: 'Only active Admin users can change search filters.' };
+  }
+
+  const path = salesPathFromDatabaseKey(formData.get('database_key'));
+  if (!path) return { status: 'error', message: 'This table is not available for search filter settings.' };
+
+  try {
+    const display = await loadDisplaySettings(supabase, path.databaseKey);
+    const columns = resultColumns({ pathId: path.id });
+    const selection = validateSearchFilterSelection(
+      formData.getAll('visible_filter_id'), columns, display.hidden, display.hiddenFilters,
+    );
+    if (!selection.ok) return { status: 'error', message: selection.message };
+
+    // Update only filter preferences; column visibility/order and every record
+    // remain untouched, including when settings are saved from another form.
+    const { error } = await supabase.from('result_display_settings').upsert({
+      database_key: path.databaseKey,
+      hidden_filter_keys: selection.hiddenFilterIds,
+      updated_at: new Date().toISOString(),
+      updated_by: profile.id,
+    }, { onConflict: 'database_key' });
+    if (error) return { status: 'error', message: `Could not save search filters: ${error.message}` };
+
+    await logAudit(supabase, 'Updated Search Filters', `${path.label}: search filter visibility updated`);
+    revalidatePath('/admin/database-manager/fields');
+    revalidatePath(path.searchPath);
+    revalidatePath(path.basePath);
+    revalidatePath(`${path.basePath}/[id]`, 'page');
+    return {
+      status: 'success',
+      message: 'Search filters saved for all users of this table.',
+      hiddenFilterIds: selection.hiddenFilterIds,
+    };
+  } catch (error) {
+    return { status: 'error', message: error instanceof Error ? error.message : 'Could not save search filters.' };
+  }
 }

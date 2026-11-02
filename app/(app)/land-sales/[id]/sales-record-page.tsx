@@ -5,9 +5,11 @@ import { RecordDetails } from '@/components/land-sales/record-details';
 import { landSaleFromRow } from '@/lib/land-sales/db';
 import { canDelete, canEdit, getCurrentUserProfile } from '@/lib/users/roles';
 import { loadDisplaySettings } from '@/lib/land-sales/display-settings';
+import { effectiveSearchFilters, searchFilterColumns } from '@/lib/land-sales/filter-visibility';
 import { fetchAdjacentLandSaleIds } from '@/lib/land-sales/query';
 import { decodeFilters } from '@/lib/land-sales/search-params';
 import { decodeSort } from '@/lib/land-sales/results-sort';
+import { resultColumns } from '@/lib/land-sales/result-columns';
 import type { SalesPath } from '@/lib/land-sales/sales-path';
 import { RECORD_IMAGE_BUCKET } from '@/lib/land-sales/record-image';
 
@@ -38,7 +40,10 @@ export async function SalesRecordPage({
   const editable = active && canEdit(role);
 
   const resultsParams = new URLSearchParams(from ?? '');
-  const filters = decodeFilters(resultsParams);
+  const filters = effectiveSearchFilters(
+    decodeFilters(resultsParams),
+    searchFilterColumns(resultColumns({ pathId: path.id }), display.hidden, display.hiddenFilters),
+  );
   const sort = decodeSort(resultsParams.get('sort'), resultsParams.get('dir'));
   const images = r.recordImages ?? [];
   const [{ prevId, nextId, position, total }, imageSignedUrls, usernameSuggestions] = await Promise.all([
