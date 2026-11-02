@@ -1,4 +1,4 @@
-import { costarColumnNames } from './costar-fields';
+import { appFieldNames } from './app-fields';
 import type { HiddenFieldIds } from './field-visibility';
 import { applyRecordImageCaptionUpdates } from './record-image';
 import type { LandSale, LandSaleInput } from './schema';
@@ -9,7 +9,7 @@ export function mergeVisibleUpdate(
   hidden: HiddenFieldIds,
 ): LandSaleInput {
   const columns: Record<string, unknown> = { ...existing.columns };
-  for (const header of costarColumnNames()) {
+  for (const header of appFieldNames()) {
     if (hidden.has(header)) continue;
     if (Object.prototype.hasOwnProperty.call(submitted.columns, header)) {
       columns[header] = submitted.columns[header];
@@ -31,7 +31,7 @@ export function sanitizeVisibleCreate(
   hidden: HiddenFieldIds,
 ): LandSaleInput {
   const columns: Record<string, unknown> = {};
-  for (const header of costarColumnNames()) {
+  for (const header of appFieldNames()) {
     if (hidden.has(header)) continue;
     columns[header] = submitted.columns[header] ?? null;
   }

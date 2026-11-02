@@ -1,3 +1,4 @@
+import { fieldLabel } from './app-fields.ts';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { costarColumnNames } from './costar-fields.ts';
@@ -30,13 +31,13 @@ describe('mergeTagName', () => {
 describe('mergeTagCatalog', () => {
   it('is derived from the closed catalog, in canonical order', () => {
     const catalog = mergeTagCatalog().filter(tag => tag.source === 'catalog');
-    assert.deepEqual(catalog.map(tag => tag.header), costarColumnNames());
+    assert.deepEqual(catalog.map(tag => tag.header), costarColumnNames().map(fieldLabel));
   });
 
   it('keeps every database-field descriptor inside the catalog', () => {
     const headers = new Set(costarColumnNames());
     const fieldTags = mergeTagCatalog().filter(tag => tag.source === 'catalog');
-    assert.equal(fieldTags.every(tag => headers.has(tag.header)), true);
+    assert.equal(fieldTags.every(tag => headers.has(tag.column)), true);
   });
 
   it('advertises the approved merge-only tags', () => {
@@ -48,7 +49,7 @@ describe('mergeTagCatalog', () => {
   it('gives every field and merge-only value a distinct tag', () => {
     const names = mergeTagCatalog().map(tag => tag.name);
     assert.equal(new Set(names).size, names.length);
-    assert.equal(names.length, costarColumnNames().length + 2);
+    assert.equal(names.length, costarColumnNames().length + 3);
   });
 
   it('carries each column type from costarColumnType', () => {

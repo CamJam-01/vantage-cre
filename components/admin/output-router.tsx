@@ -1,5 +1,7 @@
 'use client';
 
+import { fieldLabel } from '@/lib/land-sales/app-fields';
+
 import { useMemo, useState, useTransition } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Blueprint } from '@/components/ui/blueprint';
@@ -182,7 +184,7 @@ function FlowEditor({
                     onChange={event => updateCondition(index, { field: event.target.value })}
                     style={{ backgroundColor: 'var(--color-paper)' }}
                   >
-                    {fields.map(field => <option key={field} value={field}>{field}</option>)}
+                    {fields.map(field => <option key={field} value={field}>{fieldLabel(field)}</option>)}
                   </select>
                 </div>
                 <div className="field">
@@ -407,7 +409,7 @@ export function OutputRouter({
                 <ol style={{ margin: 'var(--space-2) 0 0', paddingLeft: 'var(--space-5)', fontSize: 13 }}>
                   {flow.conditions.map(condition => (
                     <li key={condition.id}>
-                      {condition.field} {OUTPUT_FLOW_OPERATOR_LABELS[condition.operator]} “{condition.value}” →{' '}
+                      {fieldLabel(condition.field)} {OUTPUT_FLOW_OPERATOR_LABELS[condition.operator]} “{condition.value}” →{' '}
                       {templateNames.get(condition.templateId) ?? 'Unavailable template'}
                     </li>
                   ))}

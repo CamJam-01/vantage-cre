@@ -16,12 +16,14 @@ const initialState: CreateFormState = null;
 export function LandSaleForm({
   path,
   hiddenFieldIds,
+  usernameSuggestions,
   fieldOrder,
   fieldDividers,
   recordImagePlacement = DEFAULT_RECORD_IMAGE_PLACEMENT,
 }: {
   path: SalesPath;
   hiddenFieldIds: string[];
+  usernameSuggestions: string[];
   fieldOrder: string[];
   fieldDividers: FieldDivider[];
   recordImagePlacement?: RecordImagePlacement;
@@ -38,6 +40,7 @@ export function LandSaleForm({
       formAction={formAction}
       pending={pending}
       hiddenFieldIds={hiddenFieldIds}
+      usernameSuggestions={usernameSuggestions}
       fieldOrder={fieldOrder}
       fieldDividers={fieldDividers}
       recordImagePlacement={recordImagePlacement}

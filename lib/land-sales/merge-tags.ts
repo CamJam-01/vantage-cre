@@ -1,15 +1,11 @@
-import { costarColumnNames } from './costar-fields';
+import { appFieldNames, fieldLabel, VERIFIED_BY_COLUMN } from './app-fields';
 import { costarColumnType, type CostarColumnType } from './costar-column-types';
 import { formatCatalogValue } from './format';
 
-/** Merge tags are written `{{ comp_id }}` in a .docx template: the field's
- * catalog header lowercased, with every run of non-alphanumeric characters
- * collapsed to a single underscore. The catalog is closed (AGENTS.md §3.1), so
- * the tag set is derived from `COSTAR_HEADER_ROW` and never hand-maintained —
- * a header added there gets a tag with no further work. All 277 distinct
- * headers produce distinct tags; a test asserts it. */
+/** Tags derive from app labels: Comments replaces the provider name, and
+ * Verified By joins the catalog-derived tags without entering the CSV catalog. */
 export function mergeTagName(header: string): string {
-  return header.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return fieldLabel(header).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }
 
 export function mergeTag(header: string): string {
@@ -32,7 +28,8 @@ type MergeTagDescriptorBase = {
 
 export type MergeTagDescriptor = MergeTagDescriptorBase & (
   | {
-      source: 'catalog';
+      source: 'catalog' | 'app';
+      column: string;
       type: CostarColumnType;
     }
   | {
@@ -64,11 +61,12 @@ export const RECORD_IMAGE_MERGE_TAG: MergeTagDescriptor = {
 /** Every tag a template may use. Merge-only tags come first for discoverability;
  * database-field tags retain canonical catalog order. */
 export function mergeTagCatalog(): MergeTagDescriptor[] {
-  const catalogTags: MergeTagDescriptor[] = costarColumnNames().map(header => ({
+  const catalogTags: MergeTagDescriptor[] = appFieldNames().map(header => ({
     tag: mergeTag(header),
     name: mergeTagName(header),
-    header,
-    source: 'catalog',
+    header: fieldLabel(header),
+    column: header,
+    source: header === VERIFIED_BY_COLUMN ? 'app' : 'catalog',
     type: costarColumnType(header),
   }));
   return [COMP_NUMBER_MERGE_TAG, RECORD_IMAGE_MERGE_TAG, ...catalogTags];
@@ -91,7 +89,7 @@ export function mergeValuesFromColumns(
   columns: Readonly<Record<string, unknown>>,
 ): Record<string, string> {
   const values: Record<string, string> = {};
-  for (const header of costarColumnNames()) {
+  for (const header of appFieldNames()) {
     values[mergeTagName(header)] = mergeValue(header, columns[header]);
   }
   return values;

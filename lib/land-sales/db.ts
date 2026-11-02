@@ -1,5 +1,5 @@
+import { appFieldNames, VERIFIED_BY_COLUMN } from './app-fields';
 import {
-  costarColumnNames,
   costarFields,
   RECORD_IMAGES_COLUMN,
   SALE_DATE_RAW_COLUMN,
@@ -19,7 +19,7 @@ export function landSaleFromRow(row: Record<string, unknown>): LandSale | null {
   if (!id) return null;
 
   const columns: Record<string, unknown> = {};
-  for (const name of costarColumnNames()) {
+  for (const name of appFieldNames()) {
     columns[name] = row[name] ?? null;
   }
   const raw = row[SALE_DATE_RAW_COLUMN];
@@ -52,7 +52,8 @@ export function projectVisibleLandSale(record: LandSale, visible: ReadonlySet<st
  * catalog Save cannot clear attached photos. */
 export function landSaleToRow(input: LandSaleInput): Record<string, unknown> {
   const columns: Record<string, unknown> = {};
-  for (const name of costarColumnNames()) {
+  for (const name of appFieldNames()) {
+    if (name === VERIFIED_BY_COLUMN && !Object.hasOwn(input.columns, name)) continue;
     columns[name] = input.columns[name] ?? null;
   }
   columns[SALE_DATE_RAW_COLUMN] = input.saleDateRaw ?? null;

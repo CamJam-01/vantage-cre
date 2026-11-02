@@ -1,4 +1,4 @@
-import { costarColumnNames } from './costar-fields';
+import { appFieldNames } from './app-fields';
 import { decodeFieldFilter, encodeFieldFilter, type FieldFilter } from './field-filters';
 
 export type TimeFilter =
@@ -96,7 +96,7 @@ export function decodeFilters(input: SearchParamsInput): LandSaleFilters {
     time = { mode: 'range', from: dateFrom, to: dateTo };
   }
 
-  const knownColumns = new Set(costarColumnNames());
+  const knownColumns = new Set(appFieldNames());
   const fieldByColumn = new Map<string, FieldFilter>();
   for (const raw of params.getAll('ff')) {
     const filter = decodeFieldFilter(raw, knownColumns);

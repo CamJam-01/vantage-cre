@@ -1,5 +1,7 @@
 'use client';
 
+import { fieldLabel } from '@/lib/land-sales/app-fields';
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -83,7 +85,7 @@ function SearchFieldControl({
             id={filterControlId(item.column)}
             value={item.contains}
             options={options}
-            ariaLabel={`${item.column} contains`}
+            ariaLabel={`${fieldLabel(item.column)} contains`}
             onChange={contains => onChange({ ...item, contains })}
           />
         );
@@ -95,7 +97,7 @@ function SearchFieldControl({
           type="text"
           value={item.contains}
           onChange={e => onChange({ ...item, contains: e.target.value })}
-          aria-label={`${item.column} contains`}
+          aria-label={`${fieldLabel(item.column)} contains`}
         />
       );
     case 'number':
@@ -109,7 +111,7 @@ function SearchFieldControl({
             placeholder="Min"
             value={item.min}
             onChange={e => onChange({ ...item, min: e.target.value })}
-            aria-label={`${item.column} minimum`}
+            aria-label={`${fieldLabel(item.column)} minimum`}
           />
           <input
             id={filterControlId(item.column, 'max')}
@@ -119,7 +121,7 @@ function SearchFieldControl({
             placeholder="Max"
             value={item.max}
             onChange={e => onChange({ ...item, max: e.target.value })}
-            aria-label={`${item.column} maximum`}
+            aria-label={`${fieldLabel(item.column)} maximum`}
           />
         </div>
       );
@@ -132,7 +134,7 @@ function SearchFieldControl({
             type="date"
             value={item.from}
             onChange={e => onChange({ ...item, from: e.target.value })}
-            aria-label={`${item.column} from`}
+            aria-label={`${fieldLabel(item.column)} from`}
           />
           <input
             id={filterControlId(item.column, 'to')}
@@ -140,7 +142,7 @@ function SearchFieldControl({
             type="date"
             value={item.to}
             onChange={e => onChange({ ...item, to: e.target.value })}
-            aria-label={`${item.column} to`}
+            aria-label={`${fieldLabel(item.column)} to`}
           />
         </div>
       );
@@ -157,7 +159,7 @@ function SearchFieldControl({
               value: value === 'true' || value === 'false' ? value : '',
             });
           }}
-          aria-label={`${item.column} is`}
+          aria-label={`${fieldLabel(item.column)} is`}
           style={{ cursor: 'pointer' }}
         >
           <option value="">Any</option>

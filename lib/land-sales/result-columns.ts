@@ -1,14 +1,10 @@
 import type { SalesPathId } from './sales-path';
-import { costarHeaders, costarColumnNames } from './costar-fields';
+import { appFieldNames, fieldLabel } from './app-fields';
 import { costarColumnType } from './costar-column-types';
 import type { LandSale } from './schema';
 
-/** One results-table / arrangement column. `key` and `label` are the catalog
- * header — a field has no second name. */
+/** Stored keys remain stable while labels follow the approved app vocabulary. */
 export type ResultColumn = { key: string; label: string };
-
-const DEFAULT_RESULT_COLUMNS: readonly ResultColumn[] =
-  costarColumnNames().map(name => ({ key: name, label: name }));
 
 export type ResultColumnsOptions = {
   pathId?: SalesPathId;
@@ -16,11 +12,9 @@ export type ResultColumnsOptions = {
 };
 
 /** Legacy option objects remain accepted for source compatibility. The closed
- * CoStar sequence for the selected path is authoritative; records cannot redefine it. */
+ * app field sequence for the selected path is authoritative; records cannot redefine it. */
 export function resultColumns(options: ResultColumnsOptions = {}): ResultColumn[] {
-  return options.pathId === 'improved'
-    ? costarColumnNames(costarHeaders('improved')).map(name => ({ key: name, label: name }))
-    : [...DEFAULT_RESULT_COLUMNS];
+  return appFieldNames(options.pathId).map(key => ({ key, label: fieldLabel(key) }));
 }
 
 export function resultSortValue(record: LandSale, column: ResultColumn): string | number | null {

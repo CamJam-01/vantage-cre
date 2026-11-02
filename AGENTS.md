@@ -123,12 +123,12 @@ The technical expression of README §6. Everything here is testable, and everyth
 
 **README Appendices A and B are the contracts.** `COSTAR_HEADER_ROW` in `lib/land-sales/costar-fields.ts` is its executable copy and must stay byte-identical to it: **278 header positions, 277 distinct names** (`Sprinklers` at positions 259 and 260; Postgres cannot hold two columns of one name, so both positions share one column).
 
-Land and Improved share 277 distinct stored fields and types, but have separate canonical CSV sequences — see README §3A. `IMPROVED_COSTAR_HEADER_ROW` matches Appendix B: 279 positions, with duplicate `Sprinklers` and `Average Rental Rate Per kW`. Thread the sales path through template, header validation, data-row parsing, export, and default display order. There is no mapping layer, no alias, no app-specific field identifier, and no subset with its own names or types. A field *is* a header string.
+Land and Improved share 277 distinct stored fields and types, but have separate canonical CSV sequences — see README §3A. `IMPROVED_COSTAR_HEADER_ROW` matches Appendix B: 279 positions, with duplicate `Sprinklers` and `Average Rental Rate Per kW`. Thread the sales path through template, header validation, data-row parsing, export, and default display order. Provider identities and types remain exact. The approved presentation exception is `Transaction Notes` → **Comments** throughout the app, including `{{ comments }}`. The sole app-only data field is `_verified_by` (**Verified By**, nullable text), exposed via `{{ verified_by }}` but never CSV. `lib/land-sales/app-fields.ts` supplies these labels and the app field sequence; CSV code continues using only `costar-fields.ts`.
 
 `land_sales` and `improved_sales` column names are those header strings **verbatim**, spaces, parentheses and all. Consequences:
 
 - Always quote identifiers in queries: `.select('"Secondary Type"')`, `.eq('Property State', v)`.
-- Derive every field list from `COSTAR_HEADER_ROW`. Never hand-maintain a second list of field names anywhere.
+- Derive provider lists from `COSTAR_HEADER_ROW`; app controls use `appFieldNames`, which adds only Verified By. Never hand-maintain another list of provider fields.
 - The count `278` is asserted in the migration. If it changes, that assertion changes with it, deliberately.
 - **The catalog is closed.** Adding, removing, renaming, or reordering a header is a contract change requiring a §5 decision, then constant + applicable appendix + tests together, with a migration only when storage changes. Sequence-only changes never require rebuilding a table.
 
@@ -140,12 +140,15 @@ Land and Improved share 277 distinct stored fields and types, but have separate 
 | Duplicate headers | `Sprinklers` in both paths; `Average Rental Rate Per kW` also in Improved | One column per name. Import keeps the last value and warns if duplicates differ; export writes it into every matching position. Accepted known lossiness. |
 | `_sale_date_raw` | `text` system store | Original text of an unrecognized `Sale Date`. Not a field. |
 | `_record_images` | `jsonb` `{ path, caption }[]` | Zero or more photos (`comp-images` bucket). Record UI + `{{ record_image }}` Print embed only — never CSV. |
+| `_verified_by` | nullable `text` | One optional **Verified By** value, saved as text; editable by active Editors/Admins with active-profile username suggestions. Field Manager + `{{ verified_by }}`, never CSV. |
+
+Verified By starts visible after Comments in both paths, including saved arrangements that do not yet name it. Explicit Admin placement/visibility wins. Username changes never rewrite stored values.
 
 Any new non-catalog storage column joins that table in README §3A, or it is not added.
 
 **Display never affects storage.** Field visibility, ordering, and record-image placement (`tab` default / `above`) are admin presentation configuration on `result_display_settings`. Hiding a field never drops a column; reordering never reorders the CSV. Export always emits its path's full canonical sequence (Land 278; Improved 279), whatever the arrangement says.
 
-**Required drift guard.** A test must assert that README Appendices A/B and their header constants agree byte-for-byte, and the live `land_sales` / `improved_sales` columns contain their 277 distinct fields plus system carve-outs (`id`, `_sale_date_raw`, `_record_images`). Physical database order is independent of CSV order; names and types must agree, and that `costar-column-types.ts` matches the live Postgres types. Without it, "single source of truth" is aspirational.
+**Required drift guard.** A test must assert that README Appendices A/B and their header constants agree byte-for-byte, and the live `land_sales` / `improved_sales` columns contain their 277 distinct fields plus system carve-outs (`id`, `_sale_date_raw`, `_record_images`, `_verified_by`). Physical database order is independent of CSV order; names and types must agree, and that `costar-column-types.ts` matches the live Postgres types. Without it, "single source of truth" is aspirational.
 
 ### 3.2 Validation
 
@@ -161,7 +164,7 @@ Validation runs identically client-side (immediate feedback) and server-side (th
 
 Import accepts the selected path's exact template header row and nothing else — no fuzzy matching, no column remapping, no auto-created fields. Export emits `costarHeaderRow(path.id)` verbatim.
 
-**Any change touching import, export, the catalog, or the schema must be tested in both directions**: a file exported from here re-imports here, and the record survives unchanged. This is README §6.1 and it is the system's central constraint.
+**Any change touching import, export, the catalog, or the schema must be tested in both directions**: a file exported from here re-imports here, and provider data survives unchanged. App-only Verified By is intentionally absent from that round trip. This is README §6.1 and it is the system's central constraint.
 
 ### 3.4 Resolve the arrangement defensively
 
@@ -177,7 +180,7 @@ Every mutation leaves an audit entry. Logging is **best-effort and must never bl
 
 README §6.7 is the rule; these are its mechanics.
 
-**Field tags are derived, never listed.** `mergeTagName` in `lib/land-sales/merge-tags.ts` lowercases a catalog header and collapses non-alphanumeric runs to underscores — `Buyer (True) Company` → `{{ buyer_true_company }}`. The catalog's 277 distinct headers produce 277 distinct field tags, asserted by a test. This is §3.1's "never hand-maintain a second list of field names" applied to templates: do not add a curated field-tag list, an alias, or a per-field formatting exception keyed by header name.
+**Field tags derive from app labels.** `mergeTagName` in `lib/land-sales/merge-tags.ts` lowercases `fieldLabel` and collapses non-alphanumeric runs to underscores. Provider tags remain mechanically derived except `Transaction Notes`, whose approved app label produces `{{ comments }}`. Do not retain `{{ transaction_notes }}` as an alias; templates must use the new tag. `_verified_by` produces `{{ verified_by }}` and is an app field, not a merge-only tag. All 278 app fields produce distinct tags, asserted by a test. Never hand-maintain a second provider field list.
 
 **Approved merge-only tags:** `{{ comp_number }}` (1-based position in the merge order; never stored) and `{{ record_image }}` (embeds every entry in `_record_images` into the DOCX via OPC media parts, with captions). Neither enters CSV, field configuration, or `COSTAR_HEADER_ROW`. Any additional computed tag is a README §5 scope decision, not an invitation to generalize a second field model. Image embed logic lives in `lib/land-sales/docx-image.ts`.
 
