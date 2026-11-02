@@ -111,7 +111,7 @@ The root proxy redirects unauthenticated requests to `/login` and signed-in user
 
 ### 2.7 The URL is the search state container
 
-A filter set must be fully expressible in the query string, and `encodeFilters` / `decodeFilters` must round-trip losslessly. Decoding is **total**: any malformed, stale, or hand-edited parameter yields a valid filter set, never a thrown error — a bad link renders a page. Never introduce search state that cannot survive a reload or be pasted to a colleague.
+A filter set must be fully expressible in the query string, and `encodeFilters` / `decodeFilters` must round-trip losslessly. Decoding is **total**: any malformed, stale, or hand-edited parameter yields a valid filter set, never a thrown error — a bad link renders a page. Resolve decoded criteria against the current per-table filter availability before use; unavailable criteria are ignored without changing the requested URL. Never introduce search state that cannot survive a reload or be pasted to a colleague.
 
 ---
 
@@ -171,6 +171,31 @@ Import accepts the selected path's exact template header row and nothing else �
 Stored configuration and the live catalog drift apart. Configuration naming a field that no longer exists is **dropped**; a field the configuration never mentioned keeps its **catalog position** and follows. Stored JSON is untrusted input — malformed entries are skipped, never thrown on.
 
 Adding a catalog field must never require re-saving the arrangement and must never blank a screen.
+
+### Search filter visibility
+
+`result_display_settings.hidden_filter_keys` is a per-table `text[]` setting,
+separate from `hidden_field_keys`, field order, dividers, and image placement.
+An empty array enables every displayed results column as a filter. Both the
+search sheet and results sidebar use `searchFilterColumns` from
+`lib/land-sales/filter-visibility.ts`: filter-hidden and column-hidden keys are
+excluded. Only displayed columns appear in Admin Search Filters; disabling all
+filters is valid. Preserve the saved filter preference of a temporarily hidden
+column without allowing that column to filter results.
+
+At every URL-backed read boundary (search sheets, results, record neighbors and
+counts, and result-position actions), run `effectiveSearchFilters` after decoding.
+It drops unavailable field filters **and all corresponding legacy parameters**.
+Old links must load without error or a redirect solely for hidden criteria;
+ignored criteria must not affect SQL, active-filter counts, or selection state.
+Do not filter the result columns or record arrangement to hide search controls.
+
+The filter-settings Server Action authorizes an active Admin, validates against
+the current displayed columns, updates **only** filter preferences plus update
+metadata, and logs the mutation best-effort. Revalidate the selected table's
+search/results/record pages. Field visibility changes must also revalidate the
+search page because column visibility constrains eligibility. Existing settings
+RLS remains the database authorization boundary.
 
 ### 3.5 Audit logging
 

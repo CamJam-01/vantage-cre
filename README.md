@@ -102,6 +102,13 @@ These terms have precise meanings here. Use them; do not invent synonyms.
   the details sheet). It is stored data, not code. One arrangement per
   database.
 
+**Search filter configuration**
+: Admin-owned filter visibility for one results table, configured separately for
+  Land and Improved Sales in **Search Filters** under that table's field
+  configuration. A filter can appear only if its column is displayed in the
+  results table. Hiding a filter does not hide the column or change any record
+  data, record form, CSV, or merge tag.
+
 **Divider**
 : A labeled break in the arrangement that holds no data of its own. A **page**
   divider starts a new tab on the record screen; a **group** divider titles a
@@ -244,8 +251,9 @@ Seven capabilities. A change either extends one of these or is out of scope.
    addressing catalog headers by their exact names:
    - **Sales search sheet.** Land and Improved search screens mirror each
      path's record-detail arrangement — the same Admin pages, groups, and
-     visible fields, presented as a tall sheet with record-style tabs and a
-     single Search action in the sticky bar. Every arranged field is a typed
+     visible fields, further limited by that table's Search Filters settings,
+     presented as a tall sheet with record-style tabs and a single Search action
+     in the sticky bar. Every enabled field is a typed
      filter control (text *contains*, numeric *min/max*, date *from/to*,
      boolean *is*); values start blank. Location and type text fields that
      appraisers reach for most — `Property City`, `Property State`,
@@ -259,14 +267,24 @@ Seven capabilities. A change either extends one of these or is out of scope.
      parent changes. Submitting encodes those choices as field filters in the
      page address. Legacy primary-filter query parameters still decode and seed
      matching blanks so old links keep working.
-   - **Field filters** over any visible field, typed by that column's Postgres
-     type: text *contains*, numeric *min/max*, date *from/to*, boolean *is*.
+   - **Field filters** over displayed columns enabled in that table's Search
+     Filters settings, typed by the column's Postgres type: text *contains*,
+     numeric *min/max*, date *from/to*, boolean *is*.
      The results sidebar edits them for every path; both search sheets build
      them from the form above.
 
-   A filter set is fully expressible in the page address, so a search is a
+   The effective filter set is fully expressible in the page address, so a search is a
    shareable, bookmarkable, reloadable thing. Do not introduce filter state that
-   cannot survive a page reload.
+   cannot survive a page reload. **Unavailable filters are ignored**, including
+   criteria in bookmarked, legacy, or hand-edited URLs. They do not restrict
+   results or record navigation, contribute to counts, or appear as active
+   filters. The URL still loads normally without a redirect just to remove
+   those criteria. Subsequent navigation encodes only effective filters.
+
+   Filter visibility is global per table. Initially every displayed column is
+   available as a filter. Admins may hide all filters; Search then returns all
+   records. A hidden results column cannot be selected as a filter. Its saved
+   filter preference is retained if the column is later displayed again.
 
 4. **Read the results.** A table of matching records, one column per visible
    field in the Admin's order, sortable by any column, with rows selectable
@@ -323,7 +341,8 @@ Authentication and roles · `Sales → Land` and `Sales → Improved` end to end
 search as arrangement-driven record-style sheets with typed field filters and dependent suggestion
 comboboxes · per-field filtering on results · results table with sort, selection, temporary column
 resizing, and CSV export · record detail with in-place editing · CSV import with per-row validation ·
-manual record entry · global field visibility, ordering, and dividers · **Print to
+manual record entry · global field visibility, ordering, and dividers ·
+**separate per-table search filter visibility for displayed columns** · **Print to
 DOCX through one admin-managed Output Flow per results table, conditional
 template routing, and sequential comp numbering** · user administration · audit
 log · user profiles with avatars · an embedded third-party feedback widget ·
@@ -618,7 +637,8 @@ Match the request to its shape before writing anything.
 | "Show field X on the record screen" / "reorder fields" / "group these together" | **Configuration.** Do it through the admin arrangement. No code. |
 | "Add field X to the database" / "rename this column" / "drop the fields we don't use" | **A change to a closed catalog (§3A).** Not ordinary work. Confirm under §5 first; if approved, the selected header constant, applicable appendix, and tests move together; migrate only if storage changes. |
 | "Field X should show as *Y* on screen" | **A scope decision (§5).** Comments for `Transaction Notes` is the approved exception; all other provider labels remain their headers. |
-| "Make field X filterable" | Confirm the column's Postgres type is classified correctly; the filter tier follows from that type. Nothing else is required — every catalog field is equally a field. |
+| "Show or hide a search filter" | **Configuration.** Active Admins use Search Filters for the selected table. Only displayed results columns are eligible; hidden criteria in old URLs are ignored. Record data and field/column configuration are unchanged. |
+| "Make field X filterable" | Display its results column, then enable its search filter. The control type follows the column's Postgres type. |
 | "Only export the columns we're actually using" | **No.** Export is always the selected path's full canonical sequence (§4.6, §3A). |
 | "Add a merge tag for field X" | Every app field already has a derived tag, including `{{ comments }}` and `{{ verified_by }}`. Additional app-only fields require a §5 decision. |
 | "Add a computed/non-field merge tag" | **A scope decision.** Only `{{ comp_number }}` and `{{ record_image }}` are approved merge-only tags; another requires the §5 process and must not silently create a second field model. |

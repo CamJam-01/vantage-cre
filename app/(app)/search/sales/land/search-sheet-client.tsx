@@ -232,7 +232,7 @@ export function LandSalesSearchSheetClient({
         <div className="record-col">
           <div className="record-head">
             <h1>{path.label} Search</h1>
-            <p className="sub">Refine your search using the criteria below.</p>
+            <p className="sub">{columns.length ? 'Refine your search using the criteria below.' : 'No search filters are displayed for this table. Search to view all records.'}</p>
           </div>
 
           {tabbedPages.length > 0 && (

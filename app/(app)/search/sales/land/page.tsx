@@ -1,3 +1,4 @@
+import { effectiveSearchFilters, searchFilterColumns } from '@/lib/land-sales/filter-visibility';
 import { createClient } from '@/lib/supabase/server';
 import { loadDisplaySettings } from '@/lib/land-sales/display-settings';
 import {
@@ -19,7 +20,6 @@ type PageProps = {
 
 export default async function LandSalesSearchPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const filters = decodeFilters(params);
   const supabase = await createClient();
   const [display, suggestions, suggestionDependencies] = await Promise.all([
     loadDisplaySettings(supabase, LAND_SALES_PATH.databaseKey),
@@ -31,10 +31,17 @@ export default async function LandSalesSearchPage({ searchParams }: PageProps) {
     display.fieldOrder,
     display.fieldDividers,
   );
-  const pages = buildRecordDisplayPages(rows, display.hidden);
+  const filterColumns = searchFilterColumns(
+    rows.flatMap(row => row.kind === 'column' ? [row.column] : []),
+    display.hidden,
+    display.hiddenFilters,
+  );
+  const pages = buildRecordDisplayPages(rows, new Set([...display.hidden, ...display.hiddenFilters]));
+  const filters = effectiveSearchFilters(decodeFilters(params), filterColumns);
 
   return (
     <LandSalesSearchSheetClient
+      key={JSON.stringify([filterColumns.map(column => column.key), display.fieldDividers])}
       path={LAND_SALES_PATH}
       pages={pages}
       initial={filters}

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { readHiddenFilterKeys } from './filter-visibility';
 import {
   canonicalizeStoredIds,
   type DatabaseKey,
@@ -20,12 +21,13 @@ export const DEFAULT_RECORD_IMAGE_PLACEMENT: RecordImagePlacement = 'tab';
 export const RECORD_PHOTOS_PAGE_ID = 'record-photos';
 export const RECORD_PHOTOS_PAGE_TITLE = 'Photos';
 
-/** The one global display configuration for a database: which fields are
- * hidden, the order Database Manager arranges them in, the page and group
+/** The one global display configuration for a database: which fields and
+ * search filters are hidden, the field order, and the page and group
  * dividers that order carries, and where the record photo appears. An empty
  * `fieldOrder` means no order has been saved, so the catalog order stands. */
 export type DisplaySettings = {
   hidden: Set<string>;
+  hiddenFilters: Set<string>;
   fieldOrder: string[];
   fieldDividers: FieldDivider[];
   recordImagePlacement: RecordImagePlacement;
@@ -60,32 +62,26 @@ export async function loadDisplaySettings(
   supabase: SupabaseClient,
   databaseKey: DatabaseKey,
 ): Promise<DisplaySettings> {
-  // Prefer the full row; if the placement column is not migrated yet, fall
-  // back so record screens keep loading with the Photos-tab default.
-  let { data, error } = await supabase
+  // The small settings row is read whole so older schemas can still supply
+  // all existing configuration while newly added settings use their defaults.
+  const { data, error } = await supabase
     .from('result_display_settings')
-    .select('hidden_field_keys, field_order, field_dividers, record_image_placement')
+    .select('*')
     .eq('database_key', databaseKey)
     .maybeSingle();
-
-  if (error && /record_image_placement/i.test(error.message)) {
-    ({ data, error } = await supabase
-      .from('result_display_settings')
-      .select('hidden_field_keys, field_order, field_dividers')
-      .eq('database_key', databaseKey)
-      .maybeSingle());
-  }
 
   if (error) throw new DisplaySettingsReadError(error.message);
 
   const row = data as {
     hidden_field_keys?: string[] | null;
+    hidden_filter_keys?: unknown;
     field_order?: string[] | null;
     field_dividers?: unknown;
     record_image_placement?: unknown;
   } | null;
   return {
     hidden: new Set(canonicalizeStoredIds(row?.hidden_field_keys)),
+    hiddenFilters: new Set(readHiddenFilterKeys(row?.hidden_filter_keys)),
     fieldOrder: canonicalizeStoredIds(row?.field_order),
     fieldDividers: readFieldDividers(row?.field_dividers),
     recordImagePlacement: readRecordImagePlacement(row?.record_image_placement),

@@ -68,7 +68,8 @@ export function FiltersSidebar({
   const router = useRouter();
   const filtersKey = encodeFilters(filters).toString();
   const [draft, setDraft] = useState<DraftFieldFilter[]>(() => appliedToDraft(filters.fieldFilters ?? []));
-  const [syncedKey, setSyncedKey] = useState(filtersKey);
+  const draftSyncKey = JSON.stringify([filtersKey, columns.map(column => column.key)]);
+  const [syncedKey, setSyncedKey] = useState(draftSyncKey);
   const [open, setOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [addMenuStyle, setAddMenuStyle] = useState<CSSProperties | null>(null);
@@ -127,8 +128,8 @@ export function FiltersSidebar({
     setAddMenuOpen(o => !o);
   }
 
-  if (filtersKey !== syncedKey) {
-    setSyncedKey(filtersKey);
+  if (draftSyncKey !== syncedKey) {
+    setSyncedKey(draftSyncKey);
     setDraft(appliedToDraft(filters.fieldFilters ?? []));
     setSearchEdits({});
   }
@@ -260,7 +261,9 @@ export function FiltersSidebar({
 
         {draft.length === 0 && searchEntries.length === 0 && (
           <p style={{ fontSize: 13, color: 'var(--color-neutral-600)', margin: 0 }}>
-            No filters added yet. Use &quot;+ Add Filter&quot; below or &quot;Modify Search&quot; above.
+            {columns.length === 0
+              ? 'No search filters are displayed for this table.'
+              : 'No filters added yet. Use "+ Add Filter" below or "Modify Search" above.'}
           </p>
         )}
 

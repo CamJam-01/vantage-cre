@@ -12,6 +12,7 @@ import type { LandSalesPageData } from '@/lib/land-sales/results-page';
 import { resultColumns, type ResultColumn } from '@/lib/land-sales/result-columns';
 import { decodeSort, type ResultsSort } from '@/lib/land-sales/results-sort';
 import { loadDisplaySettings } from '@/lib/land-sales/display-settings';
+import { effectiveSearchFilters, searchFilterColumns } from '@/lib/land-sales/filter-visibility';
 import { filterVisibleColumns, orderColumns } from '@/lib/land-sales/field-visibility';
 import { canDelete, canEdit, getCurrentUserProfile } from '@/lib/users/roles';
 import { listDocxOutputFlows } from '@/lib/land-sales/output-flow-store';
@@ -101,7 +102,6 @@ export async function SalesResultsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const filters = decodeFilters(params);
   const page = decodePage(params.page);
   const sort = decodeSort(params.sort, params.dir);
 
@@ -113,6 +113,8 @@ export async function SalesResultsPage({
   ]);
   const columns = orderColumns(resultColumns({ pathId: path.id }), display.fieldOrder);
   const visibleColumns = filterVisibleColumns(columns, display.hidden);
+  const filterColumns = searchFilterColumns(columns, display.hidden, display.hiddenFilters);
+  const filters = effectiveSearchFilters(decodeFilters(params), filterColumns);
   const role = profile?.role ?? 'Viewer';
   const active = Boolean(profile && !profile.is_suspended);
   const filterQuery = encodeFilters(filters).toString();
@@ -130,7 +132,7 @@ export async function SalesResultsPage({
       </div>
       <ResultsToolbar
         path={path}
-        columns={visibleColumns}
+        columns={filterColumns}
         canEdit={active && canEdit(role)}
         canDelete={active && canDelete(role)}
         filters={filters}
